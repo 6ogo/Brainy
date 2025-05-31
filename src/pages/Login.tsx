@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
+import { cn, commonStyles } from '../styles/utils';
 
 export const Login: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -18,10 +19,10 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex">
       {/* Left side - Login form */}
-      <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 md:px-16 bg-gray-900">
+      <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 md:px-16 bg-primary-950">
         <div className="max-w-md w-full mx-auto">
           <div className="text-center mb-12">
-            <h1 className="text-5xl font-light mb-6 bg-gradient-to-r from-blue-400 to-purple-400 text-transparent bg-clip-text">
+            <h1 className="text-5xl font-light mb-6 bg-gradient-to-r from-primary-400 to-secondary-400 text-transparent bg-clip-text font-sans">
               Welcome back!
             </h1>
             <p className="text-gray-400">
@@ -49,7 +50,7 @@ export const Login: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white focus:outline-none focus:border-primary-500 transition-colors font-sans"
                   placeholder="Enter your password"
                   required
                 />
@@ -69,18 +70,22 @@ export const Login: React.FC = () => {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-900"
+                  className="w-4 h-4 rounded border-gray-700 text-primary-500 focus:ring-primary-500 focus:ring-offset-gray-900"
                 />
                 <span className="text-sm text-gray-400">Remember me</span>
               </label>
-              <button type="button" className="text-sm text-blue-400 hover:text-blue-300">
+              <button type="button" className="text-sm text-primary-400 hover:text-primary-300">
                 Forgot password?
               </button>
             </div>
 
             <button
               type="submit"
-              className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg hover:from-blue-600 hover:to-purple-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-900 transition-colors"
+              className={cn(
+                commonStyles.button.primary,
+                "w-full py-3 px-4 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-lg",
+                "hover:from-primary-600 hover:to-secondary-600 focus:ring-primary-500 focus:ring-offset-gray-900"
+              )}
             >
               Log In
             </button>
@@ -107,7 +112,7 @@ export const Login: React.FC = () => {
               <button
                 type="button"
                 onClick={() => navigate('/signup')}
-                className="text-blue-400 hover:text-blue-300"
+                className="text-primary-400 hover:text-primary-300"
               >
                 Sign Up
               </button>
@@ -118,7 +123,7 @@ export const Login: React.FC = () => {
 
       {/* Right side - Image and testimonials */}
       <div className="hidden lg:block lg:w-1/2 relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 to-purple-900">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-900 to-secondary-900">
           <div className="absolute inset-0 bg-[url('https://images.pexels.com/photos/3769714/pexels-photo-3769714.jpeg')] bg-cover bg-center mix-blend-overlay"></div>
         </div>
         <div className="absolute inset-0 flex flex-col justify-between p-12">
