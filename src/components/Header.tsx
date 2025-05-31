@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, User } from 'lucide-react';
+import { Brain, User } from 'lucide-react';
 import { SubjectSelector } from './SubjectSelector';
 
 export const Header: React.FC = () => {
@@ -9,9 +9,9 @@ export const Header: React.FC = () => {
         <div className="flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="rounded-full bg-primary-600 p-2">
-              <BookOpen className="h-6 w-6 text-white" />
+              <Brain className="h-6 w-6 text-white" />
             </div>
-            <span className="font-semibold text-xl text-primary-900">AI Study Buddy Revolution</span>
+            <span className="font-semibold text-xl text-primary-900">Brainly</span>
           </div>
           
           <div className="flex items-center space-x-4">
@@ -28,4 +28,4 @@ export const Header: React.FC = () => {
       </div>
     </header>
   );
-};
+}

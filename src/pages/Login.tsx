@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Brain } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
 
 export const Login: React.FC = () => {
@@ -12,7 +12,6 @@ export const Login: React.FC = () => {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Add login logic here
     navigate('/study');
   };
 
@@ -22,8 +21,13 @@ export const Login: React.FC = () => {
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 md:px-16 bg-primary-950">
         <div className="max-w-md w-full mx-auto">
           <div className="text-center mb-12">
+            <div className="flex justify-center mb-6">
+              <div className="rounded-full bg-primary-600 p-4">
+                <Brain className="h-12 w-12 text-white" />
+              </div>
+            </div>
             <h1 className="text-5xl font-light mb-6 bg-gradient-to-r from-primary-400 to-secondary-400 text-transparent bg-clip-text font-sans">
-              Welcome back!
+              Welcome to Brainly
             </h1>
             <p className="text-gray-400">
               Sign in to access your personalized AI tutor and continue your learning journey
@@ -95,7 +99,7 @@ export const Login: React.FC = () => {
                 <div className="w-full border-t border-gray-700"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-gray-900 text-gray-400">Or</span>
+                <span className="px-2 bg-primary-950 text-gray-400">Or</span>
               </div>
             </div>
 
