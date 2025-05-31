@@ -1,0 +1,119 @@
+import { type } from "os";
+
+export type Subject = 'Math' | 'Science' | 'English' | 'History' | 'Languages' | 'Test Prep';
+
+export type DifficultyLevel = 'Elementary' | 'High School' | 'College' | 'Advanced';
+
+export type VoiceMode = 'push-to-talk' | 'continuous' | 'muted';
+
+export type AvatarPersonality = 
+  | 'encouraging-emma'
+  | 'challenge-charlie'
+  | 'fun-freddy'
+  | 'professor-patricia'
+  | 'buddy-ben';
+
+export type AvatarBackground = 
+  | 'classroom'
+  | 'library'
+  | 'home-office'
+  | 'futuristic';
+
+export type AvatarEmotion =
+  | 'neutral'
+  | 'happy'
+  | 'thinking'
+  | 'excited'
+  | 'concerned';
+
+export interface Avatar {
+  id: AvatarPersonality;
+  name: string;
+  description: string;
+  imageUrl: string;
+  style: string;
+}
+
+export interface Message {
+  id: string;
+  text: string;
+  sender: 'user' | 'ai';
+  timestamp: Date;
+  isBreakthrough?: boolean;
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlockedAt?: Date;
+}
+
+export interface StudyStreak {
+  current: number;
+  longest: number;
+  lastStudyDate: Date;
+}
+
+export interface Challenge {
+  id: string;
+  title: string;
+  description: string;
+  subject: Subject;
+  difficulty: DifficultyLevel;
+  xpReward: number;
+  deadline: Date;
+  isCompleted: boolean;
+}
+
+export interface SessionStats {
+  startTime: Date;
+  duration: number;
+  messagesCount: number;
+  topicsDiscussed: string[];
+  xpEarned: number;
+}
+
+export interface SocialStats {
+  streak: StudyStreak;
+  totalXP: number;
+  achievements: Achievement[];
+  activeChallenges: Challenge[];
+  level: number;
+}
+
+export interface AppState {
+  messages: Message[];
+  currentSubject: Subject;
+  difficultyLevel: DifficultyLevel;
+  voiceMode: VoiceMode;
+  isListening: boolean;
+  sessionStats: SessionStats;
+  isSpeaking: boolean;
+  currentAvatar: AvatarPersonality;
+  currentBackground: AvatarBackground;
+  avatarEmotion: AvatarEmotion;
+  isVideoEnabled: boolean;
+  isRecording: boolean;
+  socialStats: SocialStats;
+  
+  // Actions
+  setCurrentSubject: (subject: Subject) => void;
+  setDifficultyLevel: (level: DifficultyLevel) => void;
+  setVoiceMode: (mode: VoiceMode) => void;
+  toggleListening: () => void;
+  addMessage: (text: string, sender: 'user' | 'ai', isBreakthrough?: boolean) => void;
+  clearMessages: () => void;
+  updateSessionStats: (stats: Partial<SessionStats>) => void;
+  setIsSpeaking: (isSpeaking: boolean) => void;
+  setCurrentAvatar: (avatar: AvatarPersonality) => void;
+  setCurrentBackground: (background: AvatarBackground) => void;
+  setAvatarEmotion: (emotion: AvatarEmotion) => void;
+  toggleVideo: () => void;
+  toggleRecording: () => void;
+  updateSocialStats: (stats: Partial<SocialStats>) => void;
+  completeChallenge: (challengeId: string) => void;
+  unlockAchievement: (achievementId: string) => void;
+  updateStreak: () => void;
+}

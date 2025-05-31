@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Mobile-first styles */
+html {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply antialiased text-gray-900 bg-gray-50;
+  overscroll-behavior-y: none;
+}
+
+/* Mobile touch optimizations */
+button, 
+[role="button"] {
+  @apply select-none touch-manipulation;
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Mobile-friendly scrolling */
+.smooth-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Hide browser UI in standalone mode */
+@media all and (display-mode: standalone) {
+  header {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  footer {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Prevent text selection during touch interactions */
+.no-select {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Add to home screen prompt styles */
+.pwa-prompt {
+  @apply fixed bottom-0 left-0 right-0 p-4 bg-white shadow-lg transform transition-transform duration-300 ease-in-out;
+}
+
+.pwa-prompt.hidden {
+  transform: translateY(100%);
+}
+
+/* Offline indicator */
+.offline-indicator {
+  @apply fixed top-0 left-0 right-0 bg-yellow-500 text-white text-center py-2 z-50 transform transition-transform duration-300;
+}
+
+.offline-indicator.hidden {
+  transform: translateY(-100%);
+}
+
+/* Native-like animations */
+.page-transition {
+  @apply transition-opacity duration-300;
+}
+
+.page-enter {
+  @apply opacity-0;
+}
+
+.page-enter-active {
+  @apply opacity-100;
+}
+
+/* Mobile gesture area */
+.gesture-area {
+  @apply touch-pan-y overflow-hidden;
+}
+
+/* Mobile-optimized inputs */
+input[type="text"],
+input[type="number"],
+textarea {
+  @apply appearance-none;
+  font-size: 16px; /* Prevent iOS zoom */
+}
+
+/* Picture-in-picture support */
+.pip-video {
+  @apply fixed bottom-4 right-4 w-64 rounded-lg shadow-lg z-50;
+}
