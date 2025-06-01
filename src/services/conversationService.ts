@@ -59,11 +59,8 @@ export const ConversationService = {
     try {
       const voices = await ElevenLabsService.getVoices();
       const voice = voices[0]; // Select appropriate voice
-      const audio = await ElevenLabsService.generateSpeech(text, voice.voice_id);
-      
-      // Convert audio buffer to URL
-      const blob = new Blob([audio], { type: 'audio/mpeg' });
-      return URL.createObjectURL(blob);
+      const audioBlob = await ElevenLabsService.generateSpeech(text, voice.voice_id);
+      return URL.createObjectURL(audioBlob);
     } catch (error) {
       console.error('Error generating speech:', error);
       return undefined;
@@ -72,10 +69,12 @@ export const ConversationService = {
 
   async generateVideo(text: string): Promise<string | undefined> {
     try {
-      const video = await TavusService.createVideo(
-        process.env.VITE_TAVUS_REPLICA_ID!,
-        text
-      );
+      const replicaId = import.meta.env.VITE_TAVUS_REPLICA_ID;
+      if (!replicaId) {
+        throw new Error('TAVUS_REPLICA_ID not configured');
+      }
+      
+      const video = await TavusService.createVideo(replicaId, text);
       return video.url;
     } catch (error) {
       console.error('Error generating video:', error);
