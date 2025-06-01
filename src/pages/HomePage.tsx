@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Brain } from 'lucide-react';
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -16,8 +17,13 @@ const HomePage = () => {
       {/* Hero Section */}
       <div className="pt-20 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="text-center">
+          <div className="flex justify-center mb-8">
+            <div className="rounded-full bg-primary-600 p-4">
+              <Brain className="h-12 w-12 text-white" />
+            </div>
+          </div>
           <h1 className={cn(commonStyles.heading.h1, "tracking-tight sm:text-6xl md:text-7xl")}>
-            <span className="block text-primary-600 font-sans">Brainy</span>
+            <span className="block text-primary-600 font-sans">Brainbud</span>
             <span className="block font-sans">Your AI Study Buddy Revolution</span>
           </h1>
           <p className={cn(commonStyles.text.lg, "mt-6 max-w-2xl mx-auto")}>
@@ -52,7 +58,7 @@ const HomePage = () => {
             Revolutionary Learning Experience
           </h2>
           <p className={cn(commonStyles.text.lg, "mt-4")}>
-            Brainy combines cutting-edge AI technology to create the most engaging learning experience possible.
+            Brainbud combines cutting-edge AI technology to create the most engaging learning experience possible.
           </p>
         </div>
 
@@ -143,7 +149,7 @@ const HomePage = () => {
           <div className="text-center mb-16">
             <h2 className={cn(commonStyles.heading.h2, "font-sans")}>Who Can Benefit</h2>
             <p className={cn(commonStyles.text.lg, "mt-4")}>
-              Brainy is designed to help learners of all types achieve their educational goals.
+              Brainbud is designed to help learners of all types achieve their educational goals.
             </p>
           </div>
 
@@ -242,7 +248,7 @@ const HomePage = () => {
       <div className="py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
         <h2 className={cn(commonStyles.heading.h2, "font-sans mb-8")}>Ready to Transform Your Learning Experience?</h2>
         <p className={cn(commonStyles.text.lg, "mb-10 max-w-3xl mx-auto")}>
-          Join thousands of students who have already discovered the power of conversational learning with Brainy.
+          Join thousands of students who have already discovered the power of conversational learning with Brainbud.
         </p>
         <div className="flex flex-col sm:flex-row justify-center gap-4">
           <Button
@@ -307,7 +313,7 @@ const HomePage = () => {
           </div>
           <div className="mt-12 pt-8 border-t border-gray-200">
             <p className="text-base text-gray-400 text-center">
-              &copy; {new Date().getFullYear()} Brainy Education, Inc. All rights reserved.
+              &copy; {new Date().getFullYear()} Brainbud Education, Inc. All rights reserved.
             </p>
           </div>
         </div>
