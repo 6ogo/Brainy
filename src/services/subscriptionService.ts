@@ -20,24 +20,31 @@ const isMobile = (): boolean => {
 // ============== REVENUECAT INTEGRATION (for cross-platform) ===============
 
 // Get the API key from environment variables
-const REVENUECAT_API_KEY = import.meta.env.VITE_REVENUECAT_API_KEY;
+// For RevenueCat Web SDK, you must use a Web Billing API key (not the same as other platforms)
+const REVENUECAT_WEB_API_KEY = import.meta.env.VITE_REVENUECAT_WEB_API_KEY || import.meta.env.VITE_REVENUECAT_API_KEY;
 
 /**
  * Initialize the RevenueCat SDK
  * @param userId User ID for identification
  */
 export const initializeRevenueCat = (userId?: string): void => {
-  if (!REVENUECAT_API_KEY) {
-    console.error('RevenueCat API key not found in environment variables');
+  if (!REVENUECAT_WEB_API_KEY) {
+    console.error('RevenueCat Web API key not found in environment variables');
     return;
   }
 
   try {
-    // Initialize the SDK with the API key and optional user ID
+    // Initialize the SDK with the API key and required parameters
+    // See: https://www.revenuecat.com/docs/web/web-billing/web-sdk
+    // The RevenueCat Web SDK only supports apiKey and appUserId parameters
+    // See: https://www.revenuecat.com/docs/web/web-billing/web-sdk
     if (userId) {
-      RevenueCat.Purchases.configure(REVENUECAT_API_KEY, userId);
+      // With user ID - must follow parameters order in documentation
+      RevenueCat.Purchases.configure(REVENUECAT_WEB_API_KEY, userId);
     } else {
-      RevenueCat.Purchases.configure(REVENUECAT_API_KEY);
+      // Without user ID - the TypeScript definition requires at least a second parameter
+      // We pass null here as the second parameter to satisfy TypeScript
+      RevenueCat.Purchases.configure(REVENUECAT_WEB_API_KEY, null as unknown as string);
     }
     console.log('RevenueCat SDK initialized successfully');
   } catch (error) {
