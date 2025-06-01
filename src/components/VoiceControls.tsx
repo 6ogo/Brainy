@@ -1,20 +1,27 @@
 import React from 'react';
-import { Mic, MicOff, Volume2, Volume1, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, Volume1, VolumeX, Download } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { VoiceMode } from '../types';
+import toast from 'react-hot-toast';
 
 export const VoiceControls: React.FC = () => {
   const { 
     voiceMode, 
     setVoiceMode, 
     isListening,
-    setIsSpeaking
+    setIsSpeaking,
+    isRecording,
+    toggleRecording
   } = useStore();
   
-  const { startListening, stopListening } = useVoiceRecognition();
+  const { startListening, stopListening, hasPermission } = useVoiceRecognition();
 
   const handleVoiceModeChange = (mode: VoiceMode) => {
+    if (!hasPermission) {
+      toast.error('Please enable microphone access to use voice features');
+      return;
+    }
     setVoiceMode(mode);
     if (mode === 'muted') {
       stopListening();
@@ -22,6 +29,10 @@ export const VoiceControls: React.FC = () => {
   };
 
   const handlePushToTalk = (pressed: boolean) => {
+    if (!hasPermission) {
+      toast.error('Please enable microphone access to use voice features');
+      return;
+    }
     if (voiceMode === 'push-to-talk') {
       if (pressed) {
         startListening();
@@ -75,6 +86,20 @@ export const VoiceControls: React.FC = () => {
         </div>
 
         <div className="flex items-center space-x-3">
+          {/* Recording control */}
+          <button
+            onClick={() => toggleRecording()}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
+              isRecording
+                ? 'bg-red-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            title={isRecording ? 'Stop Recording' : 'Start Recording'}
+          >
+            <Download className="h-5 w-5" />
+            <span>{isRecording ? 'Stop Recording' : 'Record'}</span>
+          </button>
+
           {/* Push to talk button */}
           <button
             className={`h-12 w-12 rounded-full flex items-center justify-center focus:outline-none ${
@@ -82,7 +107,7 @@ export const VoiceControls: React.FC = () => {
                 ? 'bg-primary-500 text-white'
                 : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}
-            disabled={voiceMode !== 'push-to-talk'}
+            disabled={voiceMode !== 'push-to-talk' || !hasPermission}
             onMouseDown={() => handlePushToTalk(true)}
             onMouseUp={() => handlePushToTalk(false)}
             onTouchStart={() => handlePushToTalk(true)}
