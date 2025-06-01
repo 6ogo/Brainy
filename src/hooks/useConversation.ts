@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { useStore } from '../store/store';
 import { ConversationService } from '../services/conversationService';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 export const useConversation = () => {
   const { 
     addMessage, 
     currentSubject,
-    isVideoEnabled,
+    currentAvatar,
     setIsSpeaking,
-    setAvatarEmotion
+    setAvatarEmotion,
+    updateSessionStats,
+    sessionStats
   } = useStore();
+  
+  const { user } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const sendMessage = async (message: string) => {
@@ -21,12 +26,12 @@ export const useConversation = () => {
       // Add user message immediately
       addMessage(message, 'user');
 
-      // Get AI response with audio/video
+      // Get AI response with audio
       const response = await ConversationService.generateResponse(
         message,
         currentSubject,
-        isVideoEnabled,
-        true // Always enable voice for now
+        currentAvatar,
+        true // Enable voice
       );
 
       // Start speaking animation
@@ -36,6 +41,18 @@ export const useConversation = () => {
       // Add AI response
       addMessage(response.text, 'ai');
 
+      // Update session stats
+      updateSessionStats({
+        ...sessionStats,
+        messagesCount: sessionStats.messagesCount + 2,
+        xpEarned: sessionStats.xpEarned + 10
+      });
+
+      // Save conversation if user is logged in
+      if (user) {
+        await ConversationService.saveConversation(user.id, message, response.text);
+      }
+
       // Play audio if available
       if (response.audioUrl) {
         const audio = new Audio(response.audioUrl);
@@ -43,12 +60,12 @@ export const useConversation = () => {
         audio.onended = () => {
           setIsSpeaking(false);
           setAvatarEmotion('neutral');
+          // Clean up audio URL
+          URL.revokeObjectURL(response.audioUrl!);
         };
-      }
-
-      // Update video if available
-      if (response.videoUrl) {
-        // Handle video update in VideoArea component
+      } else {
+        setIsSpeaking(false);
+        setAvatarEmotion('neutral');
       }
 
     } catch (error) {
