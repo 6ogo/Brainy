@@ -7,6 +7,7 @@ import { SubjectSelection } from './pages/SubjectSelection';
 import { TeacherSelection } from './pages/TeacherSelection';
 import { LearningModeSelection } from './pages/LearningModeSelection';
 import { LearningAnalytics } from './pages/LearningAnalytics';
+import { Onboarding } from './pages/Onboarding';
 import HomePage from './pages/HomePage';
 import { AuthProvider } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
@@ -21,6 +22,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/onboarding" element={<PrivateRoute><Onboarding /></PrivateRoute>} />
           <Route path="/subjects" element={<PrivateRoute><SubjectSelection /></PrivateRoute>} />
           <Route path="/teachers" element={<PrivateRoute><TeacherSelection /></PrivateRoute>} />
           <Route path="/learning-mode" element={<PrivateRoute><LearningModeSelection /></PrivateRoute>} />
