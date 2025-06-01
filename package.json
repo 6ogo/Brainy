@@ -28,6 +28,7 @@
     "react-router-dom": "^6.22.1",
     "react-share": "^5.1.0",
     "recharts": "^2.12.0",
+    "revenuecat-react": "^1.0.0",
     "tailwind-merge": "^2.2.1",
     "workbox-background-sync": "^7.0.0",
     "workbox-expiration": "^7.0.0",
