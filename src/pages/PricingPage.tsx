@@ -31,9 +31,9 @@ const plans = [
     price: '19.99',
     description: 'Unlock the full potential of AI tutoring',
     features: [
-      'Unlimited conversation time',
+      '4 hours daily conversation',
+      '30 minute video calls',
       'All subjects and specializations',
-      '10+ avatar personalities',
       'Advanced analytics and insights',
       'Priority customer support',
       'Downloadable conversation transcripts'
@@ -41,16 +41,18 @@ const plans = [
     isPopular: true
   },
   {
-    name: 'Family',
-    price: '39.99',
-    description: 'Perfect for families learning together',
+    name: 'Ultimate',
+    price: '69',
+    description: 'The complete AI tutoring experience',
     features: [
-      'Up to 5 accounts',
-      'Parental controls and reporting',
-      'Family challenge competitions',
-      'Bulk educational content access',
-      'Family progress dashboard',
-      'Priority support for all members'
+      'Unlimited conversation time',
+      'Unlimited video calls',
+      'All subjects and specializations',
+      'Premium avatar collection',
+      'Advanced analytics and insights',
+      'Priority customer support',
+      'Downloadable conversation transcripts',
+      'Early access to new features'
     ]
   }
 ];
@@ -92,13 +94,13 @@ export const PricingPage: React.FC = () => {
               key={plan.name}
               variant="interactive"
               className={cn(
-                'flex flex-col',
-                plan.isPopular && 'border-2 border-primary-500 scale-105'
+                'flex flex-col relative',
+                plan.isPopular && 'ring-2 ring-primary-500 ring-offset-2'
               )}
               delay={index * 0.1}
             >
               {plan.isPopular && (
-                <div className="absolute top-0 right-0 -translate-y-1/2 px-3 py-1 bg-primary-500 text-white text-sm font-medium rounded-full">
+                <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-primary-500 text-white text-sm font-medium rounded-full shadow-lg">
                   Most Popular
                 </div>
               )}
@@ -176,8 +178,8 @@ export const PricingPage: React.FC = () => {
               <p className="text-gray-600">Start with our free tier to experience Brainbud before committing to a paid plan.</p>
             </div>
             <div>
-              <h3 className="font-semibold text-lg mb-2">How does family sharing work?</h3>
-              <p className="text-gray-600">Family plan administrators can invite up to 4 additional members to join their plan.</p>
+              <h3 className="font-semibold text-lg mb-2">What's included in video calls?</h3>
+              <p className="text-gray-600">Video calls include face-to-face learning with AI tutors and visual demonstrations.</p>
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-2">What payment methods are accepted?</h3>
