@@ -1,149 +1,133 @@
 import { API_CONFIG } from '../config/api';
 
-/**
- * Tavus API Service
- * Handles interactions with the Tavus API for creating and managing video replicas
- */
+interface TavusCache {
+  [key: string]: {
+    data: any;
+    timestamp: number;
+  }
+}
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const cache: TavusCache = {};
+
+const getCached = (key: string) => {
+  const cached = cache[key];
+  if (!cached) return null;
+  
+  const isExpired = Date.now() - cached.timestamp > CACHE_DURATION;
+  if (isExpired) {
+    delete cache[key];
+    return null;
+  }
+  
+  return cached.data;
+};
+
+const setCached = (key: string, data: any) => {
+  cache[key] = {
+    data,
+    timestamp: Date.now()
+  };
+};
+
 export const TavusService = {
-  /**
-   * Create a new replica
-   * @param replicaName - Name of the replica
-   * @param trainVideoUrl - URL of the training video
-   * @param callbackUrl - Optional callback URL
-   * @returns Promise with the creation response
-   */
-  createReplica: async (replicaName: string, trainVideoUrl: string, callbackUrl: string = '') => {
-    const options = {
-      method: 'POST',
-      headers: {
-        'x-api-key': API_CONFIG.TAVUS_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        replica_name: replicaName,
-        train_video_url: trainVideoUrl,
-        callback_url: callbackUrl
-      })
-    };
+  async createPersona(personaName: string, defaultReplicaId: string, systemPrompt: string, context: string) {
+    const cacheKey = `persona_${personaName}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
 
     try {
-      const response = await fetch('https://tavusapi.com/v2/replicas', options);
+      const response = await fetch('https://tavusapi.com/v2/personas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_CONFIG.TAVUS_API_KEY
+        },
+        body: JSON.stringify({
+          persona_name: personaName,
+          default_replica_id: defaultReplicaId,
+          system_prompt: systemPrompt,
+          context,
+          layers: {
+            perception: {
+              perception_model: 'raven-0',
+              ambient_awareness_queries: [
+                'Is the user maintaining eye contact and appearing engaged, or do they seem distracted?',
+                'Does the user have any books, artifacts, maps, or objects related to US history visible that could be referenced?',
+                'Is the user showing signs of confusion or understanding through their facial expressions or body language?',
+                'Is the user in an environment that provides context for their interest in history (classroom, museum, home study)?'
+              ]
+            }
+          }
+        })
+      });
+
       if (!response.ok) {
         throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
       }
-      return await response.json();
+
+      const data = await response.json();
+      setCached(cacheKey, data);
+      return data;
     } catch (error) {
-      console.error('Error creating Tavus replica:', error);
+      console.error('Error creating Tavus persona:', error);
       throw error;
     }
   },
 
-  /**
-   * Get a specific replica by ID
-   * @param replicaId - ID of the replica to retrieve
-   * @returns Promise with the replica data
-   */
-  getReplica: async (replicaId: string) => {
-    const options = {
-      method: 'GET',
-      headers: {
-        'x-api-key': API_CONFIG.TAVUS_API_KEY
-      }
-    };
+  async createVideo(replicaId: string, script: string): Promise<{ url: string }> {
+    const cacheKey = `video_${replicaId}_${script}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
 
     try {
-      const response = await fetch(`https://tavusapi.com/v2/replicas/${replicaId}`, options);
+      const response = await fetch('https://tavusapi.com/v2/videos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_CONFIG.TAVUS_API_KEY
+        },
+        body: JSON.stringify({
+          replica_id: replicaId,
+          script
+        })
+      });
+
       if (!response.ok) {
         throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
       }
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching Tavus replica:', error);
-      throw error;
-    }
-  },
 
-  /**
-   * List all replicas
-   * @returns Promise with array of replicas
-   */
-  listReplicas: async () => {
-    const options = {
-      method: 'GET',
-      headers: {
-        'x-api-key': API_CONFIG.TAVUS_API_KEY
-      }
-    };
-
-    try {
-      const response = await fetch('https://tavusapi.com/v2/replicas', options);
-      if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (error) {
-      console.error('Error listing Tavus replicas:', error);
-      throw error;
-    }
-  },
-
-  /**
-   * Create a new video using a replica
-   * @param replicaId - ID of the replica to use
-   * @param script - Script text for the video
-   * @param callbackUrl - Optional callback URL
-   * @returns Promise with the video creation response
-   */
-  createVideo: async (replicaId: string, script: string, callbackUrl: string = '') => {
-    const options = {
-      method: 'POST',
-      headers: {
-        'x-api-key': API_CONFIG.TAVUS_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        replica_id: replicaId,
-        script: script,
-        callback_url: callbackUrl
-      })
-    };
-
-    try {
-      const response = await fetch('https://tavusapi.com/v2/videos', options);
-      if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
-      }
-      return await response.json();
+      const data = await response.json();
+      setCached(cacheKey, data);
+      return data;
     } catch (error) {
       console.error('Error creating Tavus video:', error);
       throw error;
     }
   },
 
-  /**
-   * Get a specific video by ID
-   * @param videoId - ID of the video to retrieve
-   * @returns Promise with the video data
-   */
-  getVideo: async (videoId: string) => {
-    const options = {
-      method: 'GET',
-      headers: {
-        'x-api-key': API_CONFIG.TAVUS_API_KEY
-      }
-    };
+  async getVideo(videoId: string) {
+    const cacheKey = `video_status_${videoId}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
 
     try {
-      const response = await fetch(`https://tavusapi.com/v2/videos/${videoId}`, options);
+      const response = await fetch(`https://tavusapi.com/v2/videos/${videoId}`, {
+        headers: {
+          'x-api-key': API_CONFIG.TAVUS_API_KEY
+        }
+      });
+
       if (!response.ok) {
         throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
       }
-      return await response.json();
+
+      const data = await response.json();
+      setCached(cacheKey, data);
+      return data;
     } catch (error) {
       console.error('Error fetching Tavus video:', error);
       throw error;
     }
   }
 };
-
-export default TavusService;

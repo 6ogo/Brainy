@@ -11,6 +11,36 @@ interface ConversationResponse {
   videoUrl?: string;
 }
 
+interface ConversationCache {
+  [key: string]: {
+    data: ConversationResponse;
+    timestamp: number;
+  }
+}
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const cache: ConversationCache = {};
+
+const getCached = (key: string) => {
+  const cached = cache[key];
+  if (!cached) return null;
+  
+  const isExpired = Date.now() - cached.timestamp > CACHE_DURATION;
+  if (isExpired) {
+    delete cache[key];
+    return null;
+  }
+  
+  return cached.data;
+};
+
+const setCached = (key: string, data: ConversationResponse) => {
+  cache[key] = {
+    data,
+    timestamp: Date.now()
+  };
+};
+
 export const ConversationService = {
   async generateResponse(
     message: string, 
@@ -18,22 +48,23 @@ export const ConversationService = {
     useVideo: boolean = true,
     useVoice: boolean = true
   ): Promise<ConversationResponse> {
+    const cacheKey = `response_${message}_${subject}_${useVideo}_${useVoice}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached;
+
     try {
       if (!isConfigured) {
         toast.error('API keys not configured. Check console for details.');
         return { text: 'API configuration error. Please check your settings.' };
       }
 
-      // Get response from GPT (simulated here - replace with actual API call)
       const response = await this.getAIResponse(message, subject);
       
-      // Generate speech and video in parallel if enabled
       const [audioUrl, videoUrl] = await Promise.all([
         useVoice ? this.generateSpeech(response) : Promise.resolve(undefined),
         useVideo ? this.generateVideo(response) : Promise.resolve(undefined)
       ]);
 
-      // Save conversation to Supabase
       await this.saveConversation(message, response);
 
       if (!audioUrl && useVoice) {
@@ -43,11 +74,14 @@ export const ConversationService = {
         toast.error('Video generation failed. Using audio-only mode.');
       }
 
-      return {
+      const result = {
         text: response,
         audioUrl,
         videoUrl
       };
+
+      setCached(cacheKey, result);
+      return result;
     } catch (error) {
       console.error('Error in conversation:', error);
       toast.error('An error occurred. Please try again.');
@@ -56,6 +90,10 @@ export const ConversationService = {
   },
 
   async getAIResponse(message: string, subject: Subject): Promise<string> {
+    const cacheKey = `ai_response_${message}_${subject}`;
+    const cached = getCached(cacheKey);
+    if (cached) return cached.text;
+
     // Simulate AI response based on subject
     // Replace with actual AI API integration
     const responses = {
@@ -67,7 +105,9 @@ export const ConversationService = {
       'Test Prep': "This type of question often appears on exams. Here's how to approach it..."
     };
 
-    return responses[subject] || "Let me help you understand this better...";
+    const response = responses[subject] || "Let me help you understand this better...";
+    setCached(cacheKey, { text: response });
+    return response;
   },
 
   async generateSpeech(text: string): Promise<string | undefined> {
@@ -79,7 +119,7 @@ export const ConversationService = {
         throw new Error('No voices available');
       }
       
-      const voice = voices[0]; // Select appropriate voice
+      const voice = voices[0];
       const audioBlob = await ElevenLabsService.generateSpeech(text, voice.voice_id);
       return URL.createObjectURL(audioBlob);
     } catch (error) {
