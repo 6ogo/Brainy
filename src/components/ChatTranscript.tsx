@@ -1,78 +1,157 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { Search } from 'lucide-react';
+import { Search, Send } from 'lucide-react';
 import { useStore } from '../store/store';
+import { cn, commonStyles } from '../styles/utils';
 
 export const ChatTranscript: React.FC = () => {
-  const { messages } = useStore();
+  const { messages, addMessage, currentSubject } = useStore();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [inputMessage, setInputMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [searchTerm, setSearchTerm] = React.useState('');
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = `${inputRef.current.scrollHeight}px`;
+    }
+  }, [inputMessage]);
 
   const filteredMessages = searchTerm
     ? messages.filter(msg => 
         msg.text.toLowerCase().includes(searchTerm.toLowerCase()))
     : messages;
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputMessage.trim()) return;
+
+    addMessage(inputMessage, 'user');
+    setInputMessage('');
+
+    // Simulate AI response based on subject
+    setTimeout(() => {
+      let response = '';
+      switch (currentSubject) {
+        case 'Math':
+          response = "Let's solve this step by step. In mathematics, it's important to understand the underlying concepts...";
+          break;
+        case 'Science':
+          response = "That's an interesting question about scientific principles. Let me explain how this phenomenon works...";
+          break;
+        case 'English':
+          response = "When analyzing this piece of literature, we should consider the author's use of literary devices...";
+          break;
+        case 'History':
+          response = "This historical event had several important causes and consequences. Let's examine them...";
+          break;
+        case 'Languages':
+          response = "Here's how we can express that in the target language, paying attention to grammar and pronunciation...";
+          break;
+        case 'Test Prep':
+          response = "This type of question often appears on standardized tests. Here's a strategy to approach it...";
+          break;
+        default:
+          response = "I understand your question. Let me help you with that...";
+      }
+      addMessage(response, 'ai');
+    }, 1000);
+  };
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm">
       {/* Search bar */}
       <div className="p-3 border-b border-gray-200">
         <div className="relative">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-            <Search className="h-4 w-4 text-gray-400" />
-          </div>
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
             placeholder="Search conversation..."
-            className="pl-10 pr-3 py-2 w-full text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className={cn(
+              commonStyles.input.base,
+              "pl-10 pr-3 py-2 text-sm"
+            )}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
       </div>
       
-      {/* Transcript messages */}
-      <div className="flex-1 overflow-y-auto p-4">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {filteredMessages.length === 0 ? (
           <div className="text-center py-10">
             <p className="text-gray-500 text-sm">
-              {searchTerm ? 'No matching messages found' : 'Your conversation will appear here'}
+              {searchTerm ? 'No matching messages found' : 'Start your conversation with your AI tutor'}
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {filteredMessages.map((message) => (
+          filteredMessages.map((message) => (
+            <div
+              key={message.id}
+              className={cn(
+                "flex",
+                message.sender === 'user' ? "justify-end" : "justify-start"
+              )}
+            >
               <div
-                key={message.id}
-                className={`flex ${
-                  message.sender === 'user' ? 'justify-end' : 'justify-start'
-                }`}
+                className={cn(
+                  "max-w-[80%] rounded-lg px-4 py-2",
+                  message.sender === 'user'
+                    ? "bg-primary-100 text-primary-800"
+                    : "bg-gray-100 text-gray-800"
+                )}
               >
-                <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                    message.sender === 'user'
-                      ? 'bg-primary-100 text-primary-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  <div className="text-sm">{message.text}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    {format(message.timestamp, 'h:mm a')}
-                  </div>
+                <div className="text-sm whitespace-pre-wrap">{message.text}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {format(message.timestamp, 'h:mm a')}
                 </div>
               </div>
-            ))}
-            <div ref={chatEndRef} />
-          </div>
+            </div>
+          ))
         )}
+        <div ref={chatEndRef} />
       </div>
+
+      {/* Input area */}
+      <form onSubmit={handleSubmit} className="p-3 border-t border-gray-200">
+        <div className="flex items-end space-x-2">
+          <textarea
+            ref={inputRef}
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            placeholder="Type your message..."
+            className={cn(
+              commonStyles.input.base,
+              "resize-none min-h-[40px] max-h-[120px] py-2"
+            )}
+            rows={1}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+          />
+          <button
+            type="submit"
+            className={cn(
+              commonStyles.button.primary,
+              "px-3 py-2"
+            )}
+            disabled={!inputMessage.trim()}
+          >
+            <Send className="h-5 w-5" />
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
