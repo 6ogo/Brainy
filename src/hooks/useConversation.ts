@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useStore } from '../store/store';
 import { ConversationService } from '../services/conversationService';
 import { useAuth } from '../contexts/AuthContext';
+import { useAchievements } from './useAchievements';
 import toast from 'react-hot-toast';
 
 export const useConversation = () => {
@@ -12,10 +13,13 @@ export const useConversation = () => {
     setIsSpeaking,
     setAvatarEmotion,
     updateSessionStats,
-    sessionStats
+    sessionStats,
+    socialStats,
+    updateSocialStats
   } = useStore();
   
   const { user } = useAuth();
+  const { checkAndAwardAchievements } = useAchievements();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const sendMessage = async (message: string) => {
@@ -41,11 +45,24 @@ export const useConversation = () => {
       // Add AI response
       addMessage(response.text, 'ai');
 
-      // Update session stats
-      updateSessionStats({
+      // Update session and social stats
+      const newXP = 10;
+      const updatedSessionStats = {
         ...sessionStats,
         messagesCount: sessionStats.messagesCount + 2,
-        xpEarned: sessionStats.xpEarned + 10
+        xpEarned: sessionStats.xpEarned + newXP
+      };
+      
+      updateSessionStats(updatedSessionStats);
+      updateSocialStats({
+        ...socialStats,
+        totalXP: socialStats.totalXP + newXP
+      });
+
+      // Check for achievements
+      checkAndAwardAchievements({
+        ...socialStats,
+        totalXP: socialStats.totalXP + newXP
       });
 
       // Save conversation if user is logged in
@@ -60,7 +77,6 @@ export const useConversation = () => {
         audio.onended = () => {
           setIsSpeaking(false);
           setAvatarEmotion('neutral');
-          // Clean up audio URL
           URL.revokeObjectURL(response.audioUrl!);
         };
       } else {
