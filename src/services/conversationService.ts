@@ -40,7 +40,7 @@ export const ConversationService = {
     }
   },
 
-  private async getAIResponse(message: string, subject: Subject): Promise<string> {
+  async getAIResponse(message: string, subject: Subject): Promise<string> {
     // Simulate AI response based on subject
     // Replace with actual AI API integration
     const responses = {
@@ -55,7 +55,7 @@ export const ConversationService = {
     return responses[subject] || "Let me help you understand this better...";
   },
 
-  private async generateSpeech(text: string): Promise<string | undefined> {
+  async generateSpeech(text: string): Promise<string | undefined> {
     try {
       const voices = await ElevenLabsService.getVoices();
       const voice = voices[0]; // Select appropriate voice
@@ -70,7 +70,7 @@ export const ConversationService = {
     }
   },
 
-  private async generateVideo(text: string): Promise<string | undefined> {
+  async generateVideo(text: string): Promise<string | undefined> {
     try {
       const video = await TavusService.createVideo(
         process.env.VITE_TAVUS_REPLICA_ID!,
@@ -83,7 +83,7 @@ export const ConversationService = {
     }
   },
 
-  private async saveConversation(
+  async saveConversation(
     userMessage: string,
     aiResponse: string
   ): Promise<void> {
