@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../store/store';
-import { Video, VideoOff, Image as ImageIcon, SwordIcon as Record, StopCircle, Settings } from 'lucide-react';
+import { Video, VideoOff, Image as ImageIcon, SwordIcon as Record, StopCircle, Settings, Mic, MicOff } from 'lucide-react';
 
 const backgrounds = [
   { id: 'classroom', name: 'Classroom' },
@@ -16,7 +16,9 @@ export const VideoControls: React.FC = () => {
     currentBackground,
     toggleVideo,
     toggleRecording,
-    setCurrentBackground
+    setCurrentBackground,
+    voiceMode,
+    setVoiceMode
   } = useStore();
 
   const [showBackgrounds, setShowBackgrounds] = React.useState(false);
@@ -28,7 +30,7 @@ export const VideoControls: React.FC = () => {
         className={`p-2 rounded-full ${
           isVideoEnabled ? 'bg-primary-500 text-white' : 'bg-gray-600 text-gray-200'
         }`}
-        title={isVideoEnabled ? 'Disable video' : 'Enable video'}
+        title={isVideoEnabled ? 'Switch to voice-only mode' : 'Enable video mode'}
       >
         {isVideoEnabled ? (
           <Video className="h-5 w-5" />
@@ -37,36 +39,38 @@ export const VideoControls: React.FC = () => {
         )}
       </button>
 
-      <div className="relative">
-        <button
-          onClick={() => setShowBackgrounds(!showBackgrounds)}
-          className="p-2 rounded-full hover:bg-gray-700/50"
-          title="Change background"
-        >
-          <ImageIcon className="h-5 w-5 text-white" />
-        </button>
+      {isVideoEnabled && (
+        <div className="relative">
+          <button
+            onClick={() => setShowBackgrounds(!showBackgrounds)}
+            className="p-2 rounded-full hover:bg-gray-700/50"
+            title="Change background"
+          >
+            <ImageIcon className="h-5 w-5 text-white" />
+          </button>
 
-        {showBackgrounds && (
-          <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg py-2 min-w-[160px]">
-            {backgrounds.map((bg) => (
-              <button
-                key={bg.id}
-                className={`w-full px-4 py-2 text-left text-sm ${
-                  currentBackground === bg.id
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'hover:bg-gray-50 text-gray-700'
-                }`}
-                onClick={() => {
-                  setCurrentBackground(bg.id as any);
-                  setShowBackgrounds(false);
-                }}
-              >
-                {bg.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+          {showBackgrounds && (
+            <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg py-2 min-w-[160px]">
+              {backgrounds.map((bg) => (
+                <button
+                  key={bg.id}
+                  className={`w-full px-4 py-2 text-left text-sm ${
+                    currentBackground === bg.id
+                      ? 'bg-primary-50 text-primary-700'
+                      : 'hover:bg-gray-50 text-gray-700'
+                  }`}
+                  onClick={() => {
+                    setCurrentBackground(bg.id as any);
+                    setShowBackgrounds(false);
+                  }}
+                >
+                  {bg.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <button
         onClick={toggleRecording}
@@ -79,6 +83,20 @@ export const VideoControls: React.FC = () => {
           <StopCircle className="h-5 w-5" />
         ) : (
           <Record className="h-5 w-5" />
+        )}
+      </button>
+
+      <button
+        onClick={() => setVoiceMode(voiceMode === 'muted' ? 'push-to-talk' : 'muted')}
+        className={`p-2 rounded-full ${
+          voiceMode !== 'muted' ? 'bg-primary-500 text-white' : 'bg-gray-600 text-gray-200'
+        }`}
+        title={voiceMode === 'muted' ? 'Enable microphone' : 'Disable microphone'}
+      >
+        {voiceMode === 'muted' ? (
+          <MicOff className="h-5 w-5" />
+        ) : (
+          <Mic className="h-5 w-5" />
         )}
       </button>
 

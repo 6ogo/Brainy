@@ -13,7 +13,8 @@ export const VideoArea: React.FC = () => {
     isVideoEnabled,
     currentAvatar,
     currentBackground,
-    avatarEmotion
+    avatarEmotion,
+    voiceMode
   } = useStore();
   const { error } = useVoiceRecognition();
   const [videoLoaded, setVideoLoaded] = useState(false);
@@ -76,7 +77,7 @@ export const VideoArea: React.FC = () => {
               )}
             </div>
 
-            {isListening && (
+            {isListening && voiceMode !== 'muted' && (
               <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center justify-center space-x-1">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div 
@@ -94,7 +95,7 @@ export const VideoArea: React.FC = () => {
         )}
         
         <div className="absolute top-4 right-4 flex space-x-2">
-          {isListening ? (
+          {isListening && voiceMode !== 'muted' ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-500 text-white">
               <Mic className="w-3 h-3 mr-1" /> Listening
             </span>
