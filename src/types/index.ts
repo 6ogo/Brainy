@@ -1,4 +1,4 @@
-import { type } from "os";
+// Core types for the application
 
 export type Subject = 'Math' | 'Science' | 'English' | 'History' | 'Languages' | 'Test Prep';
 
@@ -25,6 +25,8 @@ export type AvatarEmotion =
   | 'thinking'
   | 'excited'
   | 'concerned';
+
+export type LearningMode = 'conversational' | 'videocall';
 
 export interface Avatar {
   id: AvatarPersonality;
@@ -97,6 +99,7 @@ export interface AppState {
   isVideoEnabled: boolean;
   isRecording: boolean;
   socialStats: SocialStats;
+  learningMode: LearningMode;
   
   // Actions
   setCurrentSubject: (subject: Subject) => void;
@@ -116,4 +119,5 @@ export interface AppState {
   completeChallenge: (challengeId: string) => void;
   unlockAchievement: (achievementId: string) => void;
   updateStreak: () => void;
+  setLearningMode: (mode: LearningMode) => void;
 }

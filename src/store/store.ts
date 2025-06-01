@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AppState, DifficultyLevel, Message, Subject, VoiceMode, AvatarPersonality, AvatarBackground, AvatarEmotion } from '../types';
+import { AppState, DifficultyLevel, Message, Subject, VoiceMode, AvatarPersonality, AvatarBackground, AvatarEmotion, LearningMode } from '../types';
 
 export const useStore = create<AppState>((set) => ({
   messages: [],
@@ -13,6 +13,7 @@ export const useStore = create<AppState>((set) => ({
   avatarEmotion: 'neutral',
   isVideoEnabled: true,
   isRecording: false,
+  learningMode: 'conversational',
   socialStats: {
     streak: {
       current: 1,
@@ -182,4 +183,7 @@ export const useStore = create<AppState>((set) => ({
 
       return state;
     }),
+
+  setLearningMode: (mode: LearningMode) =>
+    set({ learningMode: mode }),
 }));

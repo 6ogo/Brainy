@@ -63,7 +63,7 @@ export const SubjectSelection: React.FC = () => {
 
   const handleSubjectSelect = (subject: Subject) => {
     setCurrentSubject(subject);
-    navigate('/study');
+    navigate('/teachers');
   };
 
   return (

@@ -17,6 +17,7 @@ export const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     await login({ email, password });
+    // Navigation is now handled in the AuthContext
   };
 
   return (

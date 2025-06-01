@@ -4,8 +4,8 @@ import { supabase } from '../lib/supabase';
 import type { AuthState, LoginCredentials, SignupCredentials, User } from '../types/auth';
 
 interface AuthContextType extends AuthState {
-  login: (credentials: LoginCredentials) => Promise<void>;
-  signup: (credentials: SignupCredentials) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<boolean>;
+  signup: (credentials: SignupCredentials) => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
@@ -24,15 +24,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     supabase.auth.getSession().then(({ data: { session } }) => {
       setState(prev => ({
         ...prev,
-        user: session?.user ?? null,
+        user: session?.user ? convertSupabaseUser(session.user) : null,
         isLoading: false,
       }));
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setState(prev => ({
         ...prev,
-        user: session?.user ?? null,
+        user: session?.user ? convertSupabaseUser(session.user) : null,
         isLoading: false,
       }));
     });
@@ -46,12 +46,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) throw error;
-      navigate('/study');
+      navigate('/subjects');
+      return true;
     } catch (error) {
       setState(prev => ({ 
         ...prev, 
         error: error instanceof Error ? error.message : 'An error occurred' 
       }));
+      return false;
     } finally {
       setState(prev => ({ ...prev, isLoading: false }));
     }
@@ -69,12 +71,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (error) throw error;
-      navigate('/study');
+      navigate('/subjects');
+      return true;
     } catch (error) {
       setState(prev => ({ 
         ...prev, 
         error: error instanceof Error ? error.message : 'An error occurred' 
       }));
+      return false;
     } finally {
       setState(prev => ({ ...prev, isLoading: false }));
     }
@@ -101,6 +105,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       {children}
     </AuthContext.Provider>
   );
+};
+
+// Helper function to convert Supabase user to our custom User type
+const convertSupabaseUser = (supabaseUser: any): User => {
+  return {
+    id: supabaseUser.id,
+    email: supabaseUser.email || '',
+    created_at: new Date(supabaseUser.created_at),
+    updated_at: new Date(supabaseUser.updated_at || supabaseUser.created_at),
+    full_name: supabaseUser.user_metadata?.full_name,
+    avatar_url: supabaseUser.user_metadata?.avatar_url,
+    last_login: supabaseUser.last_sign_in_at ? new Date(supabaseUser.last_sign_in_at) : undefined,
+  };
 };
 
 export const useAuth = () => {
