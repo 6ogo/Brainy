@@ -15,7 +15,8 @@ function App() {
       </Router>
       <div className="fixed bottom-4 right-4 z-50">
         <img 
-          src="/white_circle_360x360.png" 
+          src="/white_circle_360x360.png"
+          ref="https://bolt.new/" 
           alt="Powered by Bolt" 
           className="w-16 h-16 opacity-75 hover:opacity-100 transition-opacity"
         />
