@@ -35,10 +35,8 @@ const plans = [
       '30 minute video calls',
       'All subjects and specializations',
       'Advanced analytics and insights',
-      'Priority customer support',
       'Downloadable conversation transcripts'
-    ],
-    isPopular: true
+    ]
   },
   {
     name: 'Ultimate',
@@ -46,11 +44,9 @@ const plans = [
     description: 'The complete AI tutoring experience',
     features: [
       'Increased conversation time',
-      'Video calls',
+      '60 minutes video calls',
       'All subjects and specializations',
-      'Premium avatar collection',
       'Advanced analytics and insights',
-      'Priority customer support',
       'Downloadable conversation transcripts',
       'Early access to new features'
     ]
@@ -93,18 +89,9 @@ export const PricingPage: React.FC = () => {
             <Card
               key={plan.name}
               variant="interactive"
-              className={cn(
-                'flex flex-col relative',
-                plan.isPopular && 'ring-2 ring-primary-500 ring-offset-2'
-              )}
+              className="flex flex-col"
               delay={index * 0.1}
             >
-              {plan.isPopular && (
-                <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-primary-500 text-white text-sm font-medium rounded-full shadow-lg">
-                  Most Popular
-                </div>
-              )}
-              
               <div className="p-6 text-center">
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
                 <p className="text-gray-500 mb-4">{plan.description}</p>
@@ -114,7 +101,7 @@ export const PricingPage: React.FC = () => {
                 </div>
                 
                 <Button
-                  variant={plan.isPopular ? 'primary' : 'outline'}
+                  variant="primary"
                   className="w-full mb-6"
                   onClick={() => navigate('/signup')}
                 >
