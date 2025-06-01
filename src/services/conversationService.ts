@@ -2,6 +2,8 @@ import { supabase } from '../lib/supabase';
 import { TavusService } from './tavusService';
 import { ElevenLabsService } from './elevenlabsService';
 import { Subject } from '../types';
+import { API_CONFIG, isConfigured } from '../config/api';
+import toast from 'react-hot-toast';
 
 interface ConversationResponse {
   text: string;
@@ -17,6 +19,11 @@ export const ConversationService = {
     useVoice: boolean = true
   ): Promise<ConversationResponse> {
     try {
+      if (!isConfigured) {
+        toast.error('API keys not configured. Check console for details.');
+        return { text: 'API configuration error. Please check your settings.' };
+      }
+
       // Get response from GPT (simulated here - replace with actual API call)
       const response = await this.getAIResponse(message, subject);
       
@@ -29,6 +36,13 @@ export const ConversationService = {
       // Save conversation to Supabase
       await this.saveConversation(message, response);
 
+      if (!audioUrl && useVoice) {
+        toast.error('Voice generation failed. Using text-only mode.');
+      }
+      if (!videoUrl && useVideo) {
+        toast.error('Video generation failed. Using audio-only mode.');
+      }
+
       return {
         text: response,
         audioUrl,
@@ -36,6 +50,7 @@ export const ConversationService = {
       };
     } catch (error) {
       console.error('Error in conversation:', error);
+      toast.error('An error occurred. Please try again.');
       throw error;
     }
   },
@@ -56,8 +71,14 @@ export const ConversationService = {
   },
 
   async generateSpeech(text: string): Promise<string | undefined> {
+    if (!API_CONFIG.ELEVENLABS_API_KEY) return undefined;
+
     try {
       const voices = await ElevenLabsService.getVoices();
+      if (!voices?.length) {
+        throw new Error('No voices available');
+      }
+      
       const voice = voices[0]; // Select appropriate voice
       const audioBlob = await ElevenLabsService.generateSpeech(text, voice.voice_id);
       return URL.createObjectURL(audioBlob);
@@ -68,13 +89,10 @@ export const ConversationService = {
   },
 
   async generateVideo(text: string): Promise<string | undefined> {
+    if (!API_CONFIG.TAVUS_API_KEY || !API_CONFIG.TAVUS_REPLICA_ID) return undefined;
+
     try {
-      const replicaId = import.meta.env.VITE_TAVUS_REPLICA_ID;
-      if (!replicaId) {
-        throw new Error('TAVUS_REPLICA_ID not configured');
-      }
-      
-      const video = await TavusService.createVideo(replicaId, text);
+      const video = await TavusService.createVideo(API_CONFIG.TAVUS_REPLICA_ID, text);
       return video.url;
     } catch (error) {
       console.error('Error generating video:', error);
