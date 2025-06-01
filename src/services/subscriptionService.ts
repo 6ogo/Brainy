@@ -8,6 +8,7 @@
 
 import { supabase } from '../lib/supabase';
 import { products, ProductId } from '../stripe-config';
+import * as RevenueCat from '@revenuecat/purchases-js';
 
 // Platform detection
 const isMobile = (): boolean => {
@@ -17,9 +18,6 @@ const isMobile = (): boolean => {
 };
 
 // ============== REVENUECAT INTEGRATION (for cross-platform) ===============
-
-// Use a type-safe import that avoids TypeScript errors
-const RevenueCat: any = require('@revenuecat/purchases-js');
 
 // Get the API key from environment variables
 const REVENUECAT_API_KEY = import.meta.env.VITE_REVENUECAT_API_KEY;
