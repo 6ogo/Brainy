@@ -2,18 +2,10 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { theme } from './theme';
 
-/**
- * Combines multiple class names, resolves conflicts and merges them
- * This is useful for conditionally applying classes and merging with Tailwind classes
- */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * Utility function to access theme values
- * This ensures type safety and consistent access to theme values
- */
 export const getThemeValue = {
   color: (path: string): string => {
     const parts = path.split('.');
@@ -59,10 +51,41 @@ export const getThemeValue = {
   },
 };
 
-/**
- * Common styles used across the application
- * This ensures consistency in styling components
- */
+export const animations = {
+  fadeIn: {
+    initial: { opacity: 0 },
+    animate: { opacity: 1 },
+    transition: { duration: 0.3 }
+  },
+  slideUp: {
+    initial: { y: 20, opacity: 0 },
+    animate: { y: 0, opacity: 1 },
+    transition: { duration: 0.4, ease: "easeOut" }
+  },
+  slideInLeft: {
+    initial: { x: -20, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    transition: { duration: 0.4, ease: "easeOut" }
+  },
+  slideInRight: {
+    initial: { x: 20, opacity: 0 },
+    animate: { x: 0, opacity: 1 },
+    transition: { duration: 0.4, ease: "easeOut" }
+  },
+  scale: {
+    initial: { scale: 0.95, opacity: 0 },
+    animate: { scale: 1, opacity: 1 },
+    transition: { duration: 0.3, ease: "easeOut" }
+  },
+  staggerChildren: {
+    animate: {
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  }
+};
+
 export const commonStyles = {
   container: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8',
   
@@ -83,27 +106,27 @@ export const commonStyles = {
   },
   
   button: {
-    primary: 'px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors',
-    secondary: 'px-4 py-2 bg-white text-indigo-600 font-medium rounded-md border border-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors',
-    outline: 'px-4 py-2 bg-transparent text-indigo-600 font-medium rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors',
-    text: 'font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none transition-colors',
+    primary: 'px-4 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 transform hover:scale-105 active:scale-95',
+    secondary: 'px-4 py-2 bg-white text-indigo-600 font-medium rounded-md border border-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 transform hover:scale-105 active:scale-95',
+    outline: 'px-4 py-2 bg-transparent text-indigo-600 font-medium rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-300 transform hover:scale-105 active:scale-95',
+    text: 'font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none transition-colors duration-300',
   },
   
   card: {
-    base: 'bg-white rounded-lg shadow-md overflow-hidden',
-    hover: 'bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow',
-    interactive: 'bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg cursor-pointer transition-all transform hover:-translate-y-1',
+    base: 'bg-white rounded-lg shadow-md overflow-hidden transition-all duration-300',
+    hover: 'bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1',
+    interactive: 'bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg cursor-pointer transition-all duration-300 transform hover:-translate-y-1 active:scale-98',
   },
   
   input: {
-    base: 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500',
-    error: 'block w-full rounded-md border-red-300 shadow-sm focus:border-red-500 focus:ring-red-500',
-    disabled: 'block w-full rounded-md border-gray-300 bg-gray-100 shadow-sm text-gray-500 cursor-not-allowed',
+    base: 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all duration-300',
+    error: 'block w-full rounded-md border-red-300 shadow-sm focus:border-red-500 focus:ring-red-500 transition-all duration-300',
+    disabled: 'block w-full rounded-md border-gray-300 bg-gray-100 shadow-sm text-gray-500 cursor-not-allowed transition-all duration-300',
   },
   
   label: {
-    base: 'block text-sm font-medium text-gray-700',
-    error: 'block text-sm font-medium text-red-600',
+    base: 'block text-sm font-medium text-gray-700 transition-colors duration-300',
+    error: 'block text-sm font-medium text-red-600 transition-colors duration-300',
   },
   
   section: {
@@ -117,4 +140,5 @@ export default {
   cn,
   getThemeValue,
   commonStyles,
+  animations,
 };

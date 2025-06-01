@@ -1,5 +1,6 @@
 import React from 'react';
-import { cn, commonStyles } from '../styles/utils';
+import { motion } from 'framer-motion';
+import { cn, commonStyles, animations } from '../styles/utils';
 
 export interface CardProps {
   children: React.ReactNode;
@@ -12,6 +13,7 @@ export interface CardProps {
   footerClassName?: string;
   footer?: React.ReactNode;
   onClick?: () => void;
+  delay?: number;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -25,33 +27,63 @@ export const Card: React.FC<CardProps> = ({
   footerClassName,
   footer,
   onClick,
+  delay = 0,
 }) => {
   const variantStyles = commonStyles.card[variant];
   
   return (
-    <div 
+    <motion.div 
       className={cn(variantStyles, className)}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
+      initial="initial"
+      animate="animate"
+      variants={animations.scale}
+      transition={{ delay }}
+      whileHover={variant !== 'base' ? { y: -5, transition: { duration: 0.2 } } : undefined}
+      whileTap={variant === 'interactive' ? { scale: 0.98 } : undefined}
     >
       {(title || subtitle) && (
-        <div className={cn('px-4 py-3 border-b border-gray-200', headerClassName)}>
-          {title && <h3 className="text-lg font-medium text-gray-900">{title}</h3>}
-          {subtitle && <p className="mt-1 text-sm text-gray-500">{subtitle}</p>}
-        </div>
+        <motion.div 
+          className={cn('px-4 py-3 border-b border-gray-200', headerClassName)}
+          variants={animations.fadeIn}
+        >
+          {title && (
+            <motion.h3 
+              className="text-lg font-medium text-gray-900"
+              variants={animations.slideUp}
+            >
+              {title}
+            </motion.h3>
+          )}
+          {subtitle && (
+            <motion.p 
+              className="mt-1 text-sm text-gray-500"
+              variants={animations.slideUp}
+            >
+              {subtitle}
+            </motion.p>
+          )}
+        </motion.div>
       )}
       
-      <div className={cn('p-4', bodyClassName)}>
+      <motion.div 
+        className={cn('p-4', bodyClassName)}
+        variants={animations.fadeIn}
+      >
         {children}
-      </div>
+      </motion.div>
       
       {footer && (
-        <div className={cn('px-4 py-3 bg-gray-50 border-t border-gray-200', footerClassName)}>
+        <motion.div 
+          className={cn('px-4 py-3 bg-gray-50 border-t border-gray-200', footerClassName)}
+          variants={animations.slideUp}
+        >
           {footer}
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 };
 
