@@ -2,10 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { Search, Send } from 'lucide-react';
 import { useStore } from '../store/store';
+import { useConversation } from '../hooks/useConversation';
 import { cn, commonStyles } from '../styles/utils';
 
 export const ChatTranscript: React.FC = () => {
-  const { messages, addMessage, currentSubject } = useStore();
+  const { messages } = useStore();
+  const { sendMessage, isProcessing } = useConversation();
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -29,40 +31,13 @@ export const ChatTranscript: React.FC = () => {
         msg.text.toLowerCase().includes(searchTerm.toLowerCase()))
     : messages;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMessage.trim()) return;
+    if (!inputMessage.trim() || isProcessing) return;
 
-    addMessage(inputMessage, 'user');
+    const message = inputMessage;
     setInputMessage('');
-
-    // Simulate AI response based on subject
-    setTimeout(() => {
-      let response = '';
-      switch (currentSubject) {
-        case 'Math':
-          response = "Let's solve this step by step. In mathematics, it's important to understand the underlying concepts...";
-          break;
-        case 'Science':
-          response = "That's an interesting question about scientific principles. Let me explain how this phenomenon works...";
-          break;
-        case 'English':
-          response = "When analyzing this piece of literature, we should consider the author's use of literary devices...";
-          break;
-        case 'History':
-          response = "This historical event had several important causes and consequences. Let's examine them...";
-          break;
-        case 'Languages':
-          response = "Here's how we can express that in the target language, paying attention to grammar and pronunciation...";
-          break;
-        case 'Test Prep':
-          response = "This type of question often appears on standardized tests. Here's a strategy to approach it...";
-          break;
-        default:
-          response = "I understand your question. Let me help you with that...";
-      }
-      addMessage(response, 'ai');
-    }, 1000);
+    await sendMessage(message);
   };
 
   return (
@@ -133,6 +108,7 @@ export const ChatTranscript: React.FC = () => {
               "resize-none min-h-[40px] max-h-[120px] py-2"
             )}
             rows={1}
+            disabled={isProcessing}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -146,7 +122,7 @@ export const ChatTranscript: React.FC = () => {
               commonStyles.button.primary,
               "px-3 py-2"
             )}
-            disabled={!inputMessage.trim()}
+            disabled={!inputMessage.trim() || isProcessing}
           >
             <Send className="h-5 w-5" />
           </button>
