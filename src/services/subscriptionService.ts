@@ -33,22 +33,33 @@ export const initializeRevenueCat = (userId?: string): void => {
     return;
   }
 
+  // Log key type for debugging (first characters only, not the full key for security)
+  console.log(`Initializing RevenueCat with API key type: ${REVENUECAT_WEB_API_KEY.substring(0, 5)}*****`);
+  
   try {
     // Initialize the SDK with the API key and required parameters
     // See: https://www.revenuecat.com/docs/web/web-billing/web-sdk
-    // The RevenueCat Web SDK only supports apiKey and appUserId parameters
-    // See: https://www.revenuecat.com/docs/web/web-billing/web-sdk
+    // For RevenueCat Web SDK, you need a valid API key that starts with one of these prefixes:
+    // - 'rcb_' for Web Billing 
+    // - 'sk_web_' for older Web Billing integrations
+    // - 'pk_' for Paddle integration
     if (userId) {
       // With user ID - must follow parameters order in documentation
       RevenueCat.Purchases.configure(REVENUECAT_WEB_API_KEY, userId);
     } else {
       // Without user ID - the TypeScript definition requires at least a second parameter
-      // We pass null here as the second parameter to satisfy TypeScript
-      RevenueCat.Purchases.configure(REVENUECAT_WEB_API_KEY, null as unknown as string);
+      // We pass empty string as the second parameter to satisfy TypeScript
+      RevenueCat.Purchases.configure(REVENUECAT_WEB_API_KEY, "");
     }
     console.log('RevenueCat SDK initialized successfully');
   } catch (error) {
     console.error('Error initializing RevenueCat:', error);
+    // Display more detailed error information
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error is likely due to incorrect API key format');
+      console.error('RevenueCat Web SDK requires a valid API key that starts with "rcb_", "sk_web_", or "pk_"');
+    }
   }
 };
 
