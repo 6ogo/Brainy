@@ -8,7 +8,6 @@
 
 import { supabase } from '../lib/supabase';
 import { products, ProductId } from '../stripe-config';
-import * as RevenueCat from '@revenuecat/purchases-js';
 
 // Platform detection
 const isMobile = (): boolean => {
@@ -20,47 +19,40 @@ const isMobile = (): boolean => {
 // ============== REVENUECAT INTEGRATION (for cross-platform) ===============
 
 // Get the API key from environment variables
-// For RevenueCat Web SDK, you must use a Web Billing API key (not the same as other platforms)
-const REVENUECAT_WEB_API_KEY = import.meta.env.VITE_REVENUECAT_WEB_API_KEY || import.meta.env.VITE_REVENUECAT_API_KEY;
+const REVENUECAT_API_KEY = import.meta.env.VITE_REVENUECAT_API_KEY;
 
 /**
  * Initialize the RevenueCat SDK
  * @param userId User ID for identification
  */
 export const initializeRevenueCat = (userId?: string): void => {
-  if (!REVENUECAT_WEB_API_KEY) {
-    console.error('RevenueCat Web API key not found in environment variables');
+  // Skip initialization if API key is not configured
+  if (!REVENUECAT_API_KEY || !REVENUECAT_API_KEY.match(/^(rcb_|sk_web_|pk_)/)) {
+    console.log('RevenueCat not configured - skipping initialization');
     return;
   }
 
-  // Log key type for debugging (first characters only, not the full key for security)
-  console.log(`Initializing RevenueCat with API key type: ${REVENUECAT_WEB_API_KEY.substring(0, 5)}*****`);
-  
-  try {
-    // Initialize the SDK with the API key and required parameters
-    // See: https://www.revenuecat.com/docs/web/web-billing/web-sdk
-    // For RevenueCat Web SDK, you need a valid API key that starts with one of these prefixes:
-    // - 'rcb_' for Web Billing 
-    // - 'sk_web_' for older Web Billing integrations
-    // - 'pk_' for Paddle integration
-    if (userId) {
-      // With user ID - must follow parameters order in documentation
-      RevenueCat.Purchases.configure(REVENUECAT_WEB_API_KEY, userId);
-    } else {
-      // Without user ID - the TypeScript definition requires at least a second parameter
-      // We pass empty string as the second parameter to satisfy TypeScript
-      RevenueCat.Purchases.configure(REVENUECAT_WEB_API_KEY, "");
-    }
-    console.log('RevenueCat SDK initialized successfully');
-  } catch (error) {
-    console.error('Error initializing RevenueCat:', error);
-    // Display more detailed error information
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error is likely due to incorrect API key format');
-      console.error('RevenueCat Web SDK requires a valid API key that starts with "rcb_", "sk_web_", or "pk_"');
-    }
+  // Skip initialization if not in mobile environment
+  if (!isMobile()) {
+    console.log('RevenueCat skipped - not in mobile environment');
+    return;
   }
+
+  // Import RevenueCat dynamically only when needed
+  import('@revenuecat/purchases-js').then((RevenueCat) => {
+    try {
+      if (userId) {
+        RevenueCat.Purchases.configure(REVENUECAT_API_KEY, userId);
+      } else {
+        RevenueCat.Purchases.configure(REVENUECAT_API_KEY);
+      }
+      console.log('RevenueCat SDK initialized successfully');
+    } catch (error) {
+      console.error('Error initializing RevenueCat:', error);
+    }
+  }).catch((error) => {
+    console.error('Failed to load RevenueCat:', error);
+  });
 };
 
 /**
@@ -68,7 +60,12 @@ export const initializeRevenueCat = (userId?: string): void => {
  * @param currency Currency code (default: USD)
  */
 export const getRevenueCatOfferings = async (currency = 'USD') => {
+  if (!REVENUECAT_API_KEY || !isMobile()) {
+    return { current: null, all: {} };
+  }
+
   try {
+    const RevenueCat = await import('@revenuecat/purchases-js');
     const purchases = RevenueCat.Purchases.getSharedInstance();
     const offerings = await purchases.getOfferings({ currency });
     return offerings;
@@ -83,7 +80,12 @@ export const getRevenueCatOfferings = async (currency = 'USD') => {
  * @param packageObject The package object to purchase
  */
 export const purchaseWithRevenueCat = async (packageObject: any) => {
+  if (!REVENUECAT_API_KEY || !isMobile()) {
+    throw new Error('RevenueCat not available');
+  }
+
   try {
+    const RevenueCat = await import('@revenuecat/purchases-js');
     const purchases = RevenueCat.Purchases.getSharedInstance();
     const result = await purchases.purchase({
       rcPackage: packageObject
@@ -99,7 +101,12 @@ export const purchaseWithRevenueCat = async (packageObject: any) => {
  * Get RevenueCat customer info (subscription status)
  */
 export const getRevenueCatCustomerInfo = async () => {
+  if (!REVENUECAT_API_KEY || !isMobile()) {
+    return null;
+  }
+
   try {
+    const RevenueCat = await import('@revenuecat/purchases-js');
     const purchases = RevenueCat.Purchases.getSharedInstance();
     const customerInfo = await purchases.getCustomerInfo();
     return customerInfo;
