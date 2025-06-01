@@ -45,8 +45,8 @@ const plans = [
     price: '69',
     description: 'The complete AI tutoring experience',
     features: [
-      'Unlimited conversation time',
-      'Unlimited video calls',
+      'Increased conversation time',
+      'Video calls',
       'All subjects and specializations',
       'Premium avatar collection',
       'Advanced analytics and insights',
