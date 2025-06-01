@@ -12,7 +12,7 @@ export const Header: React.FC = () => {
             <div className="rounded-full bg-primary-600 p-2">
               <Brain className="h-6 w-6 text-white" />
             </div>
-            <span className="font-semibold text-xl text-primary-900 font-sans">Brainy</span>
+            <span className="font-semibold text-xl text-primary-900 font-sans">Brainbud</span>
           </div>
           
           <div className="flex items-center space-x-4">
@@ -29,4 +29,4 @@ export const Header: React.FC = () => {
       </div>
     </header>
   );
-}
+};
