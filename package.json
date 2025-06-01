@@ -12,6 +12,7 @@
   "dependencies": {
     "@livekit/components-react": "^1.5.3",
     "@livekit/components-styles": "^1.0.8",
+    "@revenuecat/purchases-js": "^5.0.0",
     "@supabase/supabase-js": "^2.39.3",
     "chart.js": "^4.4.9",
     "clsx": "^2.1.0",
@@ -28,7 +29,6 @@
     "react-router-dom": "^6.22.1",
     "react-share": "^5.1.0",
     "recharts": "^2.12.0",
-    "revenuecat-react": "^1.0.0",
     "tailwind-merge": "^2.2.1",
     "workbox-background-sync": "^7.0.0",
     "workbox-expiration": "^7.0.0",
