@@ -37,8 +37,8 @@ const steps: OnboardingStep[] = [
   },
   {
     id: 'complete',
-    title: 'You're All Set!',
-    description: 'Let's start your learning journey'
+    title: 'You\'re All Set!',
+    description: 'Let\'s start your learning journey'
   }
 ];
 
