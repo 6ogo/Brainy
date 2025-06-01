@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Check, X } from 'lucide-react';
@@ -6,22 +6,24 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Header } from '../components/Header';
 import { cn, commonStyles, animations } from '../styles/utils';
+import { purchaseSubscription, getCurrentSubscription } from '../services/subscriptionService';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 const plans = [
   {
     name: 'Free',
     price: '0',
+    packageId: 'free_tier',
     description: 'Perfect for trying out Brainbud',
     features: [
       '30 minutes daily conversation',
       '2 subjects (Math, English)',
-      '1 basic avatar',
       'Basic progress tracking',
       'Community features'
     ],
     limitations: [
       'Limited conversation time',
-      'Basic avatars only',
       'No advanced analytics',
       'No downloadable transcripts'
     ]
@@ -29,6 +31,7 @@ const plans = [
   {
     name: 'Premium',
     price: '19.99',
+    packageId: 'premium_monthly',
     description: 'Unlock the full potential of AI tutoring',
     features: [
       '4 hours daily conversation',
@@ -41,6 +44,7 @@ const plans = [
   {
     name: 'Ultimate',
     price: '69',
+    packageId: 'ultimate_monthly',
     description: 'The complete AI tutoring experience',
     features: [
       'Increased conversation time',
@@ -55,6 +59,51 @@ const plans = [
 
 export const PricingPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [currentPlan, setCurrentPlan] = useState<string>('free_tier');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchSubscription = async () => {
+      try {
+        const customerInfo = await getCurrentSubscription();
+        if (customerInfo.entitlements.active) {
+          const activePlan = Object.keys(customerInfo.entitlements.active)[0];
+          setCurrentPlan(activePlan);
+        }
+      } catch (error) {
+        console.error('Error fetching subscription:', error);
+      }
+    };
+
+    if (user) {
+      fetchSubscription();
+    }
+  }, [user]);
+
+  const handleSubscribe = async (plan: typeof plans[0]) => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    if (plan.price === '0') {
+      navigate('/subjects');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await purchaseSubscription(plan.packageId);
+      toast.success(`Successfully subscribed to ${plan.name} plan!`);
+      navigate('/subjects');
+    } catch (error) {
+      toast.error('Failed to process subscription. Please try again.');
+      console.error('Subscription error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100">
@@ -103,9 +152,12 @@ export const PricingPage: React.FC = () => {
                 <Button
                   variant="primary"
                   className="w-full mb-6"
-                  onClick={() => navigate('/signup')}
+                  onClick={() => handleSubscribe(plan)}
+                  isLoading={isLoading}
+                  disabled={currentPlan === plan.packageId}
                 >
-                  {plan.price === '0' ? 'Get Started' : 'Subscribe Now'}
+                  {currentPlan === plan.packageId ? 'Current Plan' : 
+                   plan.price === '0' ? 'Get Started' : 'Subscribe Now'}
                 </Button>
               </div>
 
