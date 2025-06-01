@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain, Book, Flask, Language, History, GraduationCap } from 'lucide-react';
+import { Brain, Book, FlaskRound as Flask, Languages as Language, History, GraduationCap } from 'lucide-react';
 import { useStore } from '../store/store';
 import { Subject } from '../types';
 import { Card } from '../components/Card';
