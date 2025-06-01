@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useStore } from '../store/store';
 import { Subject } from '../types';
+import { cn, commonStyles } from '../styles/utils';
 
 export const SubjectSelector: React.FC = () => {
   const { currentSubject, setCurrentSubject } = useStore();
@@ -13,7 +14,11 @@ export const SubjectSelector: React.FC = () => {
     <div className="relative">
       <button
         type="button"
-        className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        className={cn(
+          commonStyles.button.outline,
+          "inline-flex items-center px-3 py-2 text-sm leading-4 font-medium",
+          "text-gray-700 hover:bg-gray-50 focus:ring-primary-500"
+        )}
         onClick={() => setIsOpen(!isOpen)}
       >
         {currentSubject}
@@ -21,7 +26,10 @@ export const SubjectSelector: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10">
+        <div className={cn(
+          commonStyles.card.base,
+          "origin-top-right absolute right-0 mt-2 w-48 z-10"
+        )}>
           <div 
             className="py-1"
             role="menu" 
@@ -30,9 +38,10 @@ export const SubjectSelector: React.FC = () => {
             {subjects.map((subject) => (
               <button
                 key={subject}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
-                  currentSubject === subject ? 'bg-primary-50 text-primary-700 font-medium' : 'text-gray-700'
-                }`}
+                className={cn(
+                  "w-full text-left px-4 py-2 text-sm hover:bg-gray-100",
+                  currentSubject === subject ? "bg-primary-50 text-primary-700 font-medium" : "text-gray-700"
+                )}
                 onClick={() => {
                   setCurrentSubject(subject);
                   setIsOpen(false);
