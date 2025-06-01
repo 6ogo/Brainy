@@ -18,7 +18,6 @@ const HomePage = () => {
         <div className="text-center">
           <h1 className={cn(commonStyles.heading.h1, "tracking-tight sm:text-6xl md:text-7xl")}>
             <span className="block text-primary-600 font-sans">Brainy</span>
-            <span className="block font-sans">Your AI Study Buddy Revolution</span>
           </h1>
           <p className={cn(commonStyles.text.lg, "mt-6 max-w-2xl mx-auto")}>
             Transform any subject into an engaging conversation with your personal AI tutor 
