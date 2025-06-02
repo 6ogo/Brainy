@@ -31,55 +31,7 @@ const setCached = (key: string, data: any) => {
 };
 
 export const TavusService = {
-  async createPersona(personaName: string, defaultReplicaId: string, systemPrompt: string, context: string) {
-    const cacheKey = `persona_${personaName}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
-    try {
-      const response = await fetch('https://tavusapi.com/v2/personas', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': API_CONFIG.TAVUS_API_KEY
-        },
-        body: JSON.stringify({
-          persona_name: personaName,
-          default_replica_id: defaultReplicaId,
-          system_prompt: systemPrompt,
-          context,
-          layers: {
-            perception: {
-              perception_model: 'raven-0',
-              ambient_awareness_queries: [
-                'Is the user maintaining eye contact and appearing engaged, or do they seem distracted?',
-                'Does the user have any books, artifacts, maps, or objects related to US history visible that could be referenced?',
-                'Is the user showing signs of confusion or understanding through their facial expressions or body language?',
-                'Is the user in an environment that provides context for their interest in history (classroom, museum, home study)?'
-              ]
-            }
-          }
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      setCached(cacheKey, data);
-      return data;
-    } catch (error) {
-      console.error('Error creating Tavus persona:', error);
-      throw error;
-    }
-  },
-
-  async createVideo(replicaId: string, script: string): Promise<{ url: string }> {
-    const cacheKey = `video_${replicaId}_${script}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
+  async createStudyTipVideo(userId: string, subject: string, learningHistory: any) {
     try {
       const response = await fetch('https://tavusapi.com/v2/videos', {
         method: 'POST',
@@ -88,8 +40,8 @@ export const TavusService = {
           'x-api-key': API_CONFIG.TAVUS_API_KEY
         },
         body: JSON.stringify({
-          replica_id: replicaId,
-          script
+          replica_id: API_CONFIG.TAVUS_REPLICA_ID,
+          script: this.generateStudyTipScript(subject, learningHistory)
         })
       });
 
@@ -98,7 +50,6 @@ export const TavusService = {
       }
 
       const data = await response.json();
-      setCached(cacheKey, data);
       return data;
     } catch (error) {
       console.error('Error creating Tavus video:', error);
@@ -106,28 +57,47 @@ export const TavusService = {
     }
   },
 
-  async getVideo(videoId: string) {
-    const cacheKey = `video_status_${videoId}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
+  generateStudyTipScript(subject: string, learningHistory: any) {
+    // Generate personalized script based on subject and learning history
+    const completedTopics = learningHistory.completedTopics || [];
+    const strugglingTopics = learningHistory.strugglingTopics || [];
+    const nextTopics = learningHistory.nextTopics || [];
 
+    let script = `Hi! I've been analyzing your progress in ${subject}. `;
+
+    if (completedTopics.length > 0) {
+      script += `You've done great with ${completedTopics.join(', ')}. `;
+    }
+
+    if (strugglingTopics.length > 0) {
+      script += `I noticed you might want to review ${strugglingTopics.join(', ')}. `;
+    }
+
+    if (nextTopics.length > 0) {
+      script += `I recommend focusing on ${nextTopics[0]} next, as it builds on what you've learned. `;
+    }
+
+    script += "Let's keep up the great work!";
+
+    return script;
+  },
+
+  async checkEligibilityForTavus(userId: string): Promise<boolean> {
     try {
-      const response = await fetch(`https://tavusapi.com/v2/videos/${videoId}`, {
-        headers: {
-          'x-api-key': API_CONFIG.TAVUS_API_KEY
-        }
-      });
+      const { data: conversations, error } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(3);
 
-      if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
-      }
+      if (error) throw error;
 
-      const data = await response.json();
-      setCached(cacheKey, data);
-      return data;
+      // User needs at least 3 conversations to access Tavus videos
+      return conversations && conversations.length >= 3;
     } catch (error) {
-      console.error('Error fetching Tavus video:', error);
-      throw error;
+      console.error('Error checking Tavus eligibility:', error);
+      return false;
     }
   }
 };
