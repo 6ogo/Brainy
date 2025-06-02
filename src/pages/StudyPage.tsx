@@ -7,6 +7,7 @@ import { QuickActionButtons } from '../components/QuickActionButtons';
 import { ProgressSidebar } from '../components/ProgressSidebar';
 import { DifficultySlider } from '../components/DifficultySlider';
 import { SocialFeatures } from '../components/SocialFeatures';
+import { ConversationHistory } from '../components/ConversationHistory';
 import { Button } from '../components/Button';
 import { useStore } from '../store/store';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,21 +15,17 @@ import { endStudySession } from '../services/analytics-service';
 
 export const StudyPage: React.FC = () => {
   const { currentSubject, currentAvatar, learningMode, updateSessionStats } = useStore();
-  // Get user for session tracking (used when ending the session)
   const { user } = useAuth();
   const navigate = useNavigate();
   const [sessionStarted, setSessionStarted] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
-  // We need userId for saving the session data when it ends
+  const [showHistory, setShowHistory] = useState(false);
   const userId = user?.id;
 
-  // Validate that we have all required data to start a study session
   useEffect(() => {
     if (!currentSubject || !currentAvatar || !learningMode) {
-      // If any required data is missing, redirect to subject selection
       navigate('/subjects');
     } else if (!sessionStarted) {
-      // Initialize a new study session in the store
       updateSessionStats({
         startTime: new Date(),
         duration: 0,
@@ -40,12 +37,10 @@ export const StudyPage: React.FC = () => {
     }
   }, [currentSubject, currentAvatar, learningMode, navigate, sessionStarted, updateSessionStats]);
 
-  // If missing required data, show nothing while redirecting
   if (!currentSubject || !currentAvatar || !learningMode || !userId) {
     return null;
   }
   
-  // Handle ending the study session and saving data
   const handleEndSession = useCallback(async () => {
     if (userId) {
       setIsEnding(true);
@@ -67,7 +62,6 @@ export const StudyPage: React.FC = () => {
       <div className="flex-1 container mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Main Study Area */}
         <div className="lg:col-span-8 space-y-6">
-          {/* Conditionally render VideoArea only in video call mode */}
           {learningMode === 'videocall' && (
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <VideoArea />
@@ -86,6 +80,18 @@ export const StudyPage: React.FC = () => {
           <div className={`bg-white rounded-lg shadow-sm ${learningMode === 'conversational' ? 'h-[600px]' : 'h-[400px]'}`}>
             <ChatTranscript />
           </div>
+
+          {/* Conversation History Toggle */}
+          <Button
+            variant="secondary"
+            onClick={() => setShowHistory(!showHistory)}
+            className="w-full"
+          >
+            {showHistory ? 'Hide History' : 'Show Conversation History'}
+          </Button>
+
+          {/* Conversation History */}
+          {showHistory && <ConversationHistory />}
         </div>
         
         {/* Sidebar */}
