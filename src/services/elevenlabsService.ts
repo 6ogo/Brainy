@@ -23,8 +23,22 @@ export class ElevenLabsService {
   private static API_URL = 'https://api.elevenlabs.io/v1';
   private static DEFAULT_MODEL = 'eleven_monolingual_v1';
 
-  static async generateSpeech(text: string, voiceId: string): Promise<Blob> {
+  // Voice IDs for our personas
+  private static VOICE_IDS = {
+    'encouraging-emma': 'EXAVITQu4vr4xnSDxMaL',
+    'challenge-charlie': 'VR6AewLTigWG4xSOukaG',
+    'fun-freddy': 'pNInz6obpgDQGcFmaJgB',
+    'professor-patricia': 'ThT5KcBeYPX3keUQqHPh',
+    'buddy-ben': 'yoZ06aMxZJJ28mfd3POQ'
+  };
+
+  static async generateSpeech(text: string, persona: string): Promise<Blob> {
     try {
+      const voiceId = this.VOICE_IDS[persona as keyof typeof this.VOICE_IDS];
+      if (!voiceId) {
+        throw new Error('Invalid persona');
+      }
+
       const response = await fetch(`${this.API_URL}/text-to-speech/${voiceId}`, {
         method: 'POST',
         headers: {
@@ -70,25 +84,6 @@ export class ElevenLabsService {
       return data.voices;
     } catch (error) {
       console.error('Error fetching voices:', error);
-      throw error;
-    }
-  }
-
-  static async getVoice(voiceId: string): Promise<Voice> {
-    try {
-      const response = await fetch(`${this.API_URL}/voices/${voiceId}`, {
-        headers: {
-          'xi-api-key': API_CONFIG.ELEVENLABS_API_KEY
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.statusText}`);
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error fetching voice:', error);
       throw error;
     }
   }
