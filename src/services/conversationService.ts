@@ -12,12 +12,10 @@ interface ConversationResponse {
 const MONTHLY_MINUTES_LIMIT = 60; // 1 hour per month for premium users
 
 export class ConversationService {
-  private static voiceIds: Record<string, string> = {
-    'encouraging-emma': 'EXAVITQu4vr4xnSDxMaL',
-    'challenge-charlie': 'VR6AewLTigWG4xSOukaG',
-    'fun-freddy': 'pNInz6obpgDQGcFmaJgB',
-    'professor-patricia': 'ThT5KcBeYPX3keUQqHPh',
-    'buddy-ben': 'yoZ06aMxZJJ28mfd3POQ'
+  private static AGENT_IDS = {
+    'encouraging-emma': 'agent_01jwryem0se8xtkcmtmbgc0pek',
+    'challenge-charlie': 'agent_01jwrysbe0e6tr7m5e5daf9em5',
+    'fun-freddy': 'agent_01jwryx0bjeder6sq38gx345t3'
   };
 
   static async checkMonthlyUsage(userId: string): Promise<boolean> {
@@ -88,8 +86,7 @@ export class ConversationService {
 
       if (useVoice) {
         try {
-          const voiceId = this.voiceIds[currentAvatar];
-          const audioBlob = await ElevenLabsService.generateSpeech(response, voiceId);
+          const audioBlob = await ElevenLabsService.generateSpeech(response, currentAvatar);
           audioUrl = URL.createObjectURL(audioBlob);
         } catch (error) {
           console.error('Error generating speech:', error);
