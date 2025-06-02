@@ -3,6 +3,7 @@ import { useStore } from '../store/store';
 import { ConversationService } from '../services/conversationService';
 import { useAuth } from '../contexts/AuthContext';
 import { useAchievements } from './useAchievements';
+import { hasAccess } from '../services/subscriptionService';
 import toast from 'react-hot-toast';
 
 export const useConversation = () => {
@@ -21,12 +22,37 @@ export const useConversation = () => {
   const { user } = useAuth();
   const { checkAndAwardAchievements } = useAchievements();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [conversationStartTime, setConversationStartTime] = useState<number | null>(null);
 
   const sendMessage = async (message: string) => {
+    if (!user) {
+      toast.error('Please sign in to continue.');
+      return;
+    }
+
     try {
+      // Check if user has premium access
+      const hasPremiumAccess = await hasAccess('premium');
+      if (!hasPremiumAccess) {
+        toast.error('This feature requires a premium subscription.');
+        return;
+      }
+
+      // Check monthly usage limit
+      const hasRemainingTime = await ConversationService.checkMonthlyUsage(user.id);
+      if (!hasRemainingTime) {
+        toast.error('You have reached your monthly usage limit.');
+        return;
+      }
+
       setIsProcessing(true);
       setAvatarEmotion('thinking');
       
+      // Start timing the conversation
+      if (!conversationStartTime) {
+        setConversationStartTime(Date.now());
+      }
+
       // Add user message immediately
       addMessage(message, 'user');
 
@@ -44,6 +70,11 @@ export const useConversation = () => {
 
       // Add AI response
       addMessage(response.text, 'ai');
+
+      // Calculate conversation duration
+      const duration = conversationStartTime 
+        ? Math.round((Date.now() - conversationStartTime) / 1000)
+        : 0;
 
       // Update session and social stats
       const newXP = 10;
@@ -65,10 +96,13 @@ export const useConversation = () => {
         totalXP: socialStats.totalXP + newXP
       });
 
-      // Save conversation if user is logged in
-      if (user) {
-        await ConversationService.saveConversation(user.id, message, response.text);
-      }
+      // Save conversation
+      await ConversationService.saveConversation(
+        user.id,
+        message,
+        response.text,
+        duration
+      );
 
       // Play audio if available
       if (response.audioUrl) {

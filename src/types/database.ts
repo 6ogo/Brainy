@@ -38,6 +38,55 @@ export interface Database {
           last_login?: string | null
         }
       }
+      conversations: {
+        Row: {
+          id: string
+          user_id: string
+          user_message: string
+          ai_response: string
+          duration: number
+          timestamp: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          user_message: string
+          ai_response: string
+          duration?: number
+          timestamp?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          user_message?: string
+          ai_response?: string
+          duration?: number
+          timestamp?: string
+        }
+      }
+      user_usage: {
+        Row: {
+          id: string
+          user_id: string
+          month_year: string
+          minutes_used: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          month_year: string
+          minutes_used?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          month_year?: string
+          minutes_used?: number
+          updated_at?: string
+        }
+      }
       study_sessions: {
         Row: {
           id: string
