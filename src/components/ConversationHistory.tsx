@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ConversationService } from '../services/conversationService';
-import { TavusService } from '../services/tavusService';
 import { Card } from './Card';
-import { Button } from './Button';
-import { Clock, MessageSquare, Video } from 'lucide-react';
+import { MessageSquare, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn, commonStyles } from '../styles/utils';
 import toast from 'react-hot-toast';
@@ -21,10 +19,8 @@ interface Conversation {
 export const ConversationHistory: React.FC = () => {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [tavusEligible, setTavusEligible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
-  const [tavusVideo, setTavusVideo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -34,9 +30,6 @@ export const ConversationHistory: React.FC = () => {
         setLoading(true);
         const history = await ConversationService.getConversationHistory(user.id);
         setConversations(history);
-
-        const eligible = await TavusService.checkEligibilityForTavus(user.id);
-        setTavusEligible(eligible);
       } catch (error) {
         console.error('Error fetching conversation history:', error);
         toast.error('Failed to load conversation history');
@@ -48,29 +41,6 @@ export const ConversationHistory: React.FC = () => {
     fetchData();
   }, [user]);
 
-  const handleGenerateStudyTip = async () => {
-    if (!user || !tavusEligible) return;
-
-    try {
-      const learningHistory = {
-        completedTopics: ['Basic Algebra', 'Linear Equations'],
-        strugglingTopics: ['Quadratic Equations'],
-        nextTopics: ['Polynomial Functions']
-      };
-
-      const video = await TavusService.createStudyTipVideo(
-        user.id,
-        'Math',
-        learningHistory
-      );
-
-      setTavusVideo(video.url);
-    } catch (error) {
-      console.error('Error generating study tip:', error);
-      toast.error('Failed to generate study tip video');
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -81,38 +51,6 @@ export const ConversationHistory: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Study Progress Video */}
-      {tavusEligible && (
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className={cn(commonStyles.heading.h3)}>
-              Personalized Study Tips
-            </h3>
-            <Button
-              variant="primary"
-              onClick={handleGenerateStudyTip}
-              leftIcon={<Video className="h-4 w-4" />}
-            >
-              Generate New Tip
-            </Button>
-          </div>
-
-          {tavusVideo ? (
-            <div className="aspect-video rounded-lg overflow-hidden">
-              <video
-                src={tavusVideo}
-                controls
-                className="w-full h-full object-cover"
-              />
-            </div>
-          ) : (
-            <p className="text-gray-600">
-              Click the button above to generate a personalized study tip video based on your learning progress.
-            </p>
-          )}
-        </Card>
-      )}
-
       {/* Conversation History */}
       <Card className="p-6">
         <h3 className={cn(commonStyles.heading.h3, "mb-4")}>

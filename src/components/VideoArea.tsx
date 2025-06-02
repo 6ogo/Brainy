@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Video, VideoOff } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { VoiceControls } from './VoiceControls';
 import { VideoControls } from './VideoControls';
 import { AvatarSelector } from './AvatarSelector';
+import { TavusService } from '../services/tavusService';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 export const VideoArea: React.FC = () => {
   const { 
@@ -14,17 +17,73 @@ export const VideoArea: React.FC = () => {
     currentAvatar,
     currentBackground,
     avatarEmotion,
-    voiceMode
+    voiceMode,
+    learningMode
   } = useStore();
+  
+  const { user } = useAuth();
   const { error } = useVoiceRecognition();
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
+  const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setVideoLoaded(true);
     }, 1000);
+
+    // Check Tavus eligibility if in video call mode
+    if (learningMode === 'videocall' && user) {
+      TavusService.checkEligibilityForTavus(user.id)
+        .then(eligible => {
+          setIsEligibleForTavus(eligible);
+          if (eligible) {
+            handleTavusVideo();
+          }
+        })
+        .catch(error => {
+          console.error('Error checking Tavus eligibility:', error);
+        });
+    }
+
     return () => clearTimeout(timer);
-  }, []);
+  }, [learningMode, user]);
+
+  const handleTavusVideo = async () => {
+    if (!user) return;
+
+    try {
+      const learningHistory = {
+        completedTopics: ['Basic Algebra', 'Linear Equations'],
+        strugglingTopics: ['Quadratic Equations'],
+        nextTopics: ['Polynomial Functions']
+      };
+
+      const video = await TavusService.createStudyTipVideo(
+        user.id,
+        'Math',
+        learningHistory
+      );
+
+      setTavusVideoUrl(video.url);
+    } catch (error) {
+      console.error('Error generating Tavus video:', error);
+      toast.error('Failed to generate study counselor video');
+    }
+  };
+
+  if (!isEligibleForTavus && learningMode === 'videocall') {
+    return (
+      <div className="h-full flex items-center justify-center bg-gray-100 rounded-lg p-8 text-center">
+        <div>
+          <h3 className="text-xl font-semibold mb-2">Complete 3 Learning Sessions</h3>
+          <p className="text-gray-600">
+            Continue learning through conversations to unlock personalized video sessions with your study counselor.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-full flex flex-col">
@@ -40,55 +99,52 @@ export const VideoArea: React.FC = () => {
         ) : (
           <div className="w-full h-full flex items-center justify-center relative">
             {isVideoEnabled ? (
-              <div 
-                className="absolute inset-0 bg-cover bg-center"
-                style={{
-                  backgroundImage: `url(https://images.pexels.com/photos/${
-                    currentBackground === 'classroom' ? '8471970' :
-                    currentBackground === 'library' ? '590493' :
-                    currentBackground === 'home-office' ? '4050315' :
-                    '7135121'
-                  }/pexels-photo-${
-                    currentBackground === 'classroom' ? '8471970' :
-                    currentBackground === 'library' ? '590493' :
-                    currentBackground === 'home-office' ? '4050315' :
-                    '7135121'
-                  }.jpeg)`
-                }}
-              >
-                <div className="absolute inset-0 bg-black/30"></div>
-              </div>
+              <>
+                <div 
+                  className="absolute inset-0 bg-cover bg-center"
+                  style={{
+                    backgroundImage: `url(https://images.pexels.com/photos/${
+                      currentBackground === 'classroom' ? '8471970' :
+                      currentBackground === 'library' ? '590493' :
+                      currentBackground === 'home-office' ? '4050315' :
+                      '7135121'
+                    }/pexels-photo-${
+                      currentBackground === 'classroom' ? '8471970' :
+                      currentBackground === 'library' ? '590493' :
+                      currentBackground === 'home-office' ? '4050315' :
+                      '7135121'
+                    }.jpeg)`
+                  }}
+                >
+                  <div className="absolute inset-0 bg-black/30"></div>
+                </div>
+
+                {tavusVideoUrl && (
+                  <video
+                    src={tavusVideoUrl}
+                    autoPlay
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                )}
+              </>
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900"></div>
             )}
 
-            <div className={`relative w-64 h-64 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300 ${
-              avatarEmotion === 'thinking' ? 'scale-105' :
-              avatarEmotion === 'excited' ? 'scale-110' :
-              'scale-100'
-            }`}>
-              <div className="absolute inset-0 bg-gradient-to-b from-primary-300 to-primary-600 opacity-50"></div>
-              <div className="w-40 h-40 rounded-full bg-primary-200 flex items-center justify-center z-10">
-                <span className="text-6xl font-bold text-primary-700">AI</span>
-              </div>
-              
-              {isSpeaking && (
-                <div className="absolute inset-0 bg-primary-500 rounded-full animate-pulse-slow opacity-20"></div>
-              )}
-            </div>
-
-            {isListening && voiceMode !== 'muted' && (
-              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex items-center justify-center space-x-1">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div 
-                    key={i}
-                    className="w-1.5 bg-accent-500"
-                    style={{
-                      height: `${Math.floor(Math.random() * 30) + 5}px`,
-                      animationDelay: `${i * 0.1}s`,
-                    }}
-                  ></div>
-                ))}
+            {!tavusVideoUrl && (
+              <div className={`relative w-64 h-64 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300 ${
+                avatarEmotion === 'thinking' ? 'scale-105' :
+                avatarEmotion === 'excited' ? 'scale-110' :
+                'scale-100'
+              }`}>
+                <div className="absolute inset-0 bg-gradient-to-b from-primary-300 to-primary-600 opacity-50"></div>
+                <div className="w-40 h-40 rounded-full bg-primary-200 flex items-center justify-center z-10">
+                  <span className="text-6xl font-bold text-primary-700">AI</span>
+                </div>
+                
+                {isSpeaking && (
+                  <div className="absolute inset-0 bg-primary-500 rounded-full animate-pulse-slow opacity-20"></div>
+                )}
               </div>
             )}
           </div>
