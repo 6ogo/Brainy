@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Brain, Book, Target, Clock, Users, ChevronRight } from 'lucide-react';
 import { useStore } from '../store/store';
@@ -6,7 +6,10 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { cn, commonStyles } from '../styles/utils';
 import { Subject, DifficultyLevel } from '../types';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import Confetti from 'react-confetti';
+import toast from 'react-hot-toast';
 
 interface OnboardingStep {
   id: string;
@@ -58,24 +61,94 @@ const schedules = [
 
 export const Onboarding: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { setCurrentSubject, setDifficultyLevel } = useStore();
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedSubjects, setSelectedSubjects] = useState<Subject[]>([]);
   const [selectedGoal, setSelectedGoal] = useState('');
   const [selectedSchedule, setSelectedSchedule] = useState('');
   const [showConfetti, setShowConfetti] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const handleNext = () => {
-    if (currentStep === steps.length - 1) {
-      // Complete onboarding
-      if (selectedSubjects.length > 0) {
-        setCurrentSubject(selectedSubjects[0]);
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (!user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('user_preferences')
+          .select('has_completed_onboarding, show_onboarding')
+          .eq('user_id', user.id)
+          .single();
+
+        if (error) throw error;
+
+        if (data.has_completed_onboarding || !data.show_onboarding) {
+          navigate('/subjects');
+        }
+      } catch (error) {
+        console.error('Error checking onboarding status:', error);
+        toast.error('Something went wrong. Please try again.');
+      } finally {
+        setLoading(false);
       }
-      setDifficultyLevel('High School'); // Default level
-      setShowConfetti(true);
-      setTimeout(() => {
-        navigate('/subjects');
-      }, 2000);
+    };
+
+    checkOnboardingStatus();
+  }, [user, navigate]);
+
+  const skipOnboarding = async (dontShowAgain = false) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('user_preferences')
+        .update({
+          has_completed_onboarding: true,
+          show_onboarding: !dontShowAgain,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      navigate('/subjects');
+    } catch (error) {
+      console.error('Error updating preferences:', error);
+      toast.error('Failed to save preferences');
+    }
+  };
+
+  const handleNext = async () => {
+    if (currentStep === steps.length - 1) {
+      if (!user) return;
+
+      try {
+        // Save onboarding preferences
+        const { error } = await supabase
+          .from('user_preferences')
+          .update({
+            has_completed_onboarding: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+
+        // Set initial subject if selected
+        if (selectedSubjects.length > 0) {
+          setCurrentSubject(selectedSubjects[0]);
+        }
+        setDifficultyLevel('High School'); // Default level
+        setShowConfetti(true);
+        
+        setTimeout(() => {
+          navigate('/subjects');
+        }, 2000);
+      } catch (error) {
+        console.error('Error saving preferences:', error);
+        toast.error('Failed to save preferences');
+      }
     } else {
       setCurrentStep(prev => prev + 1);
     }
@@ -230,6 +303,14 @@ export const Onboarding: React.FC = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 py-12 px-4">
       {showConfetti && <Confetti recycle={false} />}
@@ -249,6 +330,25 @@ export const Onboarding: React.FC = () => {
               <span>Complete</span>
             </div>
           </div>
+
+          {/* Skip button (only show after first step) */}
+          {currentStep > 0 && currentStep < steps.length - 1 && (
+            <div className="flex justify-end mb-4">
+              <Button
+                variant="text"
+                onClick={() => skipOnboarding(false)}
+                className="mr-4"
+              >
+                Skip
+              </Button>
+              <Button
+                variant="text"
+                onClick={() => skipOnboarding(true)}
+              >
+                Skip & Don't Show Again
+              </Button>
+            </div>
+          )}
 
           {/* Step content */}
           <div className="mb-8">

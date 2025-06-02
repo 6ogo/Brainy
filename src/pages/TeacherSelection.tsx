@@ -16,42 +16,26 @@ const teachers: Array<{
   {
     id: 'encouraging-emma',
     name: 'Encouraging Emma',
-    description: 'Supportive and patient teacher who focuses on building confidence',
-    imageUrl: '/assets/avatars/emma.jpg',
+    description: 'Supportive and patient teacher who focuses on building confidence through positive reinforcement',
+    imageUrl: 'https://images.pexels.com/photos/3760263/pexels-photo-3760263.jpeg',
     specialty: 'Making complex topics accessible',
-    style: 'bg-green-100 border-green-300',
+    style: 'bg-rose-100 border-rose-300',
   },
   {
     id: 'challenge-charlie',
     name: 'Challenge Charlie',
-    description: 'Pushes you to your limits with advanced problems and thought experiments',
-    imageUrl: '/assets/avatars/charlie.jpg',
+    description: 'Pushes you to your limits with advanced problems and thought experiments to accelerate your learning',
+    imageUrl: 'https://images.pexels.com/photos/5905902/pexels-photo-5905902.jpeg',
     specialty: 'Advanced problem-solving',
     style: 'bg-blue-100 border-blue-300',
   },
   {
     id: 'fun-freddy',
     name: 'Fun Freddy',
-    description: 'Makes learning enjoyable with games, stories, and interactive examples',
-    imageUrl: '/assets/avatars/freddy.jpg',
+    description: 'Makes learning enjoyable with games, stories, and interactive examples that stick in your memory',
+    imageUrl: 'https://images.pexels.com/photos/3777564/pexels-photo-3777564.jpeg',
     specialty: 'Engaging and interactive learning',
     style: 'bg-yellow-100 border-yellow-300',
-  },
-  {
-    id: 'professor-patricia',
-    name: 'Professor Patricia',
-    description: 'Structured and methodical approach with deep subject knowledge',
-    imageUrl: '/assets/avatars/patricia.jpg',
-    specialty: 'Comprehensive explanations',
-    style: 'bg-purple-100 border-purple-300',
-  },
-  {
-    id: 'buddy-ben',
-    name: 'Buddy Ben',
-    description: 'Casual peer-like teacher who makes learning feel like chatting with a friend',
-    imageUrl: '/assets/avatars/ben.jpg',
-    specialty: 'Relatable explanations',
-    style: 'bg-red-100 border-red-300',
   },
 ];
 
@@ -76,7 +60,7 @@ export const TeacherSelection: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {teachers.map((teacher) => (
             <Card
               key={teacher.id}
@@ -85,15 +69,11 @@ export const TeacherSelection: React.FC = () => {
               onClick={() => handleTeacherSelect(teacher.id)}
             >
               <div className="flex flex-col items-center">
-                <div className="w-24 h-24 rounded-full overflow-hidden mb-4 border-2 border-primary-300">
+                <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-2 border-primary-300">
                   <img 
                     src={teacher.imageUrl} 
                     alt={teacher.name}
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = 'https://via.placeholder.com/100?text=Teacher';
-                    }}
                   />
                 </div>
                 <h3 className={cn(commonStyles.heading.h3, "mb-2 text-center")}>
