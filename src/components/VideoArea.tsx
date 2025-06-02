@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, Video, VideoOff } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { VoiceControls } from './VoiceControls';
@@ -14,7 +14,6 @@ export const VideoArea: React.FC = () => {
     isListening,
     isSpeaking,
     isVideoEnabled,
-    currentAvatar,
     currentBackground,
     avatarEmotion,
     voiceMode,
@@ -53,19 +52,14 @@ export const VideoArea: React.FC = () => {
     if (!user) return;
 
     try {
-      const learningHistory = {
-        completedTopics: ['Basic Algebra', 'Linear Equations'],
-        strugglingTopics: ['Quadratic Equations'],
-        nextTopics: ['Polynomial Functions']
-      };
-
+      // Use the improved TavusService which now fetches real user progress data
       const video = await TavusService.createStudyTipVideo(
         user.id,
-        'Math',
-        learningHistory
+        'Math' // TODO: Replace with actual subject the user is studying
       );
 
       setTavusVideoUrl(video.url);
+      toast.success('Your personalized study counselor video is ready!');
     } catch (error) {
       console.error('Error generating Tavus video:', error);
       toast.error('Failed to generate study counselor video');
