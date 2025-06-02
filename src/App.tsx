@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './pages/Login';
 import { SignUp } from './pages/SignUp';
 import { ForgotPassword } from './pages/ForgotPassword';
@@ -10,6 +10,7 @@ import { LearningAnalytics } from './pages/LearningAnalytics';
 import { Onboarding } from './pages/Onboarding';
 import HomePage from './pages/HomePage';
 import PricingPage from './pages/PricingPage';
+import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import { PrivateRoute } from './components/PrivateRoute';
@@ -30,6 +31,8 @@ function App() {
           <Route path="/learning-mode" element={<PrivateRoute><LearningModeSelection /></PrivateRoute>} />
           <Route path="/study" element={<PrivateRoute><StudyPage /></PrivateRoute>} />
           <Route path="/analytics" element={<PrivateRoute><LearningAnalytics /></PrivateRoute>} />
+          <Route path="/404" element={<NotFound />} />
+          <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
         <Toaster position="top-right" />
       </AuthProvider>

@@ -66,6 +66,9 @@ export default defineConfig({
       }
     })
   ],
+  server: {
+    historyApiFallback: true,
+  },
   optimizeDeps: {
     exclude: ['lucide-react']
   }
