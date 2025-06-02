@@ -17,7 +17,7 @@ const teachers: Array<{
     id: 'encouraging-emma',
     name: 'Encouraging Emma',
     description: 'Supportive and patient teacher who focuses on building confidence through positive reinforcement',
-    imageUrl: 'https://images.pexels.com/photos/3760263/pexels-photo-3760263.jpeg',
+    imageUrl: 'https://images.pexels.com/photos/5212324/pexels-photo-5212324.jpeg',
     specialty: 'Making complex topics accessible',
     style: 'bg-rose-100 border-rose-300',
   },
@@ -25,7 +25,7 @@ const teachers: Array<{
     id: 'challenge-charlie',
     name: 'Challenge Charlie',
     description: 'Pushes you to your limits with advanced problems and thought experiments to accelerate your learning',
-    imageUrl: 'https://images.pexels.com/photos/5905902/pexels-photo-5905902.jpeg',
+    imageUrl: 'https://images.pexels.com/photos/8197534/pexels-photo-8197534.jpeg',
     specialty: 'Advanced problem-solving',
     style: 'bg-blue-100 border-blue-300',
   },
@@ -45,7 +45,7 @@ export const TeacherSelection: React.FC = () => {
 
   const handleTeacherSelect = (teacher: AvatarPersonality) => {
     setCurrentAvatar(teacher);
-    navigate('/learning-mode');
+    navigate('/study'); // Navigate directly to study page instead of learning mode
   };
 
   return (

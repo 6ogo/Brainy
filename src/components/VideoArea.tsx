@@ -31,8 +31,8 @@ export const VideoArea: React.FC = () => {
       setVideoLoaded(true);
     }, 1000);
 
-    // Check Tavus eligibility if in video call mode
-    if (learningMode === 'videocall' && user) {
+    // Check Tavus eligibility
+    if (user) {
       TavusService.checkEligibilityForTavus(user.id)
         .then(eligible => {
           setIsEligibleForTavus(eligible);
@@ -46,13 +46,12 @@ export const VideoArea: React.FC = () => {
     }
 
     return () => clearTimeout(timer);
-  }, [learningMode, user]);
+  }, [user]);
 
   const handleTavusVideo = async () => {
     if (!user) return;
 
     try {
-      // Use the improved TavusService which now fetches real user progress data
       const video = await TavusService.createStudyTipVideo(
         user.id,
         'Math' // TODO: Replace with actual subject the user is studying
@@ -66,7 +65,7 @@ export const VideoArea: React.FC = () => {
     }
   };
 
-  if (!isEligibleForTavus && learningMode === 'videocall') {
+  if (!isEligibleForTavus) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-100 rounded-lg p-8 text-center">
         <div>
