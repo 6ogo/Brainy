@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Brain } from 'lucide-react';
+import { Eye, EyeOff, Brain, ArrowLeft } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -17,12 +17,21 @@ export const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     await login({ email, password });
-    // Navigation is now handled in the AuthContext
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 px-4">
       <Card variant="base" className="w-full max-w-md p-8">
+        <div className="absolute top-4 left-4">
+          <Button
+            variant="text"
+            onClick={() => navigate('/')}
+            leftIcon={<ArrowLeft className="h-4 w-4" />}
+          >
+            Back to Home
+          </Button>
+        </div>
+
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
             <div className="rounded-full bg-primary-600 p-4">
@@ -106,3 +115,5 @@ export const Login: React.FC = () => {
     </div>
   );
 };
+
+export default Login;
