@@ -34,7 +34,7 @@ export const Header: React.FC = () => {
               <>
                 <SubjectSelector />
                 
-                <Link to="/analytics" className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-100">
+                <Link to="/analytics\" className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-100">
                   <BarChart3 className="h-5 w-5 text-primary-600" />
                   <span className="text-sm font-medium text-gray-700 hidden sm:inline">Analytics</span>
                 </Link>

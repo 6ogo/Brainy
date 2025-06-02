@@ -21,16 +21,15 @@ export const Login: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 px-4">
-      <Card variant="base" className="w-full max-w-md p-8">
-        <div className="absolute top-4 left-4">
-          <Button
-            variant="text"
-            onClick={() => navigate('/')}
-            leftIcon={<ArrowLeft className="h-4 w-4" />}
-          >
-            Back to Home
-          </Button>
-        </div>
+      <Card variant="base" className="w-full max-w-md p-8 relative">
+        <Button
+          variant="text"
+          onClick={() => navigate('/')}
+          leftIcon={<ArrowLeft className="h-4 w-4" />}
+          className="absolute top-4 left-4"
+        >
+          Back to Home
+        </Button>
 
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">

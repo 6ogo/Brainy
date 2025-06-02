@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Brain } from 'lucide-react';
+import { Brain, ArrowLeft } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -35,7 +35,16 @@ export const ForgotPassword: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 px-4">
-      <Card variant="base" className="w-full max-w-md p-8">
+      <Card variant="base" className="w-full max-w-md p-8 relative">
+        <Button
+          variant="text"
+          onClick={() => navigate('/')}
+          leftIcon={<ArrowLeft className="h-4 w-4" />}
+          className="absolute top-4 left-4"
+        >
+          Back to Home
+        </Button>
+
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
             <div className="rounded-full bg-primary-600 p-4">

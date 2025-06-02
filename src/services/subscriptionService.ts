@@ -1,128 +1,26 @@
-/**
- * Unified Subscription Service for Brainy Educational Platform
- * 
- * This service provides subscription management functionality using:
- * - Stripe: For web-based payments and subscriptions
- * - RevenueCat: For cross-platform subscription management (web + future mobile apps)
- */
-
 import { supabase } from '../lib/supabase';
 import { products, ProductId } from '../stripe-config';
 
-// Platform detection
-const isMobile = (): boolean => {
-  // Will be true when running in a mobile app wrapper
-  return !!window.navigator.userAgent.match(/Mobile|Android|iOS|iPhone|iPad|iPod/i) && 
-         window.location.protocol === 'file:'; // Additional check for true native apps
-};
+// Remove RevenueCat initialization and related functions
+export const getCurrentSubscription = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('stripe_user_subscriptions')
+      .select('*')
+      .maybeSingle();
 
-// ============== REVENUECAT INTEGRATION (for cross-platform) ===============
-
-// Get the API key from environment variables
-const REVENUECAT_API_KEY = import.meta.env.VITE_REVENUECAT_API_KEY;
-
-/**
- * Initialize the RevenueCat SDK
- * @param userId User ID for identification
- */
-export const initializeRevenueCat = (userId?: string): void => {
-  // Skip initialization if API key is not configured
-  if (!REVENUECAT_API_KEY || !REVENUECAT_API_KEY.match(/^(rcb_|sk_web_|pk_)/)) {
-    console.log('RevenueCat not configured - skipping initialization');
-    return;
-  }
-
-  // Skip initialization if not in mobile environment
-  if (!isMobile()) {
-    console.log('RevenueCat skipped - not in mobile environment');
-    return;
-  }
-
-  // Import RevenueCat dynamically only when needed
-  import('@revenuecat/purchases-js').then((RevenueCat) => {
-    try {
-      if (userId) {
-        RevenueCat.Purchases.configure(REVENUECAT_API_KEY, userId);
-      } else {
-        RevenueCat.Purchases.configure(REVENUECAT_API_KEY);
-      }
-      console.log('RevenueCat SDK initialized successfully');
-    } catch (error) {
-      console.error('Error initializing RevenueCat:', error);
+    if (error) {
+      throw error;
     }
-  }).catch((error) => {
-    console.error('Failed to load RevenueCat:', error);
-  });
-};
 
-/**
- * Get available subscription offerings from RevenueCat
- * @param currency Currency code (default: USD)
- */
-export const getRevenueCatOfferings = async (currency = 'USD') => {
-  if (!REVENUECAT_API_KEY || !isMobile()) {
-    return { current: null, all: {} };
-  }
-
-  try {
-    const RevenueCat = await import('@revenuecat/purchases-js');
-    const purchases = RevenueCat.Purchases.getSharedInstance();
-    const offerings = await purchases.getOfferings({ currency });
-    return offerings;
+    return data;
   } catch (error) {
-    console.error('Error getting RevenueCat offerings:', error);
-    return { current: null, all: {} };
-  }
-};
-
-/**
- * Purchase a subscription package via RevenueCat
- * @param packageObject The package object to purchase
- */
-export const purchaseWithRevenueCat = async (packageObject: any) => {
-  if (!REVENUECAT_API_KEY || !isMobile()) {
-    throw new Error('RevenueCat not available');
-  }
-
-  try {
-    const RevenueCat = await import('@revenuecat/purchases-js');
-    const purchases = RevenueCat.Purchases.getSharedInstance();
-    const result = await purchases.purchase({
-      rcPackage: packageObject
-    });
-    return result;
-  } catch (error) {
-    console.error('Error purchasing with RevenueCat:', error);
-    throw error;
-  }
-};
-
-/**
- * Get RevenueCat customer info (subscription status)
- */
-export const getRevenueCatCustomerInfo = async () => {
-  if (!REVENUECAT_API_KEY || !isMobile()) {
-    return null;
-  }
-
-  try {
-    const RevenueCat = await import('@revenuecat/purchases-js');
-    const purchases = RevenueCat.Purchases.getSharedInstance();
-    const customerInfo = await purchases.getCustomerInfo();
-    return customerInfo;
-  } catch (error) {
-    console.error('Error getting RevenueCat customer info:', error);
+    console.error('Error fetching subscription:', error);
     return null;
   }
 };
 
-// ================ STRIPE INTEGRATION (for web) ==================
-
-/**
- * Create a checkout session for a Stripe product
- * @param productId The product ID to create a checkout for
- */
-export const createStripeCheckout = async (productId: ProductId) => {
+export const purchaseSubscription = async (productId: ProductId) => {
   const product = products[productId];
   if (!product) {
     throw new Error('Invalid product ID');
@@ -151,185 +49,21 @@ export const createStripeCheckout = async (productId: ProductId) => {
     }
 
     const { url } = await response.json();
-    return url;
+    window.location.href = url;
   } catch (error) {
     console.error('Error creating Stripe checkout:', error);
     throw error;
   }
 };
 
-/**
- * Get current subscription from Stripe via Supabase
- */
-export const getStripeSubscription = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('stripe_user_subscriptions')
-      .select('*')
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Error fetching Stripe subscription:', error);
-    return null;
-  }
-};
-
-/**
- * Get order history from Stripe via Supabase
- */
-export const getStripeOrderHistory = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('stripe_user_orders')
-      .select('*')
-      .order('order_date', { ascending: false });
-
-    if (error) {
-      throw error;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Error fetching Stripe order history:', error);
-    return [];
-  }
-};
-
-// ================ UNIFIED SUBSCRIPTION INTERFACE ==================
-
-/**
- * Synchronize subscriptions between Stripe and RevenueCat
- * This is called after a successful Stripe purchase to update RevenueCat
- * @param stripeSubscriptionData The subscription data from Stripe
- */
-export const syncSubscriptions = async (stripeSubscriptionData: any) => {
-  try {
-    // Call the Supabase edge function to sync the subscriptions
-    // Get the current session using the updated Supabase API
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/sync-subscriptions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`,
-      },
-      body: JSON.stringify({
-        stripeSubscription: stripeSubscriptionData
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to sync subscriptions');
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Error syncing subscriptions:', error);
-    return null;
-  }
-};
-
-/**
- * Get current subscription status, using the appropriate service based on platform
- */
-export const getCurrentSubscription = async () => {
-  if (isMobile()) {
-    // Use RevenueCat for mobile apps
-    return await getRevenueCatCustomerInfo();
-  } else {
-    // Use Stripe for web
-    return await getStripeSubscription();
-  }
-};
-
-/**
- * Purchase a subscription using the appropriate service based on platform
- * @param productId The product ID to purchase
- */
-export const purchaseSubscription = async (productId: string) => {
-  if (isMobile()) {
-    // For mobile, use RevenueCat
-    const pkg = await findPackageById(productId);
-    if (!pkg) {
-      throw new Error(`Package ${productId} not found`);
-    }
-    return await purchaseWithRevenueCat(pkg);
-  } else {
-    // For web, use Stripe
-    return await createStripeCheckout(productId as ProductId);
-  }
-};
-
-/**
- * Check if user has access to a specific entitlement
- * @param entitlementId The entitlement ID to check
- */
 export const hasAccess = async (entitlementId: string): Promise<boolean> => {
   try {
-    if (isMobile()) {
-      // For mobile, check RevenueCat entitlements
-      const customerInfo = await getRevenueCatCustomerInfo();
-      if (!customerInfo) return false;
-      
-      return Object.keys(customerInfo.entitlements.active).includes(entitlementId);
-    } else {
-      // For web, check Stripe subscription status via Supabase
-      const subscription = await getStripeSubscription();
-      
-      // Map subscription status to entitlements
-      // This depends on how you've structured your data
-      if (!subscription) return false;
-      
-      // Check if subscription status is active and the entitlement is included
-      return subscription.status === 'active' && 
-             subscription.entitlements?.includes(entitlementId);
-    }
+    const subscription = await getCurrentSubscription();
+    if (!subscription) return false;
+    
+    return subscription.status === 'active';
   } catch (error) {
     console.error(`Error checking access to ${entitlementId}:`, error);
     return false;
   }
-};
-
-/**
- * Helper to find a package by identifier in RevenueCat offerings
- * @param packageId The package identifier to find
- */
-export const findPackageById = async (packageId: string) => {
-  try {
-    const offerings = await getRevenueCatOfferings();
-    if (!offerings.current) return null;
-    
-    // Search through all available packages
-    const packages = offerings.current.availablePackages;
-    for (const pkg of Object.values(packages)) {
-      // Use type assertion to handle the unknown type
-      const typedPkg = pkg as any;
-      if (typedPkg.identifier === packageId) {
-        return typedPkg;
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error(`Error finding package ${packageId}:`, error);
-    return null;
-  }
-};
-
-/**
- * Map Stripe products to RevenueCat products for cross-platform consistency
- * Use this to ensure product IDs are consistent across platforms
- */
-export const getProductMapping = () => {
-  return {
-    // Stripe product ID -> RevenueCat product ID
-    'premium': 'premium_monthly',
-    'ultimate': 'ultimate_monthly',
-    // Add more mappings as needed
-  };
 };
