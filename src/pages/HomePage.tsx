@@ -3,13 +3,23 @@ import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Brain } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const scrollToFeatures = () => {
     const featuresSection = document.getElementById('features');
     featuresSection?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleGetStarted = () => {
+    if (user) {
+      navigate('/subjects');
+    } else {
+      navigate('/signup');
+    }
   };
 
   return (
@@ -33,7 +43,7 @@ const HomePage = () => {
             <Button
               variant="primary"
               size="lg"
-              onClick={() => navigate('/login')}
+              onClick={handleGetStarted}
               className="shadow-lg hover:shadow-xl"
             >
               Get Started
