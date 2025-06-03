@@ -17,6 +17,7 @@ export const saveOnboardingPreferences = async (userId: string, preferences: Onb
         learning_goal: preferences.goal,
         preferred_schedule: preferences.schedule,
         difficulty_level: preferences.difficulty_level,
+        has_completed_onboarding: true,
         updated_at: new Date().toISOString()
       });
 
@@ -32,12 +33,12 @@ export const getOnboardingStatus = async (userId: string): Promise<boolean> => {
   try {
     const { data, error } = await supabase
       .from('public_bolt.user_preferences')
-      .select('*')
+      .select('has_completed_onboarding')
       .eq('user_id', userId)
       .single();
 
     if (error) throw error;
-    return !!data;
+    return data?.has_completed_onboarding ?? false;
   } catch (error) {
     console.error('Error checking onboarding status:', error);
     return false;

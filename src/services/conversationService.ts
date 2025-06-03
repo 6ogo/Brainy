@@ -1,8 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ElevenLabsService } from './elevenlabsService';
 import { Subject, AvatarPersonality, DifficultyLevel } from '../types';
-import { API_CONFIG } from '../config/api';
-import toast from 'react-hot-toast';
 
 interface ConversationResponse {
   text: string;
@@ -19,12 +17,12 @@ export class ConversationService {
     difficultyLevel: DifficultyLevel = 'High School'
   ): Promise<ConversationResponse> {
     try {
-      // Get AI response using Edge Function
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('No active session');
       }
 
+      // Get AI response using Edge Function
       const chatResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
         method: 'POST',
         headers: {
@@ -35,7 +33,9 @@ export class ConversationService {
           message,
           subject,
           difficultyLevel,
-          type: 'chat'
+          type: 'chat',
+          useVoice,
+          voiceId: useVoice ? ElevenLabsService.getVoiceId(currentAvatar) : undefined
         })
       });
 
@@ -43,21 +43,19 @@ export class ConversationService {
         throw new Error('Failed to get AI response');
       }
 
-      const { response: aiResponse } = await chatResponse.json();
+      const data = await chatResponse.json();
       
-      // Generate audio if voice is enabled
+      // Convert base64 audio to blob URL if available
       let audioUrl: string | undefined;
-      if (useVoice && API_CONFIG.ELEVENLABS_API_KEY) {
-        try {
-          const audioBlob = await ElevenLabsService.generateSpeech(aiResponse, currentAvatar);
-          audioUrl = URL.createObjectURL(audioBlob);
-        } catch (error) {
-          console.error('Error generating speech:', error);
-          toast.error('Voice generation failed. Using text-only mode.');
-        }
+      if (data.audioData) {
+        const audioBlob = new Blob(
+          [Uint8Array.from(atob(data.audioData), c => c.charCodeAt(0))],
+          { type: 'audio/mpeg' }
+        );
+        audioUrl = URL.createObjectURL(audioBlob);
       }
 
-      // Get summary using Edge Function
+      // Get summary
       const summaryResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
         method: 'POST',
         headers: {
@@ -69,7 +67,7 @@ export class ConversationService {
           subject,
           context: {
             userMessage: message,
-            aiResponse
+            aiResponse: data.response
           }
         })
       });
@@ -81,7 +79,7 @@ export class ConversationService {
       }
 
       return {
-        text: aiResponse,
+        text: data.response,
         audioUrl,
         summary
       };
