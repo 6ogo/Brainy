@@ -3,17 +3,12 @@ import { ElevenLabsService } from './elevenlabsService';
 import { Subject, AvatarPersonality, DifficultyLevel } from '../types';
 import { API_CONFIG } from '../config/api';
 import toast from 'react-hot-toast';
-import Groq from 'groq-sdk';
 
 interface ConversationResponse {
   text: string;
   audioUrl?: string;
   summary?: string;
 }
-
-const groq = new Groq({
-  apiKey: API_CONFIG.GROQ_API_KEY,
-});
 
 export class ConversationService {
   static async generateResponse(
@@ -24,18 +19,32 @@ export class ConversationService {
     difficultyLevel: DifficultyLevel = 'High School'
   ): Promise<ConversationResponse> {
     try {
-      if (!API_CONFIG.GROQ_API_KEY) {
-        throw new Error('Groq API key not configured');
+      // Get AI response using Edge Function
+      const chatResponse = await fetch(`${API_CONFIG.SUPABASE_URL}/functions/v1/ai-chat`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${API_CONFIG.SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message,
+          subject,
+          difficultyLevel,
+          type: 'chat'
+        })
+      });
+
+      if (!chatResponse.ok) {
+        throw new Error('Failed to get AI response');
       }
 
-      // Get AI response using Groq
-      const response = await this.getAIResponse(message, subject, difficultyLevel);
+      const { response: aiResponse } = await chatResponse.json();
       
       // Generate audio if voice is enabled
       let audioUrl: string | undefined;
       if (useVoice && API_CONFIG.ELEVENLABS_API_KEY) {
         try {
-          const audioBlob = await ElevenLabsService.generateSpeech(response, currentAvatar);
+          const audioBlob = await ElevenLabsService.generateSpeech(aiResponse, currentAvatar);
           audioUrl = URL.createObjectURL(audioBlob);
         } catch (error) {
           console.error('Error generating speech:', error);
@@ -43,67 +52,38 @@ export class ConversationService {
         }
       }
 
+      // Get summary using Edge Function
+      const summaryResponse = await fetch(`${API_CONFIG.SUPABASE_URL}/functions/v1/ai-chat`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${API_CONFIG.SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'summary',
+          subject,
+          context: {
+            userMessage: message,
+            aiResponse
+          }
+        })
+      });
+
+      let summary: string | undefined;
+      if (summaryResponse.ok) {
+        const { response: summaryText } = await summaryResponse.json();
+        summary = summaryText;
+      }
+
       return {
-        text: response,
+        text: aiResponse,
         audioUrl,
-        summary: await this.generateSummary(message, response, subject)
+        summary
       };
     } catch (error) {
       console.error('Error in conversation:', error);
       throw error;
     }
-  }
-
-  private static async getAIResponse(
-    message: string, 
-    subject: Subject,
-    difficultyLevel: DifficultyLevel
-  ): Promise<string> {
-    const systemPrompt = `You are an expert ${subject} tutor teaching at the ${difficultyLevel} level. 
-    Provide clear, accurate, and engaging explanations appropriate for this level.
-    Keep responses focused and concise while ensuring accuracy and depth of understanding.`;
-
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: message
-        }
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
-      max_tokens: 1024,
-    });
-
-    return completion.choices[0]?.message?.content || "I apologize, but I couldn't generate a response. Please try again.";
-  }
-
-  private static async generateSummary(
-    userMessage: string,
-    aiResponse: string,
-    subject: Subject
-  ): Promise<string> {
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: "Generate a concise summary of the learning interaction, highlighting key points and next steps."
-        },
-        {
-          role: "user",
-          content: `Summarize this learning interaction in ${subject}:\nQuestion: ${userMessage}\nAnswer: ${aiResponse}`
-        }
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.3,
-      max_tokens: 256,
-    });
-
-    return completion.choices[0]?.message?.content || "Summary not available.";
   }
 
   static async saveConversation(
