@@ -20,6 +20,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     rightIcon, 
     fullWidth = true,
     disabled,
+    type,
     ...props 
   }, ref) => {
     const inputStyles = error 
@@ -31,6 +32,18 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     const labelStyles = error 
       ? commonStyles.label.error 
       : commonStyles.label.base;
+
+    // Add appropriate autocomplete attributes based on input type
+    const getAutocomplete = () => {
+      switch (type) {
+        case 'password':
+          return props.name?.includes('new') ? 'new-password' : 'current-password';
+        case 'email':
+          return 'email';
+        default:
+          return props.autocomplete;
+      }
+    };
 
     return (
       <div className={cn('mb-4', fullWidth ? 'w-full' : '')}>
@@ -54,6 +67,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               className
             )}
             disabled={disabled}
+            type={type}
+            autoComplete={getAutocomplete()}
             {...props}
           />
           {rightIcon && (
