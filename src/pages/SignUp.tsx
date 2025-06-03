@@ -56,6 +56,7 @@ export const SignUp: React.FC = () => {
           <Input
             label="Full Name"
             type="text"
+            name="fullname"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Enter your full name"
@@ -65,6 +66,7 @@ export const SignUp: React.FC = () => {
           <Input
             label="Email"
             type="email"
+            name="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Enter your email"
@@ -75,6 +77,7 @@ export const SignUp: React.FC = () => {
             <Input
               label="Password"
               type={showPassword ? 'text' : 'password'}
+              name="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Create a password"
@@ -118,5 +121,3 @@ export const SignUp: React.FC = () => {
     </div>
   );
 };
-
-export default SignUp;

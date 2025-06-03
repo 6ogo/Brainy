@@ -55,6 +55,7 @@ export const Login: React.FC = () => {
           <Input
             label="Email"
             type="email"
+            name="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Enter your email"
@@ -65,6 +66,7 @@ export const Login: React.FC = () => {
             <Input
               label="Password"
               type={showPassword ? 'text' : 'password'}
+              name="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
@@ -82,8 +84,8 @@ export const Login: React.FC = () => {
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                className={cn(commonStyles.button.text, "text-sm")}
                 onClick={() => navigate('/forgot-password')}
+                className={cn(commonStyles.button.text, "text-sm")}
               >
                 Forgot password?
               </button>
@@ -114,5 +116,3 @@ export const Login: React.FC = () => {
     </div>
   );
 };
-
-export default Login;
