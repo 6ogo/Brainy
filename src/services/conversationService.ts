@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ElevenLabsService } from './elevenlabsService';
-import { Subject } from '../types';
+import { Subject, AvatarPersonality } from '../types';
 import { API_CONFIG } from '../config/api';
 import toast from 'react-hot-toast';
 
@@ -13,66 +13,10 @@ interface ConversationResponse {
 const MONTHLY_MINUTES_LIMIT = 60; // 1 hour per month for premium users
 
 export class ConversationService {
-  private static AGENT_IDS = {
-    'encouraging-emma': 'agent_01jwryem0se8xtkcmtmbgc0pek',
-    'challenge-charlie': 'agent_01jwrysbe0e6tr7m5e5daf9em5',
-    'fun-freddy': 'agent_01jwryx0bjeder6sq38gx345t3'
-  };
-
-  static async checkMonthlyUsage(userId: string): Promise<boolean> {
-    const currentDate = new Date();
-    const monthYear = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-
-    const { data: usage, error } = await supabase
-      .from('user_usage')
-      .select('minutes_used')
-      .eq('user_id', userId)
-      .eq('month_year', monthYear)
-      .single();
-
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-      throw error;
-    }
-
-    const minutesUsed = usage?.minutes_used || 0;
-    return minutesUsed < MONTHLY_MINUTES_LIMIT;
-  }
-
-  static async updateUsage(userId: string, durationInSeconds: number): Promise<void> {
-    const currentDate = new Date();
-    const monthYear = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-    const durationInMinutes = Math.ceil(durationInSeconds / 60);
-
-    const { data: existing } = await supabase
-      .from('user_usage')
-      .select('id, minutes_used')
-      .eq('user_id', userId)
-      .eq('month_year', monthYear)
-      .single();
-
-    if (existing) {
-      await supabase
-        .from('user_usage')
-        .update({ 
-          minutes_used: existing.minutes_used + durationInMinutes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existing.id);
-    } else {
-      await supabase
-        .from('user_usage')
-        .insert({
-          user_id: userId,
-          month_year: monthYear,
-          minutes_used: durationInMinutes
-        });
-    }
-  }
-
   static async generateResponse(
     message: string,
     subject: Subject,
-    currentAvatar: string,
+    currentAvatar: AvatarPersonality,
     useVoice: boolean = true
   ): Promise<ConversationResponse> {
     try {
@@ -83,11 +27,8 @@ export class ConversationService {
       // Get AI response based on subject and message
       const response = await this.getAIResponse(message, subject);
       
-      // Generate a summary of the conversation
-      const summary = await this.generateSummary(message, response, subject);
-
+      // Generate audio if voice is enabled
       let audioUrl: string | undefined;
-
       if (useVoice) {
         try {
           const audioBlob = await ElevenLabsService.generateSpeech(response, currentAvatar);
@@ -101,7 +42,7 @@ export class ConversationService {
       return {
         text: response,
         audioUrl,
-        summary
+        summary: await this.generateSummary(message, response, subject)
       };
     } catch (error) {
       console.error('Error in conversation:', error);
@@ -109,12 +50,25 @@ export class ConversationService {
     }
   }
 
+  private static async getAIResponse(message: string, subject: Subject): Promise<string> {
+    // Simulated AI response based on subject
+    const responses = {
+      Math: "Let's solve this step by step. First, let's identify the key components...",
+      Science: "This scientific concept is fascinating. Let me explain how it works...",
+      English: "When analyzing this text, we should consider the author's intent...",
+      History: "This historical event had several important causes and effects...",
+      Languages: "In this language, we express this concept using the following structure...",
+      'Test Prep': "This type of question often appears on exams. Here's how to approach it..."
+    };
+
+    return responses[subject] || "Let me help you understand this better...";
+  }
+
   private static async generateSummary(
     userMessage: string,
     aiResponse: string,
     subject: Subject
   ): Promise<string> {
-    // TODO: Replace with actual AI integration
     return `
       Topic: ${subject}
       Question: ${userMessage.substring(0, 100)}...
@@ -128,23 +82,9 @@ export class ConversationService {
     `;
   }
 
-  private static async getAIResponse(message: string, subject: Subject): Promise<string> {
-    // TODO: Replace with actual AI integration
-    const responses = {
-      Math: "Let's solve this step by step. First, let's identify the key components...",
-      Science: "This scientific concept is fascinating. Let me explain how it works...",
-      English: "When analyzing this text, we should consider the author's intent...",
-      History: "This historical event had several important causes and effects...",
-      Languages: "In this language, we express this concept using the following structure...",
-      'Test Prep': "This type of question often appears on exams. Here's how to approach it..."
-    };
-
-    return responses[subject] || "Let me help you understand this better...";
-  }
-
   static async saveConversation(
-    userId: string, 
-    userMessage: string, 
+    userId: string,
+    userMessage: string,
     aiResponse: string,
     duration: number,
     summary?: string
@@ -162,9 +102,6 @@ export class ConversationService {
         });
 
       if (error) throw error;
-
-      // Update usage tracking
-      await this.updateUsage(userId, duration);
     } catch (error) {
       console.error('Error saving conversation:', error);
       throw error;

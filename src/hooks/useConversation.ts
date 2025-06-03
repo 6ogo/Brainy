@@ -38,13 +38,6 @@ export const useConversation = () => {
         return;
       }
 
-      // Check monthly usage limit
-      const hasRemainingTime = await ConversationService.checkMonthlyUsage(user.id);
-      if (!hasRemainingTime) {
-        toast.error('You have reached your monthly usage limit.');
-        return;
-      }
-
       setIsProcessing(true);
       setAvatarEmotion('thinking');
       
