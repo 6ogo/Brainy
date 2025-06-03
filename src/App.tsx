@@ -17,8 +17,8 @@ import { PrivateRoute } from './components/PrivateRoute';
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
+    <Router>
+      <AuthProvider>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />
@@ -35,8 +35,8 @@ function App() {
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
         <Toaster position="top-right" />
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 
