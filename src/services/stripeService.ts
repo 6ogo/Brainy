@@ -8,11 +8,16 @@ export async function createCheckoutSession(productId: ProductId) {
   }
 
   try {
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('No active session');
+    }
+
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabase.auth.session()?.access_token}`,
+        'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         price_id: product.priceId,
@@ -41,7 +46,7 @@ export async function createPortalSession() {
       throw new Error('No active session');
     }
 
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-portal`, {
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-portal`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -64,7 +69,7 @@ export async function createPortalSession() {
 export async function getCurrentSubscription() {
   try {
     const { data, error } = await supabase
-      .from('stripe_user_subscriptions')
+      .from('public_bolt.stripe_user_subscriptions')
       .select('*')
       .maybeSingle();
 
@@ -82,7 +87,7 @@ export async function getCurrentSubscription() {
 export async function getOrderHistory() {
   try {
     const { data, error } = await supabase
-      .from('stripe_user_orders')
+      .from('public_bolt.stripe_user_orders')
       .select('*')
       .order('order_date', { ascending: false });
 
