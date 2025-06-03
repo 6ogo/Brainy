@@ -100,7 +100,7 @@ export class ConversationService {
   ): Promise<void> {
     try {
       const { error } = await supabase
-        .from('conversations')
+        .from('public_bolt.conversations')
         .insert({
           user_id: userId,
           user_message: userMessage,
@@ -120,7 +120,7 @@ export class ConversationService {
   static async getConversationHistory(userId: string): Promise<any[]> {
     try {
       const { data, error } = await supabase
-        .from('conversations')
+        .from('public_bolt.conversations')
         .select('*')
         .eq('user_id', userId)
         .order('timestamp', { ascending: false });

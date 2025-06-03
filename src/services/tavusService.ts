@@ -154,7 +154,7 @@ export const TavusService = {
   async checkEligibilityForTavus(userId: string): Promise<boolean> {
     try {
       const { data: conversations, error } = await supabase
-        .from('conversations')
+        .from('public_bolt.conversations')
         .select('id')
         .eq('user_id', userId)
         .order('timestamp', { ascending: false })
@@ -180,7 +180,7 @@ export const TavusService = {
     try {
       // Get completed topics
       const { data: completedData, error: completedError } = await supabase
-        .from('completed_topics')
+        .from('public_bolt.completed_topics')
         .select('topic_name, proficiency_score, completed_at')
         .eq('user_id', userId)
         .eq('subject', subject)
@@ -190,7 +190,7 @@ export const TavusService = {
       
       // Get topics in progress with low scores (struggling)
       const { data: strugglingData, error: strugglingError } = await supabase
-        .from('topic_progress')
+        .from('public_bolt.topic_progress')
         .select('topic_name, proficiency_score, last_attempt_at')
         .eq('user_id', userId)
         .eq('subject', subject)
@@ -201,7 +201,7 @@ export const TavusService = {
       
       // Get recommended next topics based on curriculum
       const { data: curriculumData, error: curriculumError } = await supabase
-        .from('subject_curriculum')
+        .from('public_bolt.subject_curriculum')
         .select('topic_name, topic_order')
         .eq('subject', subject)
         .order('topic_order', { ascending: true });
@@ -210,7 +210,7 @@ export const TavusService = {
       
       // Get user's strengths (topics with highest proficiency)
       const { data: strengthsData, error: strengthsError } = await supabase
-        .from('completed_topics')
+        .from('public_bolt.completed_topics')
         .select('topic_name, proficiency_score')
         .eq('user_id', userId)
         .eq('subject', subject)
@@ -222,7 +222,7 @@ export const TavusService = {
       
       // Get user stats
       const { data: userStats, error: statsError } = await supabase
-        .from('user_stats')
+        .from('public_bolt.user_stats')
         .select('total_study_time_hours, completion_rate, current_streak')
         .eq('user_id', userId)
         .single();

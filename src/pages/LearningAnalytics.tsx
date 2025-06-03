@@ -57,7 +57,7 @@ export const LearningAnalytics: React.FC = () => {
         
         // Fetch study sessions for the current user
         const { data: sessionData, error: sessionError } = await supabase
-          .from('study_sessions')
+          .from('public_bolt.study_sessions')
           .select('*')
           .order('created_at', { ascending: false });
           

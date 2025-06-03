@@ -30,7 +30,7 @@ export const saveStudySession = async (userId: string, sessionData: SessionStats
     };
 
     const { data, error } = await supabase
-      .from('study_sessions')
+      .from('public_bolt.study_sessions')
       .insert(studySessionData);
 
     if (error) {
@@ -51,7 +51,7 @@ export const saveStudySession = async (userId: string, sessionData: SessionStats
 export const getStudySessions = async (userId: string) => {
   try {
     const { data, error } = await supabase
-      .from('study_sessions')
+      .from('public_bolt.study_sessions')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
@@ -74,7 +74,7 @@ export const getStudySessions = async (userId: string) => {
 export const getUserStats = async (userId: string) => {
   try {
     const { data: sessions, error } = await supabase
-      .from('study_sessions')
+      .from('public_bolt.study_sessions')
       .select('*')
       .eq('user_id', userId);
 

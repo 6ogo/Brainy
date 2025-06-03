@@ -10,7 +10,7 @@ export interface OnboardingPreferences {
 export const saveOnboardingPreferences = async (userId: string, preferences: OnboardingPreferences) => {
   try {
     const { error } = await supabase
-      .from('user_preferences')
+      .from('public_bolt.user_preferences')
       .upsert({
         user_id: userId,
         subjects: preferences.subjects,
@@ -31,7 +31,7 @@ export const saveOnboardingPreferences = async (userId: string, preferences: Onb
 export const getOnboardingStatus = async (userId: string): Promise<boolean> => {
   try {
     const { data, error } = await supabase
-      .from('user_preferences')
+      .from('public_bolt.user_preferences')
       .select('*')
       .eq('user_id', userId)
       .single();
