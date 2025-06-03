@@ -32,7 +32,7 @@ function App() {
           <Route path="/study" element={<PrivateRoute><StudyPage /></PrivateRoute>} />
           <Route path="/analytics" element={<PrivateRoute><LearningAnalytics /></PrivateRoute>} />
           <Route path="/404" element={<NotFound />} />
-          <Route path="*" element={<Navigate to="/404" replace />} />
+          <Route path="*" element={<Navigate to="/404\" replace />} />
         </Routes>
         <Toaster position="top-right" />
       </AuthProvider>

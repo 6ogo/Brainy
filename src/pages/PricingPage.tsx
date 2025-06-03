@@ -7,9 +7,10 @@ import { Card } from '../components/Card';
 import { Header } from '../components/Header';
 import { cn, commonStyles, animations } from '../styles/utils';
 import { purchaseSubscription, getCurrentSubscription } from '../services/subscriptionService';
+import { createPortalSession } from '../services/stripeService';
 import { useAuth } from '../contexts/AuthContext';
-import toast from 'react-hot-toast';
 import { products } from '../stripe-config';
+import toast from 'react-hot-toast';
 
 export const PricingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -51,6 +52,19 @@ export const PricingPage: React.FC = () => {
     } catch (error) {
       console.error('Subscription error:', error);
       toast.error('Failed to process subscription. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      setIsLoading(true);
+      const url = await createPortalSession();
+      window.location.href = url;
+    } catch (error) {
+      console.error('Error opening customer portal:', error);
+      toast.error('Failed to open customer portal. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -107,6 +121,17 @@ export const PricingPage: React.FC = () => {
           >
             Choose the perfect plan for your learning journey
           </motion.p>
+
+          {currentPlan !== 'free_tier' && (
+            <Button
+              variant="secondary"
+              onClick={handleManageSubscription}
+              isLoading={isLoading}
+              className="mb-8"
+            >
+              Manage Subscription
+            </Button>
+          )}
         </motion.div>
 
         <motion.div 
