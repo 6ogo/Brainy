@@ -4,7 +4,7 @@ import { products, ProductId } from '../stripe-config';
 export const getCurrentSubscription = async () => {
   try {
     const { data, error } = await supabase
-      .from('stripe_user_subscriptions')
+      .from('stripe_subscriptions')
       .select('*')
       .maybeSingle();
 
@@ -29,7 +29,7 @@ export const purchaseSubscription = async (productId: ProductId) => {
     // Get the current session using the updated Supabase API
     const { data: { session } } = await supabase.auth.getSession();
     
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-checkout`, {
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

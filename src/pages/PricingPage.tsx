@@ -142,7 +142,7 @@ export const PricingPage: React.FC = () => {
 
               <div className="border-t border-gray-200 p-6 bg-gray-50 flex-grow">
                 <ul className="space-y-3">
-                  {plan.features.map((feature) => (
+                  {plan.features?.map((feature) => (
                     <li key={feature} className="flex items-start">
                       <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
                       <span className="text-gray-600">{feature}</span>
