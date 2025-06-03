@@ -33,6 +33,8 @@ Deno.serve(async (req) => {
       });
     }
 
+    const { price_id, success_url, cancel_url, mode } = await req.json();
+
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const {
@@ -69,23 +71,72 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!customer?.customer_id) {
-      return new Response(JSON.stringify({ error: 'No active subscription found' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    let customerId;
+
+    if (!customer || !customer.customer_id) {
+      const newCustomer = await stripe.customers.create({
+        email: user.email,
+        metadata: {
+          userId: user.id,
+        },
       });
+
+      const { error: createCustomerError } = await supabase
+        .from('public_bolt.stripe_customers')
+        .insert({
+          user_id: user.id,
+          customer_id: newCustomer.id,
+        });
+
+      if (createCustomerError) {
+        console.error('Failed to save customer information in the database', createCustomerError);
+        return new Response(JSON.stringify({ error: 'Failed to create customer mapping' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (mode === 'subscription') {
+        const { error: createSubscriptionError } = await supabase
+          .from('public_bolt.stripe_subscriptions')
+          .insert({
+            customer_id: newCustomer.id,
+            status: 'not_started',
+          });
+
+        if (createSubscriptionError) {
+          console.error('Failed to save subscription in the database', createSubscriptionError);
+          return new Response(JSON.stringify({ error: 'Failed to create subscription record' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
+      customerId = newCustomer.id;
+    } else {
+      customerId = customer.customer_id;
     }
 
-    const { url } = await stripe.billingPortal.sessions.create({
-      customer: customer.customer_id,
-      return_url: `${req.headers.get('origin')}/pricing`,
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: price_id,
+          quantity: 1,
+        },
+      ],
+      mode,
+      success_url,
+      cancel_url,
     });
 
-    return new Response(JSON.stringify({ url }), {
+    return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: any) {
-    console.error('Portal session creation error:', error);
+    console.error('Checkout error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
