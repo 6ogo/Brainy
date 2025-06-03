@@ -69,6 +69,18 @@ export default defineConfig({
   server: {
     historyApiFallback: true,
   },
+  preview: {
+    historyApiFallback: true,
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+        },
+      },
+    },
+  },
   optimizeDeps: {
     exclude: ['lucide-react']
   }

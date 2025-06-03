@@ -17,8 +17,8 @@ import { PrivateRoute } from './components/PrivateRoute';
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
+    <AuthProvider>
+      <Router>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<Login />} />
@@ -32,11 +32,11 @@ function App() {
           <Route path="/study" element={<PrivateRoute><StudyPage /></PrivateRoute>} />
           <Route path="/analytics" element={<PrivateRoute><LearningAnalytics /></PrivateRoute>} />
           <Route path="/404" element={<NotFound />} />
-          <Route path="*" element={<Navigate to="/404\" replace />} />
+          <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
         <Toaster position="top-right" />
-      </AuthProvider>
-    </Router>
+      </Router>
+    </AuthProvider>
   );
 }
 
