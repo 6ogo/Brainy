@@ -1,7 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { products, ProductId } from '../stripe-config';
 
-// Remove RevenueCat initialization and related functions
 export const getCurrentSubscription = async () => {
   try {
     const { data, error } = await supabase

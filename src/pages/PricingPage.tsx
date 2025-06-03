@@ -9,53 +9,7 @@ import { cn, commonStyles, animations } from '../styles/utils';
 import { purchaseSubscription, getCurrentSubscription } from '../services/subscriptionService';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
-
-const plans = [
-  {
-    name: 'Free',
-    price: '0',
-    packageId: 'free_tier',
-    description: 'Perfect for trying out Brainbud',
-    features: [
-      '30 minutes daily conversation',
-      '2 subjects (Math, English)',
-      'Basic progress tracking',
-      'Community features'
-    ],
-    limitations: [
-      'Limited conversation time',
-      'No advanced analytics',
-      'No downloadable transcripts'
-    ]
-  },
-  {
-    name: 'Premium',
-    price: '19.99',
-    packageId: 'premium_monthly',
-    description: 'Unlock the full potential of AI tutoring',
-    features: [
-      '4 hours daily conversation',
-      '30 minute video calls',
-      'All subjects and specializations',
-      'Advanced analytics and insights',
-      'Downloadable conversation transcripts'
-    ]
-  },
-  {
-    name: 'Ultimate',
-    price: '69',
-    packageId: 'ultimate_monthly',
-    description: 'The complete AI tutoring experience',
-    features: [
-      'Increased conversation time',
-      '60 minutes video calls',
-      'All subjects and specializations',
-      'Advanced analytics and insights',
-      'Downloadable conversation transcripts',
-      'Early access to new features'
-    ]
-  }
-];
+import { products } from '../stripe-config';
 
 export const PricingPage: React.FC = () => {
   const navigate = useNavigate();
@@ -65,45 +19,70 @@ export const PricingPage: React.FC = () => {
 
   useEffect(() => {
     const fetchSubscription = async () => {
+      if (!user) return;
+      
       try {
-        const customerInfo = await getCurrentSubscription();
-        if (customerInfo.entitlements.active) {
-          const activePlan = Object.keys(customerInfo.entitlements.active)[0];
-          setCurrentPlan(activePlan);
+        const subscription = await getCurrentSubscription();
+        if (subscription?.status === 'active') {
+          setCurrentPlan(subscription.price_id);
         }
       } catch (error) {
         console.error('Error fetching subscription:', error);
       }
     };
 
-    if (user) {
-      fetchSubscription();
-    }
+    fetchSubscription();
   }, [user]);
 
-  const handleSubscribe = async (plan: typeof plans[0]) => {
+  const handleSubscribe = async (planId: string) => {
     if (!user) {
       navigate('/login');
       return;
     }
 
-    if (plan.price === '0') {
+    if (planId === 'free_tier') {
       navigate('/subjects');
       return;
     }
 
     try {
       setIsLoading(true);
-      await purchaseSubscription(plan.packageId);
-      toast.success(`Successfully subscribed to ${plan.name} plan!`);
-      navigate('/subjects');
+      await purchaseSubscription(planId as keyof typeof products);
     } catch (error) {
-      toast.error('Failed to process subscription. Please try again.');
       console.error('Subscription error:', error);
+      toast.error('Failed to process subscription. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const plans = [
+    {
+      id: 'free_tier',
+      name: 'Free',
+      price: '0',
+      description: 'Perfect for trying out Brainbud',
+      features: [
+        '30 minutes daily conversation',
+        '2 subjects (Math, English)',
+        'Basic progress tracking',
+        'Community features'
+      ],
+      limitations: [
+        'Limited conversation time',
+        'No advanced analytics',
+        'No downloadable transcripts'
+      ]
+    },
+    {
+      ...products.premium,
+      features: products.premium.description.split(', ')
+    },
+    {
+      ...products.ultimate,
+      features: products.ultimate.description.split(', ')
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100">
@@ -136,7 +115,7 @@ export const PricingPage: React.FC = () => {
         >
           {plans.map((plan, index) => (
             <Card
-              key={plan.name}
+              key={plan.id}
               variant="interactive"
               className="flex flex-col"
               delay={index * 0.1}
@@ -152,11 +131,11 @@ export const PricingPage: React.FC = () => {
                 <Button
                   variant="primary"
                   className="w-full mb-6"
-                  onClick={() => handleSubscribe(plan)}
+                  onClick={() => handleSubscribe(plan.id)}
                   isLoading={isLoading}
-                  disabled={currentPlan === plan.packageId}
+                  disabled={currentPlan === plan.id}
                 >
-                  {currentPlan === plan.packageId ? 'Current Plan' : 
+                  {currentPlan === plan.id ? 'Current Plan' : 
                    plan.price === '0' ? 'Get Started' : 'Subscribe Now'}
                 </Button>
               </div>
