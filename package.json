@@ -20,6 +20,7 @@
     "date-fns": "^2.30.0",
     "elevenlabs-node": "^1.2.0",
     "framer-motion": "^11.0.3",
+    "groq-sdk": "^0.3.1",
     "jspdf": "^2.5.1",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",

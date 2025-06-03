@@ -1,8 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { ElevenLabsService } from './elevenlabsService';
-import { Subject, AvatarPersonality } from '../types';
+import { Subject, AvatarPersonality, DifficultyLevel } from '../types';
 import { API_CONFIG } from '../config/api';
 import toast from 'react-hot-toast';
+import Groq from 'groq-sdk';
 
 interface ConversationResponse {
   text: string;
@@ -10,26 +11,29 @@ interface ConversationResponse {
   summary?: string;
 }
 
-const MONTHLY_MINUTES_LIMIT = 60; // 1 hour per month for premium users
+const groq = new Groq({
+  apiKey: API_CONFIG.GROQ_API_KEY,
+});
 
 export class ConversationService {
   static async generateResponse(
     message: string,
     subject: Subject,
     currentAvatar: AvatarPersonality,
-    useVoice: boolean = true
+    useVoice: boolean = true,
+    difficultyLevel: DifficultyLevel = 'High School'
   ): Promise<ConversationResponse> {
     try {
-      if (!API_CONFIG.ELEVENLABS_API_KEY) {
-        throw new Error('ElevenLabs API key not configured');
+      if (!API_CONFIG.GROQ_API_KEY) {
+        throw new Error('Groq API key not configured');
       }
 
-      // Get AI response based on subject and message
-      const response = await this.getAIResponse(message, subject);
+      // Get AI response using Groq
+      const response = await this.getAIResponse(message, subject, difficultyLevel);
       
       // Generate audio if voice is enabled
       let audioUrl: string | undefined;
-      if (useVoice) {
+      if (useVoice && API_CONFIG.ELEVENLABS_API_KEY) {
         try {
           const audioBlob = await ElevenLabsService.generateSpeech(response, currentAvatar);
           audioUrl = URL.createObjectURL(audioBlob);
@@ -50,18 +54,32 @@ export class ConversationService {
     }
   }
 
-  private static async getAIResponse(message: string, subject: Subject): Promise<string> {
-    // Simulated AI response based on subject
-    const responses = {
-      Math: "Let's solve this step by step. First, let's identify the key components...",
-      Science: "This scientific concept is fascinating. Let me explain how it works...",
-      English: "When analyzing this text, we should consider the author's intent...",
-      History: "This historical event had several important causes and effects...",
-      Languages: "In this language, we express this concept using the following structure...",
-      'Test Prep': "This type of question often appears on exams. Here's how to approach it..."
-    };
+  private static async getAIResponse(
+    message: string, 
+    subject: Subject,
+    difficultyLevel: DifficultyLevel
+  ): Promise<string> {
+    const systemPrompt = `You are an expert ${subject} tutor teaching at the ${difficultyLevel} level. 
+    Provide clear, accurate, and engaging explanations appropriate for this level.
+    Keep responses focused and concise while ensuring accuracy and depth of understanding.`;
 
-    return responses[subject] || "Let me help you understand this better...";
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
+        },
+        {
+          role: "user",
+          content: message
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: 1024,
+    });
+
+    return completion.choices[0]?.message?.content || "I apologize, but I couldn't generate a response. Please try again.";
   }
 
   private static async generateSummary(
@@ -69,17 +87,23 @@ export class ConversationService {
     aiResponse: string,
     subject: Subject
   ): Promise<string> {
-    return `
-      Topic: ${subject}
-      Question: ${userMessage.substring(0, 100)}...
-      Key Points Discussed:
-      - ${aiResponse.substring(0, 100)}...
-      
-      Next Steps:
-      1. Review the concepts discussed
-      2. Practice with similar problems
-      3. Connect this topic with previous learning
-    `;
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "Generate a concise summary of the learning interaction, highlighting key points and next steps."
+        },
+        {
+          role: "user",
+          content: `Summarize this learning interaction in ${subject}:\nQuestion: ${userMessage}\nAnswer: ${aiResponse}`
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.3,
+      max_tokens: 256,
+    });
+
+    return completion.choices[0]?.message?.content || "Summary not available.";
   }
 
   static async saveConversation(
