@@ -19,7 +19,7 @@ export const getCurrentSubscription = async () => {
   }
 };
 
-export const purchaseSubscription = async (productId: ProductId) => {
+export const purchaseSubscription = async (productId: ProductId, promotionCode?: string) => {
   const product = products[productId];
   if (!product) {
     throw new Error('Invalid product ID');
@@ -28,26 +28,37 @@ export const purchaseSubscription = async (productId: ProductId) => {
   try {
     // Get the current session using the updated Supabase API
     const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('No active session found');
+    }
+
+    const apiUrl = new URL('/functions/v1/create-checkout', import.meta.env.VITE_SUPABASE_URL);
     
-    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout`, {
+    const response = await fetch(apiUrl.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`,
+        'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         price_id: product.priceId,
         success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${window.location.origin}/pricing`,
         mode: product.mode,
+        promotion_code: promotionCode,
       }),
     });
 
     if (!response.ok) {
-      throw new Error('Failed to create checkout session');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to create checkout session');
     }
 
     const { url } = await response.json();
+    if (!url) {
+      throw new Error('No checkout URL received');
+    }
+
     window.location.href = url;
   } catch (error) {
     console.error('Error creating Stripe checkout:', error);

@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { price_id, success_url, cancel_url, mode } = await req.json();
+    const { price_id, success_url, cancel_url, mode, promotion_code } = await req.json();
 
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     }
 
     const { data: customer, error: getCustomerError } = await supabase
-      .from('public_bolt.stripe_customers')
+      .from('stripe_customers')
       .select('customer_id')
       .eq('user_id', user.id)
       .is('deleted_at', null)
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       });
 
       const { error: createCustomerError } = await supabase
-        .from('public_bolt.stripe_customers')
+        .from('stripe_customers')
         .insert({
           user_id: user.id,
           customer_id: newCustomer.id,
@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
 
       if (mode === 'subscription') {
         const { error: createSubscriptionError } = await supabase
-          .from('public_bolt.stripe_subscriptions')
+          .from('stripe_subscriptions')
           .insert({
             customer_id: newCustomer.id,
             status: 'not_started',
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
       customerId = customer.customer_id;
     }
 
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       payment_method_types: ['card'],
       line_items: [
@@ -130,7 +130,29 @@ Deno.serve(async (req) => {
       mode,
       success_url,
       cancel_url,
-    });
+      allow_promotion_codes: true,
+    };
+
+    // If a specific promotion code is provided, validate and apply it
+    if (promotion_code) {
+      try {
+        const promotionCodes = await stripe.promotionCodes.list({
+          code: promotion_code,
+          active: true,
+        });
+
+        if (promotionCodes.data.length > 0) {
+          sessionConfig.discounts = [{
+            promotion_code: promotionCodes.data[0].id,
+          }];
+        }
+      } catch (error) {
+        console.error('Error validating promotion code:', error);
+        // Continue without the promotion code if validation fails
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
 
     return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
