@@ -20,6 +20,14 @@ interface TextToSpeechRequest {
 }
 
 export class ElevenLabsService {
+  /**
+   * Returns the ElevenLabs voice ID for a given persona key.
+   * @param persona The persona key (e.g., 'encouraging-emma')
+   * @returns The corresponding voice ID string, or undefined if not found.
+   */
+  static getVoiceId(persona: string): string | undefined {
+    return this.VOICE_IDS[persona as keyof typeof this.VOICE_IDS];
+  }
   private static API_URL = 'https://api.elevenlabs.io/v1';
   private static DEFAULT_MODEL = 'eleven_monolingual_v1';
 
