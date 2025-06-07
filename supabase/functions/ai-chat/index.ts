@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import Groq from 'npm:groq-sdk';
-import { ElevenLabs } from 'npm:elevenlabs-node@2.0.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,17 +21,34 @@ interface ChatRequest {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders, status: 204 });
+    return new Response(null, { 
+      status: 200,
+      headers: corsHeaders 
+    });
+  }
+
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
   }
 
   try {
-    const groq = new Groq({
-      apiKey: Deno.env.get('GROQ_API_KEY'),
-    });
+    const groqApiKey = Deno.env.get('GROQ_API_KEY');
+    const elevenLabsApiKey = Deno.env.get('ELEVENLABS_API_KEY');
 
-    const voice = new ElevenLabs({
-      apiKey: Deno.env.get('ELEVENLABS_API_KEY'),
+    if (!groqApiKey) {
+      return new Response(JSON.stringify({ error: 'GROQ_API_KEY not configured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const groq = new Groq({
+      apiKey: groqApiKey,
     });
 
     const { message, subject, difficultyLevel, type, useVoice, voiceId, context } = await req.json() as ChatRequest;
@@ -60,34 +76,49 @@ serve(async (req) => {
 
       const textResponse = completion.choices[0]?.message?.content || '';
 
-      // Generate voice if requested
-      if (useVoice && voiceId) {
+      // Generate voice if requested and ElevenLabs is available
+      if (useVoice && voiceId && elevenLabsApiKey) {
         try {
-          const audioBuffer = await voice.textToSpeech({
-            text: textResponse,
-            voice_id: voiceId,
-            model_id: 'eleven_monolingual_v1',
+          const voiceResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'xi-api-key': elevenLabsApiKey
+            },
+            body: JSON.stringify({
+              text: textResponse,
+              model_id: 'eleven_monolingual_v1',
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+                style: 0.5,
+                use_speaker_boost: true
+              }
+            })
           });
 
-          return new Response(
-            JSON.stringify({ 
-              response: textResponse,
-              audioData: audioBuffer.toString('base64')
-            }),
-            { 
-              headers: { 
-                ...corsHeaders, 
-                'Content-Type': 'application/json' 
-              } 
-            }
-          );
+          if (voiceResponse.ok) {
+            const audioBuffer = await voiceResponse.arrayBuffer();
+            const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+
+            return new Response(
+              JSON.stringify({ 
+                response: textResponse,
+                audioData: base64Audio
+              }),
+              { 
+                headers: { 
+                  ...corsHeaders, 
+                  'Content-Type': 'application/json' 
+                } 
+              }
+            );
+          } else {
+            console.error('ElevenLabs API error:', await voiceResponse.text());
+          }
         } catch (voiceError) {
           console.error('Voice generation error:', voiceError);
-          // Return text-only response if voice fails
-          return new Response(
-            JSON.stringify({ response: textResponse }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          // Continue without voice if it fails
         }
       }
 
@@ -119,11 +150,15 @@ serve(async (req) => {
       );
     }
 
-    throw new Error('Invalid request type');
+    return new Response(JSON.stringify({ error: 'Invalid request type' }), {
+      status: 400,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+
   } catch (error) {
     console.error('AI chat error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || 'Internal server error' }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
