@@ -20,14 +20,6 @@ interface TextToSpeechRequest {
 }
 
 export class ElevenLabsService {
-  /**
-   * Returns the ElevenLabs voice ID for a given persona key.
-   * @param persona The persona key (e.g., 'encouraging-emma')
-   * @returns The corresponding voice ID string, or undefined if not found.
-   */
-  static getVoiceId(persona: string): string | undefined {
-    return this.VOICE_IDS[persona as keyof typeof this.VOICE_IDS];
-  }
   private static API_URL = 'https://api.elevenlabs.io/v1';
   private static DEFAULT_MODEL = 'eleven_monolingual_v1';
 
@@ -40,11 +32,24 @@ export class ElevenLabsService {
     'buddy-ben': 'yoZ06aMxZJJ28mfd3POQ'
   };
 
+  /**
+   * Returns the ElevenLabs voice ID for a given persona key.
+   * @param persona The persona key (e.g., 'encouraging-emma')
+   * @returns The corresponding voice ID string, or undefined if not found.
+   */
+  static getVoiceId(persona: string): string | undefined {
+    return this.VOICE_IDS[persona as keyof typeof this.VOICE_IDS];
+  }
+
   static async generateSpeech(text: string, persona: string): Promise<Blob> {
     try {
       const voiceId = this.VOICE_IDS[persona as keyof typeof this.VOICE_IDS];
       if (!voiceId) {
-        throw new Error('Invalid persona');
+        throw new Error(`Invalid persona: ${persona}`);
+      }
+
+      if (!API_CONFIG.ELEVENLABS_API_KEY) {
+        throw new Error('ElevenLabs API key not configured');
       }
 
       const response = await fetch(`${this.API_URL}/text-to-speech/${voiceId}`, {
@@ -66,7 +71,8 @@ export class ElevenLabsService {
       });
 
       if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       return await response.blob();
@@ -78,6 +84,10 @@ export class ElevenLabsService {
 
   static async getVoices(): Promise<Voice[]> {
     try {
+      if (!API_CONFIG.ELEVENLABS_API_KEY) {
+        throw new Error('ElevenLabs API key not configured');
+      }
+
       const response = await fetch(`${this.API_URL}/voices`, {
         headers: {
           'xi-api-key': API_CONFIG.ELEVENLABS_API_KEY
@@ -94,5 +104,27 @@ export class ElevenLabsService {
       console.error('Error fetching voices:', error);
       throw error;
     }
+  }
+
+  /**
+   * Play audio from a blob
+   */
+  static async playAudio(audioBlob: Blob): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        resolve();
+      };
+      
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        reject(new Error('Failed to play audio'));
+      };
+      
+      audio.play().catch(reject);
+    });
   }
 }

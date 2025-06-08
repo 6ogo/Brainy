@@ -4,7 +4,7 @@ import { Subject, AvatarPersonality, DifficultyLevel } from '../types';
 
 interface ConversationResponse {
   text: string;
-  audioUrl?: string;
+  audioBlob?: Blob;
   summary?: string;
 }
 
@@ -13,7 +13,7 @@ export class ConversationService {
     message: string,
     subject: Subject,
     currentAvatar: AvatarPersonality,
-    useVoice: boolean = true,
+    useVoice: boolean = false,
     difficultyLevel: DifficultyLevel = 'High School'
   ): Promise<ConversationResponse> {
     try {
@@ -33,54 +33,65 @@ export class ConversationService {
           message,
           subject,
           difficultyLevel,
-          type: 'chat',
-          useVoice,
-          voiceId: useVoice ? ElevenLabsService.getVoiceId(currentAvatar) : undefined
+          type: 'chat'
         })
       });
 
       if (!chatResponse.ok) {
-        throw new Error('Failed to get AI response');
+        const errorText = await chatResponse.text();
+        throw new Error(`Failed to get AI response: ${chatResponse.status} ${errorText}`);
       }
 
       const data = await chatResponse.json();
-      
-      // Convert base64 audio to blob URL if available
-      let audioUrl: string | undefined;
-      if (data.audioData) {
-        const audioBlob = new Blob(
-          [Uint8Array.from(atob(data.audioData), c => c.charCodeAt(0))],
-          { type: 'audio/mpeg' }
-        );
-        audioUrl = URL.createObjectURL(audioBlob);
+      const textResponse = data.response;
+
+      if (!textResponse) {
+        throw new Error('No response received from AI');
+      }
+
+      let audioBlob: Blob | undefined;
+
+      // Generate voice if requested and ElevenLabs is available
+      if (useVoice) {
+        try {
+          audioBlob = await ElevenLabsService.generateSpeech(textResponse, currentAvatar);
+        } catch (voiceError) {
+          console.error('Voice generation error:', voiceError);
+          // Continue without voice if it fails
+        }
       }
 
       // Get summary
-      const summaryResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'summary',
-          subject,
-          context: {
-            userMessage: message,
-            aiResponse: data.response
-          }
-        })
-      });
-
       let summary: string | undefined;
-      if (summaryResponse.ok) {
-        const { response: summaryText } = await summaryResponse.json();
-        summary = summaryText;
+      try {
+        const summaryResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'summary',
+            subject,
+            context: {
+              userMessage: message,
+              aiResponse: textResponse
+            }
+          })
+        });
+
+        if (summaryResponse.ok) {
+          const { response: summaryText } = await summaryResponse.json();
+          summary = summaryText;
+        }
+      } catch (summaryError) {
+        console.error('Summary generation error:', summaryError);
+        // Continue without summary if it fails
       }
 
       return {
-        text: data.response,
-        audioUrl,
+        text: textResponse,
+        audioBlob,
         summary
       };
     } catch (error) {
@@ -98,7 +109,7 @@ export class ConversationService {
   ): Promise<void> {
     try {
       const { error } = await supabase
-        .from('public_bolt.conversations')
+        .from('conversations')
         .insert({
           user_id: userId,
           user_message: userMessage,
@@ -118,7 +129,7 @@ export class ConversationService {
   static async getConversationHistory(userId: string): Promise<any[]> {
     try {
       const { data, error } = await supabase
-        .from('public_bolt.conversations')
+        .from('conversations')
         .select('*')
         .eq('user_id', userId)
         .order('timestamp', { ascending: false });

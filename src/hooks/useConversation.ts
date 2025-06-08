@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../store/store';
 import { ConversationService } from '../services/conversationService';
+import { ElevenLabsService } from '../services/elevenlabsService';
 import { useAuth } from '../contexts/AuthContext';
 import { useAchievements } from './useAchievements';
 import { hasAccess } from '../services/subscriptionService';
@@ -16,7 +17,8 @@ export const useConversation = () => {
     updateSessionStats,
     sessionStats,
     socialStats,
-    updateSocialStats
+    updateSocialStats,
+    learningMode
   } = useStore();
   
   const { user } = useAuth();
@@ -24,18 +26,20 @@ export const useConversation = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [conversationStartTime, setConversationStartTime] = useState<number | null>(null);
 
-  const sendMessage = async (message: string) => {
+  const sendMessage = async (message: string, useVoice: boolean = false) => {
     if (!user) {
       toast.error('Please sign in to continue.');
       return;
     }
 
     try {
-      // Check if user has premium access
-      const hasPremiumAccess = await hasAccess('premium');
-      if (!hasPremiumAccess) {
-        toast.error('This feature requires a premium subscription.');
-        return;
+      // Check if user has premium access for voice features
+      if (useVoice) {
+        const hasPremiumAccess = await hasAccess('premium');
+        if (!hasPremiumAccess) {
+          toast.error('Voice features require a premium subscription.');
+          return;
+        }
       }
 
       setIsProcessing(true);
@@ -49,20 +53,34 @@ export const useConversation = () => {
       // Add user message immediately
       addMessage(message, 'user');
 
-      // Get AI response with audio
+      // Get AI response with optional voice
       const response = await ConversationService.generateResponse(
         message,
         currentSubject,
         currentAvatar,
-        true // Enable voice
+        useVoice
       );
-
-      // Start speaking animation
-      setIsSpeaking(true);
-      setAvatarEmotion('neutral');
 
       // Add AI response
       addMessage(response.text, 'ai');
+
+      // Handle voice playback if available
+      if (response.audioBlob && useVoice) {
+        setIsSpeaking(true);
+        setAvatarEmotion('neutral');
+        
+        try {
+          await ElevenLabsService.playAudio(response.audioBlob);
+        } catch (audioError) {
+          console.error('Audio playback error:', audioError);
+          toast.error('Failed to play audio response');
+        } finally {
+          setIsSpeaking(false);
+          setAvatarEmotion('neutral');
+        }
+      } else {
+        setAvatarEmotion('neutral');
+      }
 
       // Calculate conversation duration
       const duration = conversationStartTime 
@@ -94,22 +112,9 @@ export const useConversation = () => {
         user.id,
         message,
         response.text,
-        duration
+        duration,
+        response.summary
       );
-
-      // Play audio if available
-      if (response.audioUrl) {
-        const audio = new Audio(response.audioUrl);
-        await audio.play();
-        audio.onended = () => {
-          setIsSpeaking(false);
-          setAvatarEmotion('neutral');
-          URL.revokeObjectURL(response.audioUrl!);
-        };
-      } else {
-        setIsSpeaking(false);
-        setAvatarEmotion('neutral');
-      }
 
     } catch (error) {
       console.error('Error in conversation:', error);
