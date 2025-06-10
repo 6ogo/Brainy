@@ -1,5 +1,4 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect } from 'react';
 import { Login } from './pages/Login';
 import { SignUp } from './pages/SignUp';
 import { ForgotPassword } from './pages/ForgotPassword';
@@ -15,21 +14,8 @@ import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { Toaster } from 'react-hot-toast';
 import { PrivateRoute } from './components/PrivateRoute';
-import { SecurityUtils } from './utils/security';
-import toast from 'react-hot-toast';
 
 function App() {
-  useEffect(() => {
-    // Validate environment configuration on app start
-    const envValidation = SecurityUtils.validateEnvironment();
-    if (!envValidation.isValid) {
-      console.error('Environment validation failed:', envValidation.errors);
-      if (SecurityUtils.isProduction()) {
-        toast.error('Application configuration error. Please contact support.');
-      }
-    }
-  }, []);
-
   return (
     <Router>
       <AuthProvider>
@@ -46,7 +32,7 @@ function App() {
           <Route path="/study" element={<PrivateRoute><StudyPage /></PrivateRoute>} />
           <Route path="/analytics" element={<PrivateRoute><LearningAnalytics /></PrivateRoute>} />
           <Route path="/404" element={<NotFound />} />
-          <Route path="*" element={<Navigate to="/404\" replace />} />
+          <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>
         <Toaster 
           position="top-right"
