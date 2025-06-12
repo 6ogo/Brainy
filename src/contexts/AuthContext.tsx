@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { SecurityUtils } from '../utils/security';
 import type { AuthState, LoginCredentials, SignupCredentials, User } from '../types/auth';
 
 interface AuthContextType extends AuthState {
@@ -20,37 +21,111 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('Error getting session:', error);
+        setState(prev => ({
+          ...prev,
+          error: 'Failed to authenticate',
+          isLoading: false,
+        }));
+        return;
+      }
+
       setState(prev => ({
         ...prev,
         user: session?.user ? convertSupabaseUser(session.user) : null,
         isLoading: false,
       }));
+
+      // Store session securely if it exists
+      if (session?.access_token) {
+        SecurityUtils.setSecureItem('user_session', session.access_token);
+      }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event);
+      
       setState(prev => ({
         ...prev,
         user: session?.user ? convertSupabaseUser(session.user) : null,
         isLoading: false,
+        error: null,
       }));
+
+      // Handle session storage
+      if (session?.access_token) {
+        SecurityUtils.setSecureItem('user_session', session.access_token);
+      } else {
+        SecurityUtils.removeSecureItem('user_session');
+      }
+
+      // Handle navigation based on auth events
+      if (event === 'SIGNED_OUT') {
+        // Clear all secure storage
+        SecurityUtils.removeSecureItem('csrf_token');
+        navigate('/login');
+      } else if (event === 'SIGNED_IN') {
+        // User successfully signed in
+        console.log('User signed in successfully');
+      } else if (event === 'TOKEN_REFRESHED') {
+        console.log('Token refreshed');
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
   const login = async ({ email, password }: LoginCredentials) => {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
       
-      if (error) throw error;
-      navigate('/onboarding');
+      // Validate inputs
+      if (!SecurityUtils.validateEmail(email)) {
+        throw new Error('Invalid email format');
+      }
+
+      if (!SecurityUtils.validateInput(password, 128)) {
+        throw new Error('Invalid password format');
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email: email.toLowerCase().trim(), 
+        password 
+      });
+      
+      if (error) {
+        // Don't expose detailed error messages for security
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('Invalid email or password');
+        } else if (error.message.includes('Email not confirmed')) {
+          throw new Error('Please check your email and click the confirmation link');
+        } else if (error.message.includes('Too many requests')) {
+          throw new Error('Too many login attempts. Please try again later');
+        } else {
+          throw new Error('Login failed. Please try again');
+        }
+      }
+
+      if (!data.user) {
+        throw new Error('Login failed. Please try again');
+      }
+
+      // Update last login time
+      await supabase
+        .from('users')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', data.user.id);
+
       return true;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during login';
       setState(prev => ({ 
         ...prev, 
-        error: error instanceof Error ? error.message : 'An error occurred' 
+        error: errorMessage
       }));
       return false;
     } finally {
@@ -61,21 +136,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signup = async ({ email, password, full_name }: SignupCredentials) => {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
-      const { error } = await supabase.auth.signUp({ 
-        email, 
+      
+      // Validate inputs
+      if (!SecurityUtils.validateEmail(email)) {
+        throw new Error('Invalid email format');
+      }
+
+      const passwordValidation = SecurityUtils.validatePassword(password);
+      if (!passwordValidation.isValid) {
+        throw new Error(passwordValidation.errors[0]);
+      }
+
+      if (!SecurityUtils.validateInput(full_name, 100) || full_name.trim().length < 2) {
+        throw new Error('Name must be between 2 and 100 characters');
+      }
+
+      // Sanitize inputs
+      const sanitizedFullName = SecurityUtils.sanitizeInput(full_name.trim());
+      const sanitizedEmail = email.toLowerCase().trim();
+
+      const { data, error } = await supabase.auth.signUp({ 
+        email: sanitizedEmail, 
         password,
         options: {
-          data: { full_name }
+          data: { 
+            full_name: sanitizedFullName 
+          }
         }
       });
       
-      if (error) throw error;
-      navigate('/onboarding');
+      if (error) {
+        // Handle specific signup errors
+        if (error.message.includes('User already registered')) {
+          throw new Error('An account with this email already exists');
+        } else if (error.message.includes('Password should be')) {
+          throw new Error('Password does not meet security requirements');
+        } else if (error.message.includes('Unable to validate email')) {
+          throw new Error('Invalid email address');
+        } else {
+          throw new Error('Account creation failed. Please try again');
+        }
+      }
+
+      if (!data.user) {
+        throw new Error('Account creation failed. Please try again');
+      }
+
       return true;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during signup';
       setState(prev => ({ 
         ...prev, 
-        error: error instanceof Error ? error.message : 'An error occurred' 
+        error: errorMessage
       }));
       return false;
     } finally {
@@ -86,13 +198,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
+      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      navigate('/login');
+
+      // Clear all secure storage
+      SecurityUtils.removeSecureItem('user_session');
+      SecurityUtils.removeSecureItem('csrf_token');
+      
+      // Clear any cached data
+      if ('caches' in window) {
+        try {
+          const cacheNames = await caches.keys();
+          await Promise.all(
+            cacheNames.map(cacheName => caches.delete(cacheName))
+          );
+        } catch (error) {
+          console.error('Error clearing caches:', error);
+        }
+      }
+
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during logout';
       setState(prev => ({ 
         ...prev, 
-        error: error instanceof Error ? error.message : 'An error occurred' 
+        error: errorMessage
       }));
     } finally {
       setState(prev => ({ ...prev, isLoading: false }));

@@ -5,6 +5,8 @@ import { ElevenLabsService } from '../services/elevenlabsService';
 import { useAuth } from '../contexts/AuthContext';
 import { useAchievements } from './useAchievements';
 import { hasAccess } from '../services/subscriptionService';
+import { conversationRateLimiter } from '../utils/rateLimiter';
+import { SecurityUtils } from '../utils/security';
 import toast from 'react-hot-toast';
 
 export const useConversation = () => {
@@ -32,6 +34,24 @@ export const useConversation = () => {
       return;
     }
 
+    // Rate limiting check
+    if (!conversationRateLimiter.isAllowed(user.id)) {
+      toast.error('Too many messages. Please wait a moment before sending another.');
+      return;
+    }
+
+    // Input validation and sanitization
+    const sanitizedMessage = SecurityUtils.sanitizeInput(message);
+    if (!SecurityUtils.validateInput(sanitizedMessage, 2000)) {
+      toast.error('Message is too long or contains invalid characters.');
+      return;
+    }
+
+    if (sanitizedMessage.trim().length === 0) {
+      toast.error('Please enter a message.');
+      return;
+    }
+
     try {
       // Check if user has premium access for voice features
       if (useVoice) {
@@ -51,18 +71,24 @@ export const useConversation = () => {
       }
 
       // Add user message immediately
-      addMessage(message, 'user');
+      addMessage(sanitizedMessage, 'user');
 
       // Get AI response with optional voice
       const response = await ConversationService.generateResponse(
-        message,
+        sanitizedMessage,
         currentSubject,
         currentAvatar,
         useVoice
       );
 
+      // Validate AI response
+      const sanitizedResponse = SecurityUtils.sanitizeInput(response.text);
+      if (!SecurityUtils.validateInput(sanitizedResponse, 5000)) {
+        throw new Error('Invalid response from AI service');
+      }
+
       // Add AI response
-      addMessage(response.text, 'ai');
+      addMessage(sanitizedResponse, 'ai');
 
       // Handle voice playback if available
       if (response.audioBlob && useVoice) {
@@ -107,18 +133,33 @@ export const useConversation = () => {
         totalXP: socialStats.totalXP + newXP
       });
 
-      // Save conversation
+      // Save conversation with sanitized data
       await ConversationService.saveConversation(
         user.id,
-        message,
-        response.text,
+        sanitizedMessage,
+        sanitizedResponse,
         duration,
-        response.summary
+        response.summary ? SecurityUtils.sanitizeInput(response.summary) : undefined
       );
 
     } catch (error) {
       console.error('Error in conversation:', error);
-      toast.error('Failed to process message. Please try again.');
+      
+      // Provide user-friendly error messages
+      if (error instanceof Error) {
+        if (error.message.includes('rate limit')) {
+          toast.error('Too many requests. Please wait a moment.');
+        } else if (error.message.includes('network')) {
+          toast.error('Network error. Please check your connection.');
+        } else if (error.message.includes('Invalid response')) {
+          toast.error('Received invalid response. Please try again.');
+        } else {
+          toast.error('Failed to process message. Please try again.');
+        }
+      } else {
+        toast.error('An unexpected error occurred. Please try again.');
+      }
+      
       setIsSpeaking(false);
       setAvatarEmotion('neutral');
     } finally {
