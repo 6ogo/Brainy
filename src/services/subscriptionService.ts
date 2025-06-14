@@ -49,7 +49,7 @@ export const getCurrentSubscription = async (): Promise<UserSubscription | null>
   }
 };
 
-export const purchaseSubscription = async (productId: ProductId, promotionCode?: string) => {
+export const purchaseSubscription = async (productId: ProductId) => {
   const product = products[productId];
   if (!product) {
     throw new Error('Invalid product ID');
@@ -64,17 +64,12 @@ export const purchaseSubscription = async (productId: ProductId, promotionCode?:
 
     const apiUrl = new URL('/functions/v1/create-checkout', import.meta.env.VITE_SUPABASE_URL);
     
-    const requestBody: any = {
+    const requestBody = {
       price_id: product.priceId,
       success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${window.location.origin}/pricing`,
       mode: product.mode,
     };
-
-    // Only include promotion_code if it's provided and not empty
-    if (promotionCode && promotionCode.trim()) {
-      requestBody.promotion_code = promotionCode.trim();
-    }
     
     const response = await fetch(apiUrl.toString(), {
       method: 'POST',

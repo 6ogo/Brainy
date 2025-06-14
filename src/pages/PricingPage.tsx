@@ -1,15 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Gift } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Header } from '../components/Header';
-import { CouponInput } from '../components/CouponInput';
-import { SubscriptionCard } from '../components/SubscriptionCard';
 import { cn, commonStyles, animations } from '../styles/utils';
 import { purchaseSubscription, getCurrentSubscription } from '../services/subscriptionService';
-import { createPortalSession, validateCoupon } from '../services/stripeService';
+import { createPortalSession } from '../services/stripeService';
 import { useAuth } from '../contexts/AuthContext';
 import { products } from '../stripe-config';
 import toast from 'react-hot-toast';
@@ -20,10 +18,6 @@ export const PricingPage: React.FC = () => {
   const [currentSubscription, setCurrentSubscription] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
-  
-  // Individual coupon states for each plan
-  const [appliedCoupons, setAppliedCoupons] = useState<Record<string, string>>({});
-  const [couponLoading, setCouponLoading] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchSubscription = async () => {
@@ -55,18 +49,11 @@ export const PricingPage: React.FC = () => {
       setIsLoading(true);
       setLoadingPlanId(planId);
       
-      // Get the coupon for this specific plan
-      const couponCode = appliedCoupons[planId];
-      
-      await purchaseSubscription(planId as keyof typeof products, couponCode);
+      await purchaseSubscription(planId as keyof typeof products);
     } catch (error) {
       console.error('Subscription error:', error);
       if (error instanceof Error) {
-        if (error.message.includes('coupon') || error.message.includes('promotion')) {
-          toast.error('Invalid or expired coupon code. Please check and try again.');
-          // Clear the invalid coupon for this plan
-          setAppliedCoupons(prev => ({ ...prev, [planId]: '' }));
-        } else if (error.message.includes('checkout')) {
+        if (error.message.includes('checkout')) {
           toast.error('Failed to create checkout session. Please try again.');
         } else {
           toast.error('Failed to process subscription. Please try again.');
@@ -91,29 +78,6 @@ export const PricingPage: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleCouponApply = async (planId: string, couponCode: string) => {
-    setCouponLoading(prev => ({ ...prev, [planId]: true }));
-    try {
-      const isValid = await validateCoupon(couponCode);
-      if (isValid) {
-        setAppliedCoupons(prev => ({ ...prev, [planId]: couponCode }));
-        toast.success(`Coupon "${couponCode}" applied to ${plans.find(p => p.id === planId)?.name} plan!`);
-      } else {
-        toast.error('Invalid or expired coupon code. Please check the code and try again.');
-      }
-    } catch (error) {
-      console.error('Error validating coupon:', error);
-      toast.error('Failed to validate coupon. Please try again.');
-    } finally {
-      setCouponLoading(prev => ({ ...prev, [planId]: false }));
-    }
-  };
-
-  const handleCouponRemove = (planId: string) => {
-    setAppliedCoupons(prev => ({ ...prev, [planId]: '' }));
-    toast.success('Coupon removed.');
   };
 
   const plans = [
@@ -240,45 +204,48 @@ export const PricingPage: React.FC = () => {
                   currentPlanId === plan.id && "ring-2 ring-green-400 ring-opacity-50"
                 )}
               >
-                <SubscriptionCard
-                  plan={plan}
-                  isCurrentPlan={currentPlanId === plan.id}
-                  isPopular={plan.id === 'premium'}
-                  onSubscribe={handleSubscribe}
-                  isLoading={loadingPlanId === plan.id}
-                  delay={index * 0.1}
-                />
-
-                {/* Individual Coupon Input for each paid plan */}
-                {user && plan.id !== 'free_tier' && (
-                  <div className="p-6 pt-0 mt-auto">
-                    <div className="border-t border-gray-200 pt-4">
-                      <div className="flex items-center space-x-2 mb-3">
-                        <Gift className="h-4 w-4 text-primary-600" />
-                        <span className="text-sm font-medium text-gray-700">
-                          Coupon for {plan.name}
-                        </span>
-                      </div>
-                      <CouponInput
-                        onCouponApply={(coupon) => handleCouponApply(plan.id, coupon)}
-                        onCouponRemove={() => handleCouponRemove(plan.id)}
-                        appliedCoupon={appliedCoupons[plan.id]}
-                        isLoading={couponLoading[plan.id]}
-                      />
-                      {appliedCoupons[plan.id] && (
-                        <div className="mt-2 text-xs text-green-600">
-                          Coupon will be applied at checkout
-                        </div>
-                      )}
-                    </div>
+                <div className="p-6 text-center">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.name}</h3>
+                  <p className="text-gray-500 mb-4">{plan.description}</p>
+                  <div className="flex items-baseline justify-center mb-6">
+                    <span className="text-4xl font-extrabold text-gray-900">${plan.price}</span>
+                    <span className="text-gray-500 ml-1">/month</span>
                   </div>
-                )}
+                  
+                  <Button
+                    variant="primary"
+                    className="w-full mb-6"
+                    onClick={() => handleSubscribe(plan.id)}
+                    isLoading={loadingPlanId === plan.id}
+                    disabled={currentPlanId === plan.id}
+                  >
+                    {currentPlanId === plan.id ? 'Current Plan' : 
+                     plan.price === '0' ? 'Get Started' : 'Upgrade Now'}
+                  </Button>
+                </div>
+
+                <div className="border-t border-gray-200 p-6 bg-gray-50 flex-grow">
+                  <ul className="space-y-3">
+                    {plan.features?.map((feature) => (
+                      <li key={feature} className="flex items-start">
+                        <Check className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
+                        <span className="text-gray-600">{feature}</span>
+                      </li>
+                    ))}
+                    {plan.limitations?.map((limitation) => (
+                      <li key={limitation} className="flex items-start text-gray-400">
+                        <X className="h-5 w-5 text-gray-400 mr-2 flex-shrink-0" />
+                        <span>{limitation}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </Card>
             </motion.div>
           ))}
         </motion.div>
 
-        {user && currentPlanId !== 'free_tier' && (
+        {user && currentSubscription && currentPlanId !== 'free_tier' && (
           <motion.div 
             className="mt-16 text-center"
             variants={animations.fadeIn}
@@ -362,7 +329,7 @@ export const PricingPage: React.FC = () => {
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-2">How do coupon codes work?</h3>
-              <p className="text-gray-600">Each plan has its own coupon input. Enter your coupon code for the specific plan you want. The discount will be applied at checkout.</p>
+              <p className="text-gray-600">You can apply coupon codes directly in the Stripe checkout window during payment.</p>
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-2">Can I get a refund?</h3>
@@ -370,21 +337,6 @@ export const PricingPage: React.FC = () => {
             </div>
           </div>
         </motion.div>
-
-        {!user && (
-          <motion.div 
-            className="mt-16 text-center"
-            variants={animations.fadeIn}
-          >
-            <Button
-              variant="outline"
-              onClick={() => navigate('/')}
-              leftIcon={<ArrowLeft className="h-4 w-4" />}
-            >
-              Back to Home
-            </Button>
-          </motion.div>
-        )}
       </main>
     </div>
   );
