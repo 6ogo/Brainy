@@ -37,7 +37,7 @@ import {
   Video
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { format, subDays, startOfWeek, endOfWeek } from 'date-fns';
+import { format, subDays, startOfWeek, endOfWeek, parseISO, isValid } from 'date-fns';
 import { StudyAdvisorButton } from '../components/StudyAdvisorButton';
 import { AnalyticsInsights } from '../components/AnalyticsInsights';
 
@@ -80,9 +80,6 @@ interface AnalyticsCache {
   lastUpdated: number;
 }
 
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const CACHE_KEY = 'learning_analytics_cache';
-
 export const LearningAnalytics: React.FC = () => {
   const { socialStats, currentSubject } = useStore();
   const { user } = useAuth();
@@ -92,51 +89,16 @@ export const LearningAnalytics: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState('week');
   const [showExport, setShowExport] = useState(false);
-
-  // Cache management
-  const getCachedData = (): AnalyticsCache | null => {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (!cached) return null;
-      
-      const data = JSON.parse(cached) as AnalyticsCache;
-      const isExpired = Date.now() - data.lastUpdated > CACHE_DURATION;
-      
-      if (isExpired) {
-        localStorage.removeItem(CACHE_KEY);
-        return null;
-      }
-      
-      return data;
-    } catch {
-      return null;
-    }
-  };
-
-  const setCachedData = (data: AnalyticsCache) => {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-    } catch (error) {
-      console.error('Failed to cache analytics data:', error);
-    }
-  };
+  const [subjectDistribution, setSubjectDistribution] = useState<Record<string, number>>({});
+  const [skillsData, setSkillsData] = useState<{skill: string, value: number}[]>([]);
 
   useEffect(() => {
-    if (!user) return;
-
     const fetchAnalyticsData = async () => {
+      if (!user) return;
+
       try {
         setLoading(true);
         setError(null);
-
-        // Try to get cached data first
-        const cachedData = getCachedData();
-        if (cachedData) {
-          setConversations(cachedData.conversations);
-          setUsageData(cachedData.usage);
-          setLoading(false);
-          return;
-        }
 
         // Fetch conversations
         const { data: conversationData, error: conversationError } = await supabase
@@ -162,22 +124,38 @@ export const LearningAnalytics: React.FC = () => {
           throw new Error(`Failed to fetch usage data: ${usageError.message}`);
         }
 
-        const conversations = conversationData || [];
-        const usage = usageDataResult || [];
-
-        setConversations(conversations);
-        setUsageData(usage);
-
-        // Cache the data
-        setCachedData({
-          conversations,
-          usage,
-          lastUpdated: Date.now()
+        setConversations(conversationData || []);
+        setUsageData(usageDataResult || []);
+        
+        // Calculate subject distribution
+        const subjects: Record<string, number> = {
+          'Math': 0,
+          'Science': 0,
+          'English': 0,
+          'History': 0,
+          'Languages': 0,
+          'Test Prep': 0
+        };
+        
+        (conversationData || []).forEach(conv => {
+          const text = conv.user_message.toLowerCase();
+          if (text.includes('math')) subjects['Math']++;
+          else if (text.includes('science') || text.includes('physics') || text.includes('chemistry')) subjects['Science']++;
+          else if (text.includes('english') || text.includes('literature')) subjects['English']++;
+          else if (text.includes('history')) subjects['History']++;
+          else if (text.includes('language') || text.includes('spanish') || text.includes('french')) subjects['Languages']++;
+          else if (text.includes('test') || text.includes('exam')) subjects['Test Prep']++;
+          else subjects['Math']++; // Default to Math if no subject detected
         });
+        
+        setSubjectDistribution(subjects);
+        
+        // Generate skills data based on conversation analysis
+        setSkillsData(generateSkillsData(conversationData || []));
 
       } catch (err) {
-        console.error('Error fetching analytics data:', err);
-        setError(err instanceof Error ? err.message : 'An unknown error occurred');
+        console.error('Error fetching analytics:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load analytics');
       } finally {
         setLoading(false);
       }
@@ -186,11 +164,63 @@ export const LearningAnalytics: React.FC = () => {
     fetchAnalyticsData();
   }, [user]);
 
+  // Generate skills data based on conversation analysis
+  const generateSkillsData = (conversations: ConversationData[]) => {
+    // This would normally use NLP to analyze conversation content
+    // For now, we'll use a simple approach based on keywords and conversation patterns
+    
+    const skills = [
+      { skill: 'Problem Solving', value: 0 },
+      { skill: 'Critical Thinking', value: 0 },
+      { skill: 'Memory', value: 0 },
+      { skill: 'Speed', value: 0 },
+      { skill: 'Comprehension', value: 0 }
+    ];
+    
+    // Count keywords related to each skill
+    conversations.forEach(conv => {
+      const text = (conv.user_message + ' ' + conv.ai_response).toLowerCase();
+      
+      // Problem Solving
+      if (text.includes('problem') || text.includes('solve') || text.includes('solution')) {
+        skills[0].value += 1;
+      }
+      
+      // Critical Thinking
+      if (text.includes('why') || text.includes('analyze') || text.includes('evaluate')) {
+        skills[1].value += 1;
+      }
+      
+      // Memory
+      if (text.includes('remember') || text.includes('recall') || text.includes('memorize')) {
+        skills[2].value += 1;
+      }
+      
+      // Speed
+      if (text.includes('quick') || text.includes('fast') || text.includes('speed')) {
+        skills[3].value += 1;
+      }
+      
+      // Comprehension
+      if (text.includes('understand') || text.includes('comprehend') || text.includes('meaning')) {
+        skills[4].value += 1;
+      }
+    });
+    
+    // Normalize values to 0-100 scale
+    const maxValue = Math.max(...skills.map(s => s.value), 1);
+    return skills.map(skill => ({
+      ...skill,
+      value: Math.min(100, Math.round((skill.value / maxValue) * 80) + 20) // Ensure minimum of 20
+    }));
+  };
+
   // Calculate analytics metrics
   const totalConversations = conversations.length;
   const totalStudyMinutes = usageData.reduce((sum, day) => 
     sum + (day.conversation_minutes || 0) + (day.video_call_minutes || 0), 0);
   const totalStudyHours = Math.round(totalStudyMinutes / 60 * 10) / 10;
+  
   const averageSessionLength = totalConversations > 0 
     ? Math.round(conversations.reduce((sum, conv) => sum + (conv.duration || 0), 0) / totalConversations / 60)
     : 0;
@@ -235,29 +265,65 @@ export const LearningAnalytics: React.FC = () => {
     ],
   };
 
+  // Calculate weekly progress data
+  const weeklyProgress = Array.from({ length: 4 }, (_, weekIndex) => {
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() - (weekIndex * 7));
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 7);
+    
+    const weekUsage = usageData.filter(day => {
+      if (!day.date) return false;
+      const dayDate = parseISO(day.date);
+      return isValid(dayDate) && dayDate >= startDate && dayDate < endDate;
+    });
+    
+    return weekUsage.reduce((sum, day) => 
+      sum + (day.conversation_minutes || 0) + (day.video_call_minutes || 0), 0);
+  }).reverse();
+
   const weeklyProgressData = {
     labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
     datasets: [
       {
-        label: 'XP Earned',
-        data: [120, 190, 300, socialStats.totalXP % 100],
+        label: 'Study Minutes',
+        data: weeklyProgress,
         backgroundColor: 'rgba(139, 92, 246, 0.8)',
       },
     ],
   };
 
   const skillsRadarData = {
-    labels: ['Problem Solving', 'Critical Thinking', 'Memory', 'Speed', 'Comprehension'],
+    labels: skillsData.map(s => s.skill),
     datasets: [
       {
         label: 'Skills',
-        data: [85, 78, 92, 65, 88],
+        data: skillsData.map(s => s.value),
         backgroundColor: 'rgba(59, 130, 246, 0.2)',
         borderColor: 'rgba(59, 130, 246, 1)',
         pointBackgroundColor: 'rgba(59, 130, 246, 1)',
         pointBorderColor: '#fff',
         pointHoverBackgroundColor: '#fff',
         pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
+      },
+    ],
+  };
+
+  const subjectDistributionData = {
+    labels: Object.keys(subjectDistribution),
+    datasets: [
+      {
+        label: 'Conversations',
+        data: Object.values(subjectDistribution),
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(139, 92, 246, 0.8)',
+          'rgba(245, 158, 11, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+          'rgba(17, 24, 39, 0.8)',
+        ],
+        borderWidth: 0,
       },
     ],
   };
@@ -279,7 +345,7 @@ export const LearningAnalytics: React.FC = () => {
     
     doc.setFontSize(10);
     doc.text(`Total Conversations: ${totalConversations}`, 20, 75);
-    doc.text(`Total Study Time: ${totalStudyHours} hours`, 20, 85);
+    doc.text(`Total Study Time: ${totalStudyHours}h`, 20, 85);
     doc.text(`Current XP: ${socialStats.totalXP}`, 20, 95);
     doc.text(`Current Streak: ${socialStats.streak.current} days`, 20, 105);
     doc.text(`Average Session: ${averageSessionLength} minutes`, 20, 115);
@@ -495,7 +561,7 @@ export const LearningAnalytics: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Weekly Progress */}
           <Card className="p-6">
-            <h3 className={cn(commonStyles.heading.h3, "mb-4")}>Weekly XP Progress</h3>
+            <h3 className={cn(commonStyles.heading.h3, "mb-4")}>Weekly Study Time</h3>
             <div className="h-64">
               <Bar 
                 data={weeklyProgressData} 
@@ -510,6 +576,10 @@ export const LearningAnalytics: React.FC = () => {
                   scales: {
                     y: {
                       beginAtZero: true,
+                      title: {
+                        display: true,
+                        text: 'Minutes'
+                      }
                     }
                   }
                 }}
@@ -535,6 +605,40 @@ export const LearningAnalytics: React.FC = () => {
                     r: {
                       beginAtZero: true,
                       max: 100,
+                      ticks: {
+                        stepSize: 20
+                      }
+                    }
+                  }
+                }}
+              />
+            </div>
+          </Card>
+        </div>
+
+        {/* Subject Distribution */}
+        <div className="mb-8">
+          <Card className="p-6">
+            <h3 className={cn(commonStyles.heading.h3, "mb-4")}>Subject Distribution</h3>
+            <div className="h-64">
+              <Bar 
+                data={subjectDistributionData} 
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  indexAxis: 'y',
+                  plugins: {
+                    legend: {
+                      display: false,
+                    },
+                  },
+                  scales: {
+                    x: {
+                      beginAtZero: true,
+                      title: {
+                        display: true,
+                        text: 'Number of Conversations'
+                      }
                     }
                   }
                 }}
@@ -548,14 +652,20 @@ export const LearningAnalytics: React.FC = () => {
           {/* Achievements */}
           <Card className="p-6">
             <h3 className={cn(commonStyles.heading.h3, "mb-4")}>Recent Achievements</h3>
-            {socialStats.achievements.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">
-                Keep learning to unlock achievements!
+            {achievements.length === 0 ? (
+              <p className="text-center py-10">
+                <Trophy className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <span className="text-gray-500 text-sm">
+                  Complete learning activities to earn achievements!
+                </span>
               </p>
             ) : (
               <div className="space-y-3">
-                {socialStats.achievements.slice(0, 5).map((achievement) => (
-                  <div key={achievement.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                {achievements.slice(0, 5).map((achievement) => (
+                  <div
+                    key={achievement.id}
+                    className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg"
+                  >
                     <div className="p-2 bg-yellow-100 rounded-full">
                       <Trophy className="h-5 w-5 text-yellow-600" />
                     </div>
@@ -576,8 +686,11 @@ export const LearningAnalytics: React.FC = () => {
           <Card className="p-6">
             <h3 className={cn(commonStyles.heading.h3, "mb-4")}>Recent Sessions</h3>
             {conversations.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">
-                Start learning to see your session history!
+              <p className="text-center py-10">
+                <BookOpen className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+                <span className="text-gray-500 text-sm">
+                  Start learning to see your session history!
+                </span>
               </p>
             ) : (
               <div className="space-y-3">
@@ -610,7 +723,7 @@ export const LearningAnalytics: React.FC = () => {
           averageSessionLength={averageSessionLength}
           currentStreak={socialStats.streak.current}
           totalXP={socialStats.totalXP}
-          weeklyProgress={weeklyProgressData.datasets[0].data as number[]}
+          weeklyProgress={weeklyProgress}
         />
       </div>
     </div>
