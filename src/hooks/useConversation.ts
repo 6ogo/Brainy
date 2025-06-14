@@ -4,7 +4,7 @@ import { ConversationService } from '../services/conversationService';
 import { ElevenLabsService } from '../services/elevenlabsService';
 import { useAuth } from '../contexts/AuthContext';
 import { useAchievements } from './useAchievements';
-import { hasAccess } from '../services/subscriptionService';
+import { hasAccess, checkDailyUsageLimit, trackDailyUsage } from '../services/subscriptionService';
 import { conversationRateLimiter } from '../utils/rateLimiter';
 import { SecurityUtils } from '../utils/security';
 import toast from 'react-hot-toast';
@@ -53,11 +53,24 @@ export const useConversation = () => {
     }
 
     try {
+      // Check daily usage limits
+      const canUseConversation = await checkDailyUsageLimit('conversation');
+      if (!canUseConversation) {
+        toast.error('Daily conversation limit reached. Upgrade your plan for more usage.');
+        return;
+      }
+
       // Check if user has premium access for voice features
       if (useVoice) {
         const hasPremiumAccess = await hasAccess('premium');
         if (!hasPremiumAccess) {
           toast.error('Voice features require a premium subscription.');
+          return;
+        }
+
+        const canUseVideo = await checkDailyUsageLimit('video');
+        if (!canUseVideo) {
+          toast.error('Daily video call limit reached. Upgrade your plan for more usage.');
           return;
         }
       }
@@ -108,10 +121,16 @@ export const useConversation = () => {
         setAvatarEmotion('neutral');
       }
 
-      // Calculate conversation duration
+      // Calculate conversation duration and track usage
       const duration = conversationStartTime 
         ? Math.round((Date.now() - conversationStartTime) / 1000)
         : 0;
+
+      const conversationMinutes = Math.ceil(duration / 60);
+      const videoMinutes = useVoice ? Math.ceil(duration / 60) : 0;
+
+      // Track daily usage
+      await trackDailyUsage(conversationMinutes, videoMinutes);
 
       // Update session and social stats
       const newXP = 10;
@@ -153,6 +172,8 @@ export const useConversation = () => {
           toast.error('Network error. Please check your connection.');
         } else if (error.message.includes('Invalid response')) {
           toast.error('Received invalid response. Please try again.');
+        } else if (error.message.includes('Daily conversation limit')) {
+          toast.error('Daily conversation limit reached. Upgrade for more usage.');
         } else {
           toast.error('Failed to process message. Please try again.');
         }

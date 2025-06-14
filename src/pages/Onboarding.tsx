@@ -76,12 +76,14 @@ export const Onboarding: React.FC = () => {
 
       try {
         const { data, error } = await supabase
-          .from('public_bolt.user_preferences')
+          .from('user_preferences')
           .select('has_completed_onboarding, show_onboarding')
           .eq('user_id', user.id)
           .single();
 
-        if (error) throw error;
+        if (error && error.code !== 'PGRST116') {
+          throw error;
+        }
 
         if (data?.has_completed_onboarding || data?.show_onboarding === false) {
           navigate('/subjects');
@@ -102,7 +104,7 @@ export const Onboarding: React.FC = () => {
 
     try {
       const { error } = await supabase
-        .from('public_bolt.user_preferences')
+        .from('user_preferences')
         .upsert({
           user_id: user.id,
           has_completed_onboarding: true,
@@ -126,7 +128,7 @@ export const Onboarding: React.FC = () => {
       try {
         // Save onboarding preferences
         const { error } = await supabase
-          .from('public_bolt.user_preferences')
+          .from('user_preferences')
           .upsert({
             user_id: user.id,
             has_completed_onboarding: true,

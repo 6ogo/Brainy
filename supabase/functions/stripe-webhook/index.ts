@@ -13,6 +13,12 @@ const stripe = new Stripe(stripeSecret, {
 
 const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
+// Map Stripe price IDs to subscription levels
+const PRICE_TO_LEVEL_MAP: Record<string, string> = {
+  'price_1RVHwmE0tB4GMirf5kR0lhaB': 'premium',
+  'price_1RVHznE0tB4GMirfRUpHNtxo': 'ultimate',
+};
+
 Deno.serve(async (req) => {
   try {
     // Handle OPTIONS request for CORS preflight
@@ -141,7 +147,8 @@ async function syncCustomerFromStripe(customerId: string) {
       const { error: noSubError } = await supabase.from('stripe_subscriptions').upsert(
         {
           customer_id: customerId,
-          subscription_status: 'not_started',
+          status: 'not_started',
+          subscription_level: 'free',
         },
         {
           onConflict: 'customer_id',
@@ -152,17 +159,25 @@ async function syncCustomerFromStripe(customerId: string) {
         console.error('Error updating subscription status:', noSubError);
         throw new Error('Failed to update subscription status in database');
       }
+      return;
     }
 
     // assumes that a customer can only have a single subscription
     const subscription = subscriptions.data[0];
+    const priceId = subscription.items.data[0].price.id;
+    
+    // Determine subscription level based on price ID
+    const subscriptionLevel = PRICE_TO_LEVEL_MAP[priceId] || 'free';
+
+    console.info(`Syncing subscription for customer ${customerId}: ${subscriptionLevel} (${priceId})`);
 
     // store subscription state
     const { error: subError } = await supabase.from('stripe_subscriptions').upsert(
       {
         customer_id: customerId,
         subscription_id: subscription.id,
-        price_id: subscription.items.data[0].price.id,
+        price_id: priceId,
+        subscription_level: subscriptionLevel,
         current_period_start: subscription.current_period_start,
         current_period_end: subscription.current_period_end,
         cancel_at_period_end: subscription.cancel_at_period_end,
@@ -183,7 +198,7 @@ async function syncCustomerFromStripe(customerId: string) {
       console.error('Error syncing subscription:', subError);
       throw new Error('Failed to sync subscription in database');
     }
-    console.info(`Successfully synced subscription for customer: ${customerId}`);
+    console.info(`Successfully synced subscription for customer: ${customerId} with level: ${subscriptionLevel}`);
   } catch (error) {
     console.error(`Failed to sync subscription for customer ${customerId}:`, error);
     throw error;
