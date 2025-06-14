@@ -5,7 +5,7 @@ import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { useSecureAuth } from '../hooks/useSecureAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { useSecurity } from '../components/SecurityProvider';
 import { SecurityUtils } from '../utils/security';
 
@@ -20,7 +20,7 @@ export const SignUp: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   
-  const { secureSignup, isLoading, error } = useSecureAuth();
+  const { signup, isLoading, error } = useAuth();
   const { csrfToken, sanitizeInput, validateInput } = useSecurity();
   const navigate = useNavigate();
 
@@ -81,10 +81,18 @@ export const SignUp: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      const success = await secureSignup(email, password, fullName);
+      const success = await signup({ 
+        email: email.trim().toLowerCase(), 
+        password, 
+        full_name: fullName.trim() 
+      });
+      
       if (success) {
         navigate('/onboarding');
       }
+    } catch (signupError) {
+      console.error('Signup error:', signupError);
+      // Error is already handled by the auth context
     } finally {
       setIsSubmitting(false);
     }
@@ -149,6 +157,7 @@ export const SignUp: React.FC = () => {
           <input type="hidden" name="csrf_token" value={csrfToken} />
           
           <Input
+            id="fullname"
             label="Full Name"
             type="text"
             name="fullname"
@@ -161,6 +170,7 @@ export const SignUp: React.FC = () => {
           />
 
           <Input
+            id="email"
             label="Email"
             type="email"
             name="email"
@@ -173,11 +183,12 @@ export const SignUp: React.FC = () => {
           />
 
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
             <div className="relative">
               <input
+                id="password"
                 type={showPassword ? 'text' : 'password'}
                 name="new-password"
                 value={password}
@@ -192,6 +203,7 @@ export const SignUp: React.FC = () => {
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 transition-colors"
                 tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>

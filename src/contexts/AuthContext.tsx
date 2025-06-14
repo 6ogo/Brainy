@@ -98,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (error) {
+        console.error('Login error:', error);
         // Don't expose detailed error messages for security
         if (error.message.includes('Invalid login credentials')) {
           throw new Error('Invalid email or password');
@@ -114,14 +115,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Login failed. Please try again');
       }
 
-      // Update last login time
-      await supabase
-        .from('users')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', data.user.id);
-
       return true;
     } catch (error) {
+      console.error('Login error:', error);
       const errorMessage = error instanceof Error ? error.message : 'An error occurred during login';
       setState(prev => ({ 
         ...prev, 
@@ -155,6 +151,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sanitizedFullName = SecurityUtils.sanitizeInput(full_name.trim());
       const sanitizedEmail = email.toLowerCase().trim();
 
+      console.log('Attempting signup with:', { email: sanitizedEmail, full_name: sanitizedFullName });
+
       const { data, error } = await supabase.auth.signUp({ 
         email: sanitizedEmail, 
         password,
@@ -166,6 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (error) {
+        console.error('Signup error:', error);
         // Handle specific signup errors
         if (error.message.includes('User already registered')) {
           throw new Error('An account with this email already exists');
@@ -173,6 +172,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           throw new Error('Password does not meet security requirements');
         } else if (error.message.includes('Unable to validate email')) {
           throw new Error('Invalid email address');
+        } else if (error.message.includes('signup_disabled')) {
+          throw new Error('Account registration is temporarily disabled');
         } else {
           throw new Error('Account creation failed. Please try again');
         }
@@ -182,8 +183,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Account creation failed. Please try again');
       }
 
+      console.log('Signup successful:', data.user);
       return true;
     } catch (error) {
+      console.error('Signup error:', error);
       const errorMessage = error instanceof Error ? error.message : 'An error occurred during signup';
       setState(prev => ({ 
         ...prev, 

@@ -5,7 +5,7 @@ import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { useSecureAuth } from '../hooks/useSecureAuth';
+import { useAuth } from '../contexts/AuthContext';
 import { useSecurity } from '../components/SecurityProvider';
 import { SecurityUtils } from '../utils/security';
 
@@ -17,7 +17,7 @@ export const Login: React.FC = () => {
   const [passwordError, setPasswordError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const { secureLogin, isLoading, error, isLocked, lockoutEndTime, remainingAttempts } = useSecureAuth();
+  const { login, isLoading, error } = useAuth();
   const { csrfToken, sanitizeInput, validateInput } = useSecurity();
   const navigate = useNavigate();
 
@@ -55,10 +55,6 @@ export const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (isLocked) {
-      return;
-    }
-
     if (!email || !password || emailError || passwordError) {
       return;
     }
@@ -66,23 +62,23 @@ export const Login: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      const success = await secureLogin(email, password);
+      const success = await login({ 
+        email: email.trim().toLowerCase(), 
+        password 
+      });
+      
       if (success) {
         navigate('/onboarding');
       }
+    } catch (loginError) {
+      console.error('Login error:', loginError);
+      // Error is already handled by the auth context
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const getLockoutMessage = () => {
-    if (!isLocked || !lockoutEndTime) return '';
-    
-    const remainingTime = Math.ceil((lockoutEndTime - Date.now()) / 1000 / 60);
-    return `Account temporarily locked. Try again in ${remainingTime} minutes.`;
-  };
-
-  const isFormValid = email && password && !emailError && !passwordError && !isLocked;
+  const isFormValid = email && password && !emailError && !passwordError;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 px-4">
@@ -116,26 +112,8 @@ export const Login: React.FC = () => {
           <span className="text-sm text-green-700">Secure login protected by advanced security measures</span>
         </div>
 
-        {/* Rate Limiting Warning */}
-        {remainingAttempts <= 2 && remainingAttempts > 0 && (
-          <div className="mb-6 p-3 bg-yellow-50 border border-yellow-200 rounded-md flex items-center">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2" />
-            <span className="text-sm text-yellow-700">
-              {remainingAttempts} login attempt{remainingAttempts !== 1 ? 's' : ''} remaining
-            </span>
-          </div>
-        )}
-
-        {/* Account Lockout Warning */}
-        {isLocked && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-md flex items-center">
-            <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
-            <span className="text-sm text-red-700">{getLockoutMessage()}</span>
-          </div>
-        )}
-
         {/* General Error */}
-        {error && !isLocked && (
+        {error && (
           <div className="mb-6 p-3 bg-error-50 border border-error-200 text-error-700 rounded-md">
             {error}
           </div>
@@ -145,6 +123,7 @@ export const Login: React.FC = () => {
           <input type="hidden" name="csrf_token" value={csrfToken} />
           
           <Input
+            id="email"
             label="Email"
             type="email"
             name="email"
@@ -152,24 +131,23 @@ export const Login: React.FC = () => {
             onChange={handleEmailChange}
             placeholder="Enter your email"
             required
-            disabled={isLocked}
             error={emailError}
             autoComplete="email"
           />
 
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
               Password
             </label>
             <div className="relative">
               <input
+                id="password"
                 type={showPassword ? 'text' : 'password'}
                 name="current-password"
                 value={password}
                 onChange={handlePasswordChange}
                 placeholder="Enter your password"
                 required
-                disabled={isLocked}
                 autoComplete="current-password"
                 className={cn(
                   "block w-full pr-12 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all duration-300",
@@ -180,8 +158,8 @@ export const Login: React.FC = () => {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 transition-colors"
-                disabled={isLocked}
                 tabIndex={-1}
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
