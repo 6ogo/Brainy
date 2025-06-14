@@ -220,6 +220,24 @@ export const TavusService = {
     }
   },
 
+  async getCompletedSessionCount(userId: string): Promise<number> {
+    try {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false });
+
+      if (error) throw error;
+      
+      // Count unique sessions (this is a simplification - in a real app, you'd count actual sessions)
+      return data ? Math.min(3, data.length) : 0;
+    } catch (error) {
+      console.error('Error getting completed session count:', error);
+      return 0;
+    }
+  },
+
   async getUserLearningProgress(userId: string, subject: Subject): Promise<UserProgress> {
     // Try to get cached data first
     const cacheKey = `progress_${userId}_${subject}`;

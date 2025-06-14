@@ -33,10 +33,13 @@ import {
   Users,
   Zap,
   Trophy,
-  Flame
+  Flame,
+  Video
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { format, subDays, startOfWeek, endOfWeek } from 'date-fns';
+import { StudyAdvisorButton } from '../components/StudyAdvisorButton';
+import { AnalyticsInsights } from '../components/AnalyticsInsights';
 
 // Register Chart.js components
 ChartJS.register(
@@ -377,6 +380,11 @@ export const LearningAnalytics: React.FC = () => {
           </div>
         </div>
 
+        {/* Study Advisor Button */}
+        <div className="mb-8">
+          <StudyAdvisorButton />
+        </div>
+
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="p-6">
@@ -596,43 +604,14 @@ export const LearningAnalytics: React.FC = () => {
         </div>
 
         {/* Learning Insights */}
-        <Card className="p-6">
-          <h3 className={cn(commonStyles.heading.h3, "mb-4")}>Learning Insights</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <div className="p-4 bg-blue-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center">
-                <Target className="h-8 w-8 text-blue-600" />
-              </div>
-              <h4 className="font-semibold text-gray-900 mb-2">Consistency</h4>
-              <p className="text-sm text-gray-600">
-                You've been studying consistently for {socialStats.streak.current} days. 
-                Keep it up to build lasting knowledge!
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="p-4 bg-green-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center">
-                <TrendingUp className="h-8 w-8 text-green-600" />
-              </div>
-              <h4 className="font-semibold text-gray-900 mb-2">Progress</h4>
-              <p className="text-sm text-gray-600">
-                Your learning velocity is {(socialStats.totalXP / Math.max(totalStudyMinutes, 1) * 60).toFixed(1)} XP/hour. 
-                You're making great progress!
-              </p>
-            </div>
-            
-            <div className="text-center">
-              <div className="p-4 bg-purple-100 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center">
-                <Brain className="h-8 w-8 text-purple-600" />
-              </div>
-              <h4 className="font-semibold text-gray-900 mb-2">Engagement</h4>
-              <p className="text-sm text-gray-600">
-                Average session length of {averageSessionLength} minutes shows 
-                you're deeply engaged with the material.
-              </p>
-            </div>
-          </div>
-        </Card>
+        <AnalyticsInsights 
+          totalStudyTime={totalStudyMinutes}
+          totalConversations={totalConversations}
+          averageSessionLength={averageSessionLength}
+          currentStreak={socialStats.streak.current}
+          totalXP={socialStats.totalXP}
+          weeklyProgress={weeklyProgressData.datasets[0].data as number[]}
+        />
       </div>
     </div>
   );

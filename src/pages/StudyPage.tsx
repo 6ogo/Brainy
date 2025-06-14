@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { VideoArea } from '../components/VideoArea';
@@ -12,7 +12,6 @@ import { StudySessionControls } from '../components/StudySessionControls';
 import { Button } from '../components/Button';
 import { useStore } from '../store/store';
 import { useAuth } from '../contexts/AuthContext';
-import { endStudySession } from '../services/analytics-service';
 
 export const StudyPage: React.FC = () => {
   const { currentSubject, currentAvatar, learningMode, updateSessionStats } = useStore();

@@ -9,6 +9,7 @@ import { TeacherSelection } from './pages/TeacherSelection';
 import { LearningModeSelection } from './pages/LearningModeSelection';
 import { LearningAnalytics } from './pages/LearningAnalytics';
 import { Onboarding } from './pages/Onboarding';
+import { StudyAdvisorPage } from './pages/StudyAdvisorPage';
 import HomePage from './pages/HomePage';
 import PricingPage from './pages/PricingPage';
 import AboutPage from './pages/AboutPage';
@@ -51,6 +52,7 @@ function App() {
             <Route path="/teachers" element={<PrivateRoute><TeacherSelection /></PrivateRoute>} />
             <Route path="/learning-mode" element={<PrivateRoute><LearningModeSelection /></PrivateRoute>} />
             <Route path="/study" element={<PrivateRoute><StudyPage /></PrivateRoute>} />
+            <Route path="/study-advisor" element={<PrivateRoute><StudyAdvisorPage /></PrivateRoute>} />
             <Route path="/analytics" element={<PrivateRoute><LearningAnalytics /></PrivateRoute>} />
             <Route path="/404" element={<NotFound />} />
             <Route path="*" element={<Navigate to="/404" replace />} />

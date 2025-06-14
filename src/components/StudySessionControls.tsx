@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -14,7 +14,27 @@ export const StudySessionControls: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [isEnding, setIsEnding] = useState(false);
-  const [isLoadingTavus, setIsLoadingTavus] = useState(false);
+  const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
+  const [sessionCount, setSessionCount] = useState(0);
+
+  useEffect(() => {
+    const checkEligibility = async () => {
+      if (!user) return;
+      
+      try {
+        const eligible = await TavusService.checkEligibilityForTavus(user.id);
+        setIsEligibleForTavus(eligible);
+        
+        // Get session count for progress indicator
+        const count = await TavusService.getCompletedSessionCount(user.id);
+        setSessionCount(count);
+      } catch (error) {
+        console.error('Error checking Tavus eligibility:', error);
+      }
+    };
+
+    checkEligibility();
+  }, [user]);
 
   const handleEndSession = async () => {
     if (!user) return;
@@ -22,6 +42,16 @@ export const StudySessionControls: React.FC = () => {
     setIsEnding(true);
     try {
       await endStudySession(user.id);
+      
+      // Check if this session makes the user eligible for Tavus
+      const newCount = sessionCount + 1;
+      if (newCount >= 3 && !isEligibleForTavus) {
+        toast.success('You\'ve unlocked the Study Advisor feature!', {
+          duration: 5000,
+          icon: '🎉'
+        });
+      }
+      
       navigate('/analytics');
     } catch (error) {
       console.error('Failed to end session:', error);
@@ -31,26 +61,8 @@ export const StudySessionControls: React.FC = () => {
     }
   };
 
-  const handleGetTavusVideo = async () => {
-    if (!user) return;
-    
-    setIsLoadingTavus(true);
-    try {
-      const isEligible = await TavusService.checkEligibilityForTavus(user.id);
-      
-      if (!isEligible) {
-        toast.error('Complete at least 3 learning sessions to unlock this feature');
-        return;
-      }
-      
-      toast.success('Generating your personalized study tips video...');
-      navigate('/study');
-    } catch (error) {
-      console.error('Failed to generate Tavus video:', error);
-      toast.error('Failed to generate study tips video');
-    } finally {
-      setIsLoadingTavus(false);
-    }
+  const handleGetStudyAdvice = () => {
+    navigate('/study-advisor');
   };
 
   const handleDownloadTranscript = () => {
@@ -73,13 +85,15 @@ export const StudySessionControls: React.FC = () => {
         </Button>
         
         <Button
-          variant="secondary"
+          variant={isEligibleForTavus ? "secondary" : "outline"}
           className="w-full"
-          onClick={handleGetTavusVideo}
-          isLoading={isLoadingTavus}
+          onClick={handleGetStudyAdvice}
+          disabled={!isEligibleForTavus}
           leftIcon={<Video className="h-4 w-4" />}
         >
-          Get Personalized Study Tips
+          {isEligibleForTavus 
+            ? "Get Personalized Study Advice" 
+            : `Study Advisor (${sessionCount}/3 sessions)`}
         </Button>
         
         <Button
