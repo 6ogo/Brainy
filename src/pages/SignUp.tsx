@@ -173,25 +173,29 @@ export const SignUp: React.FC = () => {
           />
 
           <div className="space-y-1">
-            <Input
-              label="Password"
-              type={showPassword ? 'text' : 'password'}
-              name="new-password"
-              value={password}
-              onChange={handlePasswordChange}
-              placeholder="Create a password"
-              required
-              autoComplete="new-password"
-              rightIcon={
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              }
-            />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                name="new-password"
+                value={password}
+                onChange={handlePasswordChange}
+                placeholder="Create a password"
+                required
+                autoComplete="new-password"
+                className="block w-full pr-12 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all duration-300"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 transition-colors"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
             
             {/* Password Strength Indicator */}
             {password && (

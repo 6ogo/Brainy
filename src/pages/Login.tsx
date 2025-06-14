@@ -158,29 +158,38 @@ export const Login: React.FC = () => {
           />
 
           <div className="space-y-1">
-            <Input
-              label="Password"
-              type={showPassword ? 'text' : 'password'}
-              name="current-password"
-              value={password}
-              onChange={handlePasswordChange}
-              placeholder="Enter your password"
-              required
-              disabled={isLocked}
-              error={passwordError}
-              autoComplete="current-password"
-              rightIcon={
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="text-gray-400 hover:text-gray-600"
-                  disabled={isLocked}
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              }
-            />
-            <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                name="current-password"
+                value={password}
+                onChange={handlePasswordChange}
+                placeholder="Enter your password"
+                required
+                disabled={isLocked}
+                autoComplete="current-password"
+                className={cn(
+                  "block w-full pr-12 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all duration-300",
+                  passwordError ? "border-red-300 focus:border-red-500 focus:ring-red-500" : ""
+                )}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={isLocked}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+            {passwordError && (
+              <p className="mt-1 text-sm text-red-600">{passwordError}</p>
+            )}
+            <div className="flex items-center justify-between mt-2">
               <Link
                 to="/forgot-password"
                 className={cn(commonStyles.button.text, "text-sm")}
