@@ -12,6 +12,7 @@ import { Onboarding } from './pages/Onboarding';
 import { StudyAdvisorPage } from './pages/StudyAdvisorPage';
 import HomePage from './pages/HomePage';
 import PricingPage from './pages/PricingPage';
+import SuccessPage from './pages/SuccessPage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
 import PrivacyPage from './pages/PrivacyPage';
@@ -39,6 +40,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<ResetPassword />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/success" element={<PrivateRoute><SuccessPage /></PrivateRoute>} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />

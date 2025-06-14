@@ -159,3 +159,33 @@ export async function validateCoupon(couponCode: string): Promise<boolean> {
     return false;
   }
 }
+
+export async function verifyCheckoutSession(sessionId: string): Promise<boolean> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('No active session');
+    }
+
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/verify-checkout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+      }),
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const { valid } = await response.json();
+    return valid;
+  } catch (error) {
+    console.error('Error verifying checkout session:', error);
+    return false;
+  }
+}

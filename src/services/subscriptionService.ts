@@ -97,6 +97,25 @@ export const purchaseSubscription = async (productId: ProductId) => {
   }
 };
 
+export const refreshSubscriptionData = async (): Promise<void> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('No active session found');
+    }
+
+    // Call RPC function to refresh subscription data
+    const { error } = await supabase.rpc('refresh_subscription_data');
+    
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error refreshing subscription data:', error);
+    throw error;
+  }
+};
+
 export const hasAccess = async (entitlementId: string): Promise<boolean> => {
   try {
     const { data, error } = await supabase.rpc('user_has_access', {
