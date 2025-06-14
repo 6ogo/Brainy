@@ -1,5 +1,5 @@
 import React from 'react';
-import { Brain, User, BarChart3, LogOut } from 'lucide-react';
+import { Brain, User, BarChart3, LogOut, CreditCard } from 'lucide-react';
 import { SubjectSelector } from './SubjectSelector';
 import { cn, commonStyles } from '../styles/utils';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
@@ -34,9 +34,14 @@ export const Header: React.FC = () => {
               <>
                 <SubjectSelector />
                 
-                <Link to="/analytics\" className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-100">
+                <Link to="/analytics" className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-100">
                   <BarChart3 className="h-5 w-5 text-primary-600" />
                   <span className="text-sm font-medium text-gray-700 hidden sm:inline">Analytics</span>
+                </Link>
+
+                <Link to="/pricing" className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-100">
+                  <CreditCard className="h-5 w-5 text-primary-600" />
+                  <span className="text-sm font-medium text-gray-700 hidden sm:inline">Upgrade</span>
                 </Link>
                 
                 <div className="relative group">
@@ -51,6 +56,13 @@ export const Header: React.FC = () => {
                   
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg overflow-hidden z-20 hidden group-hover:block">
                     <div className="py-2">
+                      <Link 
+                        to="/pricing"
+                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <CreditCard className="h-4 w-4 mr-3 text-gray-400" />
+                        Manage Subscription
+                      </Link>
                       <button 
                         onClick={handleLogout}
                         className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
