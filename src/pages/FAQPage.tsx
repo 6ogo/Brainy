@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
+import { Button } from '../components/Button';
 import { cn, commonStyles } from '../styles/utils';
 import { 
   Search, 
