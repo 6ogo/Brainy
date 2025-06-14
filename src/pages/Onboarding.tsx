@@ -85,7 +85,7 @@ export const Onboarding: React.FC = () => {
           throw error;
         }
 
-        if (data?.has_completed_onboarding || data?.show_onboarding === false) {
+        if (data?.has_completed_onboarding === true || data?.show_onboarding === false) {
           navigate('/subjects');
         }
       } catch (error) {
@@ -132,6 +132,7 @@ export const Onboarding: React.FC = () => {
           .upsert({
             user_id: user.id,
             has_completed_onboarding: true,
+            show_onboarding: false, // This ensures it won't show again
             subjects: selectedSubjects,
             learning_goal: selectedGoal,
             preferred_schedule: selectedSchedule,
