@@ -19,6 +19,7 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   leftIcon,
   rightIcon,
+  onClick,
   ...props
 }) => {
   const baseStyles = commonStyles.button[variant];
@@ -39,6 +40,17 @@ export const Button: React.FC<ButtonProps> = ({
       transition: { duration: 0.1 }
     }
   };
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // Scroll to top when navigating to a new page
+    if (onClick) {
+      onClick(e);
+      // Small delay to allow navigation to complete before scrolling
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+    }
+  };
   
   return (
     <motion.button
@@ -52,6 +64,7 @@ export const Button: React.FC<ButtonProps> = ({
       whileHover={!disabled && !isLoading ? "hover" : undefined}
       whileTap={!disabled && !isLoading ? "tap" : undefined}
       variants={buttonVariants}
+      onClick={handleClick}
       {...props}
     >
       <motion.div 

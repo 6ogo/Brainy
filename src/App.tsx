@@ -11,12 +11,19 @@ import { LearningAnalytics } from './pages/LearningAnalytics';
 import { Onboarding } from './pages/Onboarding';
 import HomePage from './pages/HomePage';
 import PricingPage from './pages/PricingPage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
+import PrivacyPage from './pages/PrivacyPage';
+import TermsPage from './pages/TermsPage';
+import FAQPage from './pages/FAQPage';
+import CareersPage from './pages/CareersPage';
+import BlogPage from './pages/BlogPage';
+import HelpPage from './pages/HelpPage';
 import NotFound from './pages/NotFound';
 import { AuthProvider } from './contexts/AuthContext';
 import { SecurityProvider } from './components/SecurityProvider';
 import { Toaster } from 'react-hot-toast';
 import { PrivateRoute } from './components/PrivateRoute';
-import { Header } from './components/Header';
 
 function App() {
   return (
@@ -31,6 +38,14 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<ResetPassword />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/faq" element={<FAQPage />} />
+            <Route path="/careers" element={<CareersPage />} />
+            <Route path="/blog" element={<BlogPage />} />
+            <Route path="/help" element={<HelpPage />} />
             <Route path="/onboarding" element={<PrivateRoute><Onboarding /></PrivateRoute>} />
             <Route path="/subjects" element={<PrivateRoute><SubjectSelection /></PrivateRoute>} />
             <Route path="/teachers" element={<PrivateRoute><TeacherSelection /></PrivateRoute>} />
