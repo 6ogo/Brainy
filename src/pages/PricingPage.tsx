@@ -19,8 +19,11 @@ export const PricingPage: React.FC = () => {
   const { user } = useAuth();
   const [currentSubscription, setCurrentSubscription] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [appliedCoupon, setAppliedCoupon] = useState<string>('');
-  const [isCouponLoading, setIsCouponLoading] = useState(false);
+  const [loadingPlanId, setLoadingPlanId] = useState<string | null>(null);
+  
+  // Individual coupon states for each plan
+  const [appliedCoupons, setAppliedCoupons] = useState<Record<string, string>>({});
+  const [couponLoading, setCouponLoading] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const fetchSubscription = async () => {
@@ -50,17 +53,30 @@ export const PricingPage: React.FC = () => {
 
     try {
       setIsLoading(true);
-      await purchaseSubscription(planId as keyof typeof products, appliedCoupon);
+      setLoadingPlanId(planId);
+      
+      // Get the coupon for this specific plan
+      const couponCode = appliedCoupons[planId];
+      
+      await purchaseSubscription(planId as keyof typeof products, couponCode);
     } catch (error) {
       console.error('Subscription error:', error);
-      if (error instanceof Error && error.message.includes('coupon')) {
-        toast.error('Invalid or expired coupon code. Please check and try again.');
-        setAppliedCoupon(''); // Clear the invalid coupon
+      if (error instanceof Error) {
+        if (error.message.includes('coupon') || error.message.includes('promotion')) {
+          toast.error('Invalid or expired coupon code. Please check and try again.');
+          // Clear the invalid coupon for this plan
+          setAppliedCoupons(prev => ({ ...prev, [planId]: '' }));
+        } else if (error.message.includes('checkout')) {
+          toast.error('Failed to create checkout session. Please try again.');
+        } else {
+          toast.error('Failed to process subscription. Please try again.');
+        }
       } else {
-        toast.error('Failed to process subscription. Please try again.');
+        toast.error('An unexpected error occurred. Please try again.');
       }
     } finally {
       setIsLoading(false);
+      setLoadingPlanId(null);
     }
   };
 
@@ -77,13 +93,13 @@ export const PricingPage: React.FC = () => {
     }
   };
 
-  const handleCouponApply = async (couponCode: string) => {
-    setIsCouponLoading(true);
+  const handleCouponApply = async (planId: string, couponCode: string) => {
+    setCouponLoading(prev => ({ ...prev, [planId]: true }));
     try {
       const isValid = await validateCoupon(couponCode);
       if (isValid) {
-        setAppliedCoupon(couponCode);
-        toast.success(`Coupon "${couponCode}" applied successfully!`);
+        setAppliedCoupons(prev => ({ ...prev, [planId]: couponCode }));
+        toast.success(`Coupon "${couponCode}" applied to ${plans.find(p => p.id === planId)?.name} plan!`);
       } else {
         toast.error('Invalid or expired coupon code. Please check the code and try again.');
       }
@@ -91,12 +107,12 @@ export const PricingPage: React.FC = () => {
       console.error('Error validating coupon:', error);
       toast.error('Failed to validate coupon. Please try again.');
     } finally {
-      setIsCouponLoading(false);
+      setCouponLoading(prev => ({ ...prev, [planId]: false }));
     }
   };
 
-  const handleCouponRemove = () => {
-    setAppliedCoupon('');
+  const handleCouponRemove = (planId: string) => {
+    setAppliedCoupons(prev => ({ ...prev, [planId]: '' }));
     toast.success('Coupon removed.');
   };
 
@@ -187,7 +203,7 @@ export const PricingPage: React.FC = () => {
               <Button
                 variant="secondary"
                 onClick={handleManageSubscription}
-                isLoading={isLoading}
+                isLoading={isLoading && !loadingPlanId}
                 className="mb-8"
               >
                 Manage Current Subscription
@@ -201,42 +217,66 @@ export const PricingPage: React.FC = () => {
           variants={animations.staggerChildren}
         >
           {plans.map((plan, index) => (
-            <SubscriptionCard
+            <motion.div
               key={plan.id}
-              plan={plan}
-              isCurrentPlan={currentPlanId === plan.id}
-              isPopular={plan.id === 'premium'}
-              onSubscribe={handleSubscribe}
-              isLoading={isLoading}
-              delay={index * 0.1}
-            />
-          ))}
-        </motion.div>
-
-        {user && (
-          <motion.div 
-            className="max-w-md mx-auto mt-12"
-            variants={animations.slideUp}
-          >
-            <Card className="p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <Gift className="h-5 w-5 text-primary-600" />
-                <span className="font-medium text-gray-900">Have a coupon code?</span>
-              </div>
-              <CouponInput
-                onCouponApply={handleCouponApply}
-                onCouponRemove={handleCouponRemove}
-                appliedCoupon={appliedCoupon}
-                isLoading={isCouponLoading}
-              />
-              {appliedCoupon && (
-                <div className="mt-3 text-sm text-green-600">
-                  Your coupon will be applied at checkout
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1, duration: 0.5 }}
+              className="relative"
+            >
+              {plan.id === 'premium' && (
+                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-10">
+                  <div className="bg-gradient-to-r from-orange-400 to-pink-500 text-white px-4 py-1 rounded-full text-sm font-medium">
+                    Most Popular
+                  </div>
                 </div>
               )}
-            </Card>
-          </motion.div>
-        )}
+              
+              <Card
+                variant="hover"
+                className={cn(
+                  "relative overflow-hidden transition-all duration-300 h-full flex flex-col",
+                  plan.id === 'premium' && "ring-2 ring-orange-400 ring-opacity-50",
+                  currentPlanId === plan.id && "ring-2 ring-green-400 ring-opacity-50"
+                )}
+              >
+                <SubscriptionCard
+                  plan={plan}
+                  isCurrentPlan={currentPlanId === plan.id}
+                  isPopular={plan.id === 'premium'}
+                  onSubscribe={handleSubscribe}
+                  isLoading={loadingPlanId === plan.id}
+                  delay={index * 0.1}
+                />
+
+                {/* Individual Coupon Input for each paid plan */}
+                {user && plan.id !== 'free_tier' && (
+                  <div className="p-6 pt-0 mt-auto">
+                    <div className="border-t border-gray-200 pt-4">
+                      <div className="flex items-center space-x-2 mb-3">
+                        <Gift className="h-4 w-4 text-primary-600" />
+                        <span className="text-sm font-medium text-gray-700">
+                          Coupon for {plan.name}
+                        </span>
+                      </div>
+                      <CouponInput
+                        onCouponApply={(coupon) => handleCouponApply(plan.id, coupon)}
+                        onCouponRemove={() => handleCouponRemove(plan.id)}
+                        appliedCoupon={appliedCoupons[plan.id]}
+                        isLoading={couponLoading[plan.id]}
+                      />
+                      {appliedCoupons[plan.id] && (
+                        <div className="mt-2 text-xs text-green-600">
+                          Coupon will be applied at checkout
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            </motion.div>
+          ))}
+        </motion.div>
 
         {user && currentPlanId !== 'free_tier' && (
           <motion.div 
@@ -322,7 +362,7 @@ export const PricingPage: React.FC = () => {
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-2">How do coupon codes work?</h3>
-              <p className="text-gray-600">Enter your coupon code before selecting a plan. The discount will be applied at checkout and validated with Stripe.</p>
+              <p className="text-gray-600">Each plan has its own coupon input. Enter your coupon code for the specific plan you want. The discount will be applied at checkout.</p>
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-2">Can I get a refund?</h3>

@@ -35,7 +35,18 @@ export async function createCheckoutSession(productId: ProductId, promotionCode?
     });
 
     if (!response.ok) {
-      throw new Error('Failed to create checkout session');
+      const errorText = await response.text();
+      let errorMessage = 'Failed to create checkout session';
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error || errorMessage;
+      } catch {
+        // If response isn't JSON, use the text as error message
+        errorMessage = errorText || errorMessage;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const { url } = await response.json();
@@ -62,7 +73,17 @@ export async function createPortalSession() {
     });
 
     if (!response.ok) {
-      throw new Error('Failed to create portal session');
+      const errorText = await response.text();
+      let errorMessage = 'Failed to create portal session';
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const { url } = await response.json();
