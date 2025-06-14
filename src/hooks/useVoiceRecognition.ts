@@ -4,9 +4,6 @@ import toast from 'react-hot-toast';
 import { storage } from '../utils/storage';
 import { VoiceMode } from '../types';
 
-// Import speech recognition types
-import '../types/speech';
-
 // Utility to get error message from error code
 function getErrorMessage(error: string): string {
   switch (error) {
