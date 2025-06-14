@@ -24,7 +24,8 @@ export const CouponInput: React.FC<CouponInputProps> = ({
 
   const handleApply = () => {
     if (couponCode.trim()) {
-      onCouponApply(couponCode.trim().toUpperCase());
+      // Preserve the exact case as entered by the user
+      onCouponApply(couponCode.trim());
       setCouponCode('');
     }
   };
@@ -32,6 +33,11 @@ export const CouponInput: React.FC<CouponInputProps> = ({
   const handleRemove = () => {
     onCouponRemove();
     setIsExpanded(false);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Don't force uppercase here - let user enter as they want
+    setCouponCode(e.target.value);
   };
 
   if (appliedCoupon) {
@@ -72,8 +78,8 @@ export const CouponInput: React.FC<CouponInputProps> = ({
           <div className="flex space-x-2">
             <Input
               value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-              placeholder="Enter coupon code"
+              onChange={handleInputChange}
+              placeholder="Enter coupon code (case-sensitive)"
               className="flex-1"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -90,6 +96,9 @@ export const CouponInput: React.FC<CouponInputProps> = ({
             >
               Apply
             </Button>
+          </div>
+          <div className="text-xs text-gray-500">
+            Coupon codes are case-sensitive. Enter exactly as provided.
           </div>
           <Button
             variant="text"

@@ -158,26 +158,47 @@ Deno.serve(async (req) => {
       allow_promotion_codes: true,
     };
 
-    // If a specific promotion code is provided, validate and apply it
-    if (promotion_code) {
+    // Handle coupon/promotion code application
+    if (promotion_code && promotion_code.trim()) {
+      const trimmedCode = promotion_code.trim();
+      
       try {
+        // First, try to find it as a promotion code (case-sensitive)
         const promotionCodes = await stripe.promotionCodes.list({
-          code: promotion_code,
+          code: trimmedCode,
           active: true,
+          limit: 1,
         });
 
         if (promotionCodes.data.length > 0) {
+          console.log(`Found promotion code: ${trimmedCode}`);
           sessionConfig.discounts = [{
             promotion_code: promotionCodes.data[0].id,
           }];
+        } else {
+          // If not found as promotion code, try as direct coupon
+          try {
+            const coupon = await stripe.coupons.retrieve(trimmedCode);
+            if (coupon && coupon.valid) {
+              console.log(`Found direct coupon: ${trimmedCode}`);
+              sessionConfig.discounts = [{
+                coupon: coupon.id,
+              }];
+            }
+          } catch (couponError) {
+            console.log(`Coupon ${trimmedCode} not found or invalid`);
+            // Continue without the coupon if it's not valid
+          }
         }
       } catch (error) {
-        console.error('Error validating promotion code:', error);
-        // Continue without the promotion code if validation fails
+        console.error('Error applying coupon/promotion code:', error);
+        // Continue without the coupon if there's an error
       }
     }
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
+
+    console.log(`Created checkout session ${session.id} for customer ${customerId}${promotion_code ? ` with coupon ${promotion_code}` : ''}`);
 
     return new Response(JSON.stringify({ sessionId: session.id, url: session.url }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
