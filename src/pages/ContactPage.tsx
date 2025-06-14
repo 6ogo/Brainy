@@ -6,12 +6,8 @@ import { Input } from '../components/Input';
 import { cn, commonStyles } from '../styles/utils';
 import { 
   Mail, 
-  Phone, 
-  MapPin, 
-  Clock, 
   MessageSquare, 
-  Users, 
-  Building,
+  Users,
   Send,
   CheckCircle
 } from 'lucide-react';
@@ -40,48 +36,28 @@ export const ContactPage: React.FC = () => {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate form submission
-    try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      setSubmitted(true);
-      toast.success('Message sent successfully! We\'ll get back to you within 24 hours.');
-    } catch (error) {
-      toast.error('Failed to send message. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    const { name, email, subject, message, inquiryType } = formData;
+    
+    const emailBody = `Name: ${name}
+Email: ${email}
+Inquiry Type: ${inquiryType}
+Subject: ${subject}
 
-  const contactInfo = [
-    {
-      icon: <Mail className="h-6 w-6" />,
-      title: 'Email Us',
-      content: 'support@brainbud.com',
-      description: 'Get in touch for general inquiries'
-    },
-    {
-      icon: <Phone className="h-6 w-6" />,
-      title: 'Call Us',
-      content: '+1 (555) 123-4567',
-      description: 'Monday to Friday, 9 AM - 6 PM PST'
-    },
-    {
-      icon: <MapPin className="h-6 w-6" />,
-      title: 'Visit Us',
-      content: '123 Innovation Drive, San Francisco, CA 94105',
-      description: 'Our headquarters in the heart of Silicon Valley'
-    },
-    {
-      icon: <Clock className="h-6 w-6" />,
-      title: 'Support Hours',
-      content: '24/7 Online Support',
-      description: 'AI-powered help available anytime'
-    }
-  ];
+Message:
+${message}`;
+
+    const mailtoLink = `mailto:info@learny.se?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+    window.location.href = mailtoLink;
+    
+    // Show success message
+    setSubmitted(true);
+    toast.success('Email client opened with your message!');
+    setIsSubmitting(false);
+  };
 
   const inquiryTypes = [
     { value: 'general', label: 'General Inquiry' },
@@ -108,7 +84,7 @@ export const ContactPage: React.FC = () => {
                 Message Sent Successfully!
               </h1>
               <p className={cn(commonStyles.text.lg, "mb-6")}>
-                Thank you for contacting us. We've received your message and will get back to you within 24 hours.
+                Thank you for contacting us. Your email client should have opened with your message to info@learny.se.
               </p>
               <Button
                 variant="primary"
@@ -119,6 +95,55 @@ export const ContactPage: React.FC = () => {
             </Card>
           </div>
         </main>
+        
+        {/* Footer */}
+        <footer className="bg-white py-12 px-4 border-t border-gray-200 mt-16">
+          <div className="max-w-7xl mx-auto">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Product</h3>
+                <ul className="space-y-4">
+                  <li><a href="/pricing" className="text-base text-gray-600 hover:text-primary-600">Pricing</a></li>
+                  <li><a href="/faq" className="text-base text-gray-600 hover:text-primary-600">FAQ</a></li>
+                  <li><a href="/help" className="text-base text-gray-600 hover:text-primary-600">Help Center</a></li>
+                  <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">Blog</a></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Company</h3>
+                <ul className="space-y-4">
+                  <li><a href="/about" className="text-base text-gray-600 hover:text-primary-600">About Us</a></li>
+                  <li><a href="/careers" className="text-base text-gray-600 hover:text-primary-600">Careers</a></li>
+                  <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Contact</a></li>
+                  <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">News</a></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Resources</h3>
+                <ul className="space-y-4">
+                  <li><a href="/help" className="text-base text-gray-600 hover:text-primary-600">Help Center</a></li>
+                  <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Support</a></li>
+                  <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">Learning Tips</a></li>
+                  <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Partners</a></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Legal</h3>
+                <ul className="space-y-4">
+                  <li><a href="/privacy" className="text-base text-gray-600 hover:text-primary-600">Privacy</a></li>
+                  <li><a href="/terms" className="text-base text-gray-600 hover:text-primary-600">Terms</a></li>
+                  <li><a href="/privacy" className="text-base text-gray-600 hover:text-primary-600">Cookie Policy</a></li>
+                  <li><a href="/terms" className="text-base text-gray-600 hover:text-primary-600">Licenses</a></li>
+                </ul>
+              </div>
+            </div>
+            <div className="mt-12 pt-8 border-t border-gray-200">
+              <p className="text-base text-gray-400 text-center">
+                &copy; {new Date().getFullYear()} Brainbud Education, Inc. All rights reserved.
+              </p>
+            </div>
+          </div>
+        </footer>
       </div>
     );
   }
@@ -148,24 +173,22 @@ export const ContactPage: React.FC = () => {
                   Contact Information
                 </h2>
                 <div className="space-y-6">
-                  {contactInfo.map((info, index) => (
-                    <div key={index} className="flex items-start space-x-4">
-                      <div className="p-2 bg-primary-100 rounded-lg text-primary-600">
-                        {info.icon}
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 mb-1">
-                          {info.title}
-                        </h3>
-                        <p className="text-gray-700 font-medium mb-1">
-                          {info.content}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {info.description}
-                        </p>
-                      </div>
+                  <div className="flex items-start space-x-4">
+                    <div className="p-2 bg-primary-100 rounded-lg text-primary-600">
+                      <Mail className="h-6 w-6" />
                     </div>
-                  ))}
+                    <div>
+                      <h3 className="font-semibold text-gray-900 mb-1">
+                        Email Us
+                      </h3>
+                      <p className="text-gray-700 font-medium mb-1">
+                        info@learny.se
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Get in touch for general inquiries
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Quick Links */}
@@ -174,20 +197,14 @@ export const ContactPage: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center space-x-2">
                       <MessageSquare className="h-4 w-4 text-primary-600" />
-                      <a href="#" className="text-primary-600 hover:text-primary-700">
-                        Live Chat Support
-                      </a>
+                      <span className="text-gray-600">
+                        Live Chat Support (Coming Soon)
+                      </span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Users className="h-4 w-4 text-primary-600" />
-                      <a href="#" className="text-primary-600 hover:text-primary-700">
-                        Community Forum
-                      </a>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Building className="h-4 w-4 text-primary-600" />
-                      <a href="#" className="text-primary-600 hover:text-primary-700">
-                        Enterprise Solutions
+                      <a href="/help" className="text-primary-600 hover:text-primary-700">
+                        Help Center
                       </a>
                     </div>
                   </div>
@@ -300,7 +317,7 @@ export const ContactPage: React.FC = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Do you offer phone support?</h3>
-                <p className="text-gray-600 text-sm">Yes! Premium and Ultimate subscribers have access to priority phone support.</p>
+                <p className="text-gray-600 text-sm">Phone support is coming soon! Premium and Ultimate subscribers will have access to priority phone support.</p>
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Can I schedule a demo?</h3>
@@ -314,6 +331,55 @@ export const ContactPage: React.FC = () => {
           </Card>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="bg-white py-12 px-4 border-t border-gray-200 mt-16">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Product</h3>
+              <ul className="space-y-4">
+                <li><a href="/pricing" className="text-base text-gray-600 hover:text-primary-600">Pricing</a></li>
+                <li><a href="/faq" className="text-base text-gray-600 hover:text-primary-600">FAQ</a></li>
+                <li><a href="/help" className="text-base text-gray-600 hover:text-primary-600">Help Center</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">Blog</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Company</h3>
+              <ul className="space-y-4">
+                <li><a href="/about" className="text-base text-gray-600 hover:text-primary-600">About Us</a></li>
+                <li><a href="/careers" className="text-base text-gray-600 hover:text-primary-600">Careers</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Contact</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">News</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Resources</h3>
+              <ul className="space-y-4">
+                <li><a href="/help" className="text-base text-gray-600 hover:text-primary-600">Help Center</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Support</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">Learning Tips</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Partners</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Legal</h3>
+              <ul className="space-y-4">
+                <li><a href="/privacy" className="text-base text-gray-600 hover:text-primary-600">Privacy</a></li>
+                <li><a href="/terms" className="text-base text-gray-600 hover:text-primary-600">Terms</a></li>
+                <li><a href="/privacy" className="text-base text-gray-600 hover:text-primary-600">Cookie Policy</a></li>
+                <li><a href="/terms" className="text-base text-gray-600 hover:text-primary-600">Licenses</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-12 pt-8 border-t border-gray-200">
+            <p className="text-base text-gray-400 text-center">
+              &copy; {new Date().getFullYear()} Brainbud Education, Inc. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

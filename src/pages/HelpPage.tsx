@@ -8,22 +8,52 @@ import {
   Book, 
   MessageSquare, 
   Mail, 
-  Phone,
   Search,
   ChevronRight,
   ExternalLink,
   Video,
   FileText,
   Users,
-  Settings
+  Settings,
+  Clock
 } from 'lucide-react';
 
 export const HelpPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    subject: '',
+    message: '',
+    inquiryType: 'general'
+  });
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSendMessage = () => {
+    const { name, email, subject, message, inquiryType } = formData;
+    
+    const emailBody = `Name: ${name}
+Email: ${email}
+Inquiry Type: ${inquiryType}
+Subject: ${subject}
+
+Message:
+${message}`;
+
+    const mailtoLink = `mailto:info@learny.se?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailBody)}`;
+    window.location.href = mailtoLink;
+  };
 
   const helpCategories = [
     {
@@ -81,29 +111,30 @@ export const HelpPage: React.FC = () => {
       title: 'Live Chat Support',
       description: 'Get instant help from our support team',
       icon: <MessageSquare className="h-6 w-6" />,
-      action: 'Start Chat',
-      available: 'Available 24/7 for Premium users'
+      action: 'Coming Soon',
+      available: 'Feature in development'
     },
     {
       title: 'Video Tutorials',
       description: 'Watch step-by-step guides',
       icon: <Video className="h-6 w-6" />,
-      action: 'Watch Videos',
-      available: 'Free for all users'
+      action: 'Coming Soon',
+      available: 'Feature in development'
     },
     {
       title: 'Email Support',
       description: 'Send us a detailed message',
       icon: <Mail className="h-6 w-6" />,
       action: 'Send Email',
-      available: 'Response within 24 hours'
+      available: 'Response within 24 hours',
+      onClick: () => window.location.href = 'mailto:info@learny.se'
     },
     {
       title: 'Phone Support',
       description: 'Speak directly with our team',
-      icon: <Phone className="h-6 w-6" />,
-      action: 'Call Now',
-      available: 'Premium & Ultimate users only'
+      icon: <Clock className="h-6 w-6" />,
+      action: 'Coming Soon',
+      available: 'Feature in development'
     }
   ];
 
@@ -145,6 +176,15 @@ export const HelpPage: React.FC = () => {
     category.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     category.articles.some(article => article.toLowerCase().includes(searchTerm.toLowerCase()))
   );
+
+  const inquiryTypes = [
+    { value: 'general', label: 'General Inquiry' },
+    { value: 'support', label: 'Technical Support' },
+    { value: 'billing', label: 'Billing & Subscriptions' },
+    { value: 'partnership', label: 'Partnership Opportunities' },
+    { value: 'enterprise', label: 'Enterprise Solutions' },
+    { value: 'press', label: 'Press & Media' }
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -201,10 +241,11 @@ export const HelpPage: React.FC = () => {
                     {action.description}
                   </p>
                   <Button
-                    variant="outline"
+                    variant={action.onClick ? "primary" : "outline"}
                     size="sm"
                     className="w-full mb-3"
-                    rightIcon={<ExternalLink className="h-4 w-4" />}
+                    onClick={action.onClick}
+                    disabled={!action.onClick}
                   >
                     {action.action}
                   </Button>
@@ -294,28 +335,14 @@ export const HelpPage: React.FC = () => {
               {/* Contact Info */}
               <Card className="p-6">
                 <h3 className={cn(commonStyles.heading.h3, "mb-4")}>
-                  Still Need Help?
+                  Get in Touch
                 </h3>
-                <div className="space-y-4">
+                <div className="space-y-4 mb-6">
                   <div className="flex items-center space-x-3">
                     <Mail className="h-5 w-5 text-primary-600" />
                     <div>
                       <p className="font-medium text-gray-900">Email Support</p>
-                      <p className="text-sm text-gray-600">support@brainbud.com</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <Phone className="h-5 w-5 text-primary-600" />
-                    <div>
-                      <p className="font-medium text-gray-900">Phone Support</p>
-                      <p className="text-sm text-gray-600">+1 (555) 123-4567</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <MessageSquare className="h-5 w-5 text-primary-600" />
-                    <div>
-                      <p className="font-medium text-gray-900">Live Chat</p>
-                      <p className="text-sm text-gray-600">Available 24/7</p>
+                      <p className="text-sm text-gray-600">info@learny.se</p>
                     </div>
                   </div>
                 </div>
@@ -324,7 +351,7 @@ export const HelpPage: React.FC = () => {
                   <Button
                     variant="primary"
                     className="w-full"
-                    onClick={() => window.location.href = '/contact'}
+                    onClick={() => window.location.href = 'mailto:info@learny.se'}
                   >
                     Contact Support
                   </Button>
@@ -334,43 +361,159 @@ export const HelpPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Additional Resources */}
+        {/* Contact Form */}
         <div className="max-w-4xl mx-auto mt-16">
-          <Card className="p-8 bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-200">
-            <div className="text-center">
-              <h2 className={cn(commonStyles.heading.h3, "mb-4")}>
-                Additional Resources
-              </h2>
-              <p className={cn(commonStyles.text.base, "mb-6")}>
-                Explore more ways to get help and learn about Brainbud
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Button
-                  variant="outline"
-                  leftIcon={<Video className="h-4 w-4" />}
-                  onClick={() => window.open('https://youtube.com/@brainbud', '_blank')}
-                >
-                  Video Tutorials
-                </Button>
-                <Button
-                  variant="outline"
-                  leftIcon={<Users className="h-4 w-4" />}
-                  onClick={() => window.open('https://community.brainbud.com', '_blank')}
-                >
-                  Community Forum
-                </Button>
-                <Button
-                  variant="outline"
-                  leftIcon={<FileText className="h-4 w-4" />}
-                  onClick={() => window.location.href = '/faq'}
-                >
-                  FAQ
-                </Button>
+          <Card className="p-8">
+            <h2 className={cn(commonStyles.heading.h3, "mb-6")}>
+              Send us a Message
+            </h2>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name
+                  </label>
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    placeholder="Your full name"
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="your.email@example.com"
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
               </div>
+
+              <div>
+                <label htmlFor="inquiryType" className="block text-sm font-medium text-gray-700 mb-1">
+                  Inquiry Type
+                </label>
+                <select
+                  id="inquiryType"
+                  name="inquiryType"
+                  value={formData.inquiryType}
+                  onChange={handleInputChange}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  required
+                >
+                  {inquiryTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
+                  Subject
+                </label>
+                <input
+                  id="subject"
+                  name="subject"
+                  type="text"
+                  value={formData.subject}
+                  onChange={handleInputChange}
+                  placeholder="Brief description of your inquiry"
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
+                  Message
+                </label>
+                <textarea
+                  id="message"
+                  name="message"
+                  rows={6}
+                  value={formData.message}
+                  onChange={handleInputChange}
+                  placeholder="Please provide details about your inquiry..."
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+
+              <Button
+                variant="primary"
+                className="w-full"
+                onClick={handleSendMessage}
+                leftIcon={<Mail className="h-5 w-5" />}
+              >
+                Send Message
+              </Button>
             </div>
           </Card>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="bg-white py-12 px-4 border-t border-gray-200 mt-16">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Product</h3>
+              <ul className="space-y-4">
+                <li><a href="/pricing" className="text-base text-gray-600 hover:text-primary-600">Pricing</a></li>
+                <li><a href="/faq" className="text-base text-gray-600 hover:text-primary-600">FAQ</a></li>
+                <li><a href="/help" className="text-base text-gray-600 hover:text-primary-600">Help Center</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">Blog</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Company</h3>
+              <ul className="space-y-4">
+                <li><a href="/about" className="text-base text-gray-600 hover:text-primary-600">About Us</a></li>
+                <li><a href="/careers" className="text-base text-gray-600 hover:text-primary-600">Careers</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Contact</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">News</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Resources</h3>
+              <ul className="space-y-4">
+                <li><a href="/help" className="text-base text-gray-600 hover:text-primary-600">Help Center</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Support</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">Learning Tips</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Partners</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Legal</h3>
+              <ul className="space-y-4">
+                <li><a href="/privacy" className="text-base text-gray-600 hover:text-primary-600">Privacy</a></li>
+                <li><a href="/terms" className="text-base text-gray-600 hover:text-primary-600">Terms</a></li>
+                <li><a href="/privacy" className="text-base text-gray-600 hover:text-primary-600">Cookie Policy</a></li>
+                <li><a href="/terms" className="text-base text-gray-600 hover:text-primary-600">Licenses</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-12 pt-8 border-t border-gray-200">
+            <p className="text-base text-gray-400 text-center">
+              &copy; {new Date().getFullYear()} Brainbud Education, Inc. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };
