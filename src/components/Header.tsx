@@ -1,6 +1,5 @@
 import React from 'react';
-import { Brain, User, BarChart3, LogOut, CreditCard } from 'lucide-react';
-import { SubjectSelector } from './SubjectSelector';
+import { Brain, User, BarChart3, LogOut, CreditCard, Grid } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,7 +31,10 @@ export const Header: React.FC = () => {
           <div className="flex items-center space-x-4">
             {user ? (
               <>
-                <SubjectSelector />
+                <Link to="/subjects" className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-100">
+                  <Grid className="h-5 w-5 text-primary-600" />
+                  <span className="text-sm font-medium text-gray-700 hidden sm:inline">Subjects</span>
+                </Link>
                 
                 <Link to="/analytics" className="flex items-center space-x-2 px-3 py-2 rounded-md hover:bg-gray-100">
                   <BarChart3 className="h-5 w-5 text-primary-600" />

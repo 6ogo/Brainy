@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { VideoArea } from '../components/VideoArea';
 import { ChatTranscript } from '../components/ChatTranscript';
@@ -12,6 +12,7 @@ import { StudySessionControls } from '../components/StudySessionControls';
 import { Button } from '../components/Button';
 import { useStore } from '../store/store';
 import { useAuth } from '../contexts/AuthContext';
+import { ArrowLeft } from 'lucide-react';
 
 export const StudyPage: React.FC = () => {
   const { currentSubject, currentAvatar, learningMode, updateSessionStats } = useStore();
@@ -45,6 +46,17 @@ export const StudyPage: React.FC = () => {
       <Header />
       
       <div className="flex-1 container mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Back to Subjects Button */}
+        <div className="lg:col-span-12">
+          <Link 
+            to="/subjects" 
+            className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Subjects
+          </Link>
+        </div>
+        
         {/* Main Study Area */}
         <div className="lg:col-span-8 space-y-6">
           {learningMode === 'videocall' && (

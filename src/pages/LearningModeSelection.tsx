@@ -1,9 +1,9 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useStore } from '../store/store';
 import { Card } from '../components/Card';
 import { cn, commonStyles } from '../styles/utils';
-import { Video, MessageCircle } from 'lucide-react';
+import { Video, MessageCircle, ArrowLeft } from 'lucide-react';
 import { LearningMode } from '../types';
 
 const modes: Array<{
@@ -41,6 +41,17 @@ export const LearningModeSelection: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 py-12 px-4">
       <div className="max-w-5xl mx-auto">
+        {/* Back to Teachers Button */}
+        <div className="mb-8">
+          <Link 
+            to="/teachers" 
+            className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Teachers
+          </Link>
+        </div>
+        
         <div className="text-center mb-12">
           <h1 className={cn(commonStyles.heading.h1, "mb-4")}>
             Choose Your Learning Mode
