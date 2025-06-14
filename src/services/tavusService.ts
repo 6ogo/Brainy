@@ -279,7 +279,7 @@ export const TavusService = {
     }
   },
 
-  private extractTopicsFromConversations(conversations: any[]): {
+  extractTopicsFromConversations(conversations: any[]): {
     completed: string[];
     struggling: string[];
     recommended: string[];
@@ -330,7 +330,7 @@ export const TavusService = {
     };
   },
 
-  private determineLearningStyle(conversations: any[]): string {
+  determineLearningStyle(conversations: any[]): string {
     // This would normally analyze conversation patterns to determine learning style
     // For now, we'll randomly select one
     const styles = ['visual', 'auditory', 'kinesthetic', 'reading/writing'];
