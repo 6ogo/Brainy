@@ -8,15 +8,17 @@ import { VoiceMode } from '../types';
 function getErrorMessage(error: string): string {
   switch (error) {
     case 'not-allowed':
-      return 'Microphone access denied.';
+      return 'Microphone access denied. Please enable microphone permissions in your browser settings.';
     case 'no-speech':
       return 'No speech detected. Please try again.';
     case 'aborted':
       return 'Speech recognition aborted.';
     case 'audio-capture':
-      return 'No microphone found.';
+      return 'No microphone found. Please check your microphone connection.';
+    case 'network':
+      return 'Network error occurred during speech recognition.';
     default:
-      return 'An unknown error occurred.';
+      return 'An unknown error occurred with speech recognition.';
   }
 }
 
@@ -27,6 +29,7 @@ interface UseVoiceRecognitionReturn {
   error: string | null;
   hasPermission: boolean;
   handleVoiceCommand: (transcript: string) => boolean;
+  requestPermission: () => Promise<boolean>;
 }
 
 export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
@@ -48,9 +51,11 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
+  const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const isMounted = useRef(true);
   
   // Cleanup on unmount
@@ -63,37 +68,122 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       if (mediaRecorderRef.current?.state === 'recording') {
         mediaRecorderRef.current.stop();
       }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
     };
   }, []);
+
+  // Request microphone permission
+  const requestPermission = useCallback(async (): Promise<boolean> => {
+    try {
+      setError(null);
+      
+      // Check if we already have permission
+      if (navigator.permissions) {
+        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        setPermissionState(permission.state);
+        
+        if (permission.state === 'granted') {
+          setHasPermission(true);
+          return true;
+        } else if (permission.state === 'denied') {
+          setHasPermission(false);
+          setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
+          return false;
+        }
+      }
+
+      // Request permission by trying to access the microphone
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+      
+      streamRef.current = stream;
+      setHasPermission(true);
+      setPermissionState('granted');
+      setError(null);
+      
+      // Initialize MediaRecorder for recording functionality
+      const recorder = new MediaRecorder(stream);
+      
+      recorder.ondataavailable = (e: BlobEvent) => {
+        if (e.data.size > 0) {
+          setAudioChunks((chunks) => [...chunks, e.data]);
+        }
+      };
+      
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create download link
+        const a = document.createElement('a');
+        a.href = audioUrl;
+        a.download = `recording-${new Date().toISOString()}.wav`;
+        a.click();
+        
+        // Clean up
+        URL.revokeObjectURL(audioUrl);
+        setAudioChunks([]);
+      };
+      
+      mediaRecorderRef.current = recorder;
+      
+      toast.success('Microphone access granted!');
+      return true;
+    } catch (err) {
+      console.error('Microphone permission error:', err);
+      setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
+      setHasPermission(false);
+      setPermissionState('denied');
+      
+      // Show helpful toast with instructions
+      toast.error('Microphone access required for voice features. Please check your browser permissions.', {
+        duration: 5000,
+      });
+      
+      return false;
+    }
+  }, [audioChunks]);
   
   // Declare startListening and stopListening before using them in voiceCommands
   const startListening = useCallback(async (): Promise<boolean> => {
     if (!hasPermission) {
-      setError('Microphone permission not granted.');
-      toast.error('Microphone permission not granted.');
-      return false;
+      const granted = await requestPermission();
+      if (!granted) {
+        return false;
+      }
     }
+    
     try {
       if (recognitionRef.current) {
         recognitionRef.current.start();
+        setError(null);
       }
       return true;
     } catch (err) {
+      console.error('Failed to start listening:', err);
       setError('Failed to start listening.');
-      toast.error('Failed to start listening.');
+      toast.error('Failed to start voice recognition.');
       return false;
     }
-  }, [hasPermission]);
+  }, [hasPermission, requestPermission]);
 
   const stopListening = useCallback(async (): Promise<boolean> => {
     try {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
+      setError(null);
       return true;
     } catch (err) {
+      console.error('Failed to stop listening:', err);
       setError('Failed to stop listening.');
-      toast.error('Failed to stop listening.');
       return false;
     }
   }, []);
@@ -124,73 +214,6 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     return false;
   }, [voiceCommands]);
 
-  // Request microphone permissions
-  useEffect(() => {
-    const requestPermissions = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          audio: true,
-          echoCancellation: true,
-          noiseSuppression: true,
-        });
-        setHasPermission(true);
-        
-        // Initialize MediaRecorder for recording functionality
-        const recorder = new MediaRecorder(stream);
-        
-        recorder.ondataavailable = (e: BlobEvent) => {
-          if (e.data.size > 0) {
-            setAudioChunks((chunks) => [...chunks, e.data]);
-          }
-        };
-        
-        recorder.onstop = () => {
-          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-          const audioUrl = URL.createObjectURL(audioBlob);
-          
-          // Create download link
-          const a = document.createElement('a');
-          a.href = audioUrl;
-          a.download = `recording-${new Date().toISOString()}.wav`;
-          a.click();
-          
-          // Clean up
-          URL.revokeObjectURL(audioUrl);
-          setAudioChunks([]);
-        };
-        
-        mediaRecorderRef.current = recorder;
-        
-        // Initialize speech recognition
-        if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-          const recognitionInstance = new SpeechRecognition();
-          
-          recognitionInstance.continuous = voiceMode === 'continuous';
-          recognitionInstance.interimResults = false;
-          recognitionInstance.lang = 'en-US';
-          
-          recognitionRef.current = recognitionInstance;
-          setError(null);
-        } else {
-          setError('Speech recognition is not supported in this browser');
-        }
-      } catch (err) {
-        setError('Microphone access denied. Please enable microphone permissions.');
-        setHasPermission(false);
-        toast.error('Microphone access denied. Please enable microphone permissions.');
-      }
-    };
-
-    requestPermissions();
-    
-    return () => {
-      if (mediaRecorderRef.current?.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-    };
-  }, [voiceMode]);
-
   // Handle recording state changes
   useEffect(() => {
     if (!mediaRecorderRef.current || !hasPermission) return;
@@ -203,7 +226,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       mediaRecorderRef.current.stop();
       toast.success('Recording saved! Check your downloads.');
     }
-  }, [isRecording, mediaRecorderRef, hasPermission]);
+  }, [isRecording, hasPermission]);
 
   // Initialize speech recognition
   const initSpeechRecognition = useCallback((): SpeechRecognition | null => {
@@ -225,7 +248,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
 
   // Configure recognition event handlers
   useEffect(() => {
-    if (!isMounted.current) return;
+    if (!isMounted.current || !hasPermission) return;
     
     const recognition = initSpeechRecognition();
     if (!recognition) return;
@@ -248,13 +271,19 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     const handleResult = (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript;
       if (transcript.trim()) {
-        addMessage(transcript, 'user'); // isBreakthrough left as undefined
+        addMessage(transcript, 'user');
       }
     };
     
     const handleError = (event: SpeechRecognitionErrorEvent) => {
       const errorMessage = getErrorMessage(event.error as string);
       setError(errorMessage);
+      
+      if (event.error === 'not-allowed') {
+        setHasPermission(false);
+        setPermissionState('denied');
+      }
+      
       toast.error(errorMessage);
       toggleListening(false);
     };
@@ -268,42 +297,38 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         toggleListening(false);
       }
     };
-  }, [initSpeechRecognition, setVoiceMode, toggleListening, addMessage, isListening, voiceMode]);
+  }, [initSpeechRecognition, setVoiceMode, toggleListening, addMessage, isListening, voiceMode, hasPermission]);
 
-  const safeStartListening = useCallback(async (): Promise<boolean> => {
-    try {
-      if (!hasPermission) {
-        setError('Microphone permission not granted.');
-        toast.error('Microphone permission not granted.');
-        return false;
+  // Check permission on mount
+  useEffect(() => {
+    const checkPermission = async () => {
+      if (navigator.permissions) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          setPermissionState(permission.state);
+          setHasPermission(permission.state === 'granted');
+          
+          // Listen for permission changes
+          permission.onchange = () => {
+            setPermissionState(permission.state);
+            setHasPermission(permission.state === 'granted');
+          };
+        } catch (error) {
+          console.error('Error checking microphone permission:', error);
+        }
       }
-      if (recognitionRef.current) {
-        recognitionRef.current.start();
-      }
-      return true;
-    } catch (err) {
-      setError('Failed to start listening.');
-      toast.error('Failed to start listening.');
-      return false;
-    }
-  }, [hasPermission, recognitionRef]);
-
-  const safeStopListening = useCallback(async (): Promise<boolean> => {
-    try {
-      stopListening();
-      return true;
-    } catch (error) {
-      setError(getErrorMessage(error instanceof Error ? error.message : String(error)));
-      return false;
-    }
-  }, [stopListening]);
+    };
+    
+    checkPermission();
+  }, []);
 
   return {
     isListening,
-    startListening: safeStartListening,
-    stopListening: safeStopListening,
+    startListening,
+    stopListening,
     error,
     hasPermission,
     handleVoiceCommand,
+    requestPermission,
   } as const;
 };

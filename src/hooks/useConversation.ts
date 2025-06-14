@@ -111,10 +111,27 @@ export const useConversation = () => {
         setAvatarEmotion('neutral');
         
         try {
+          // Check if audio is supported before playing
+          if (!ElevenLabsService.isAudioSupported()) {
+            throw new Error('Audio playback not supported in this browser');
+          }
+          
           await ElevenLabsService.playAudio(response.audioBlob);
         } catch (audioError) {
           console.error('Audio playback error:', audioError);
-          toast.error('Failed to play audio response');
+          
+          // Provide specific error messages
+          if (audioError instanceof Error) {
+            if (audioError.message.includes('not supported')) {
+              toast.error('Audio playback not supported in this browser');
+            } else if (audioError.message.includes('timeout')) {
+              toast.error('Audio loading timeout - please try again');
+            } else {
+              toast.error('Failed to play audio response');
+            }
+          } else {
+            toast.error('Failed to play audio response');
+          }
         } finally {
           setIsSpeaking(false);
           setAvatarEmotion('neutral');
@@ -132,7 +149,12 @@ export const useConversation = () => {
       const videoMinutes = useVoice ? Math.ceil(duration / 60) : 0;
 
       // Track daily usage
-      await trackDailyUsage(conversationMinutes, videoMinutes);
+      try {
+        await trackDailyUsage(conversationMinutes, videoMinutes);
+      } catch (usageError) {
+        console.error('Error tracking daily usage:', usageError);
+        // Don't fail the conversation if usage tracking fails
+      }
 
       // Update session and social stats
       const newXP = 10;
@@ -176,6 +198,10 @@ export const useConversation = () => {
           toast.error('Received invalid response. Please try again.');
         } else if (error.message.includes('Daily conversation limit')) {
           toast.error('Daily conversation limit reached. Upgrade for more usage.');
+        } else if (error.message.includes('Premium subscription required')) {
+          toast.error('Voice features require a premium subscription.');
+        } else if (error.message.includes('Voice service')) {
+          toast.error('Voice service temporarily unavailable. Please try text mode.');
         } else {
           toast.error('Failed to process message. Please try again.');
         }

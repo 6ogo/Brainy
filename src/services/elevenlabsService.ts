@@ -49,6 +49,15 @@ export class ElevenLabsService {
         throw new Error('No active session');
       }
 
+      // Validate inputs
+      if (!text || text.trim().length === 0) {
+        throw new Error('Text cannot be empty');
+      }
+
+      if (text.length > 5000) {
+        throw new Error('Text is too long for speech generation');
+      }
+
       // Use our secure edge function to proxy the request to ElevenLabs
       const response = await fetch(`${supabase.supabaseUrl}/functions/v1/elevenlabs-proxy`, {
         method: 'POST',
@@ -57,19 +66,48 @@ export class ElevenLabsService {
           'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          text,
+          text: text.trim(),
           persona
         })
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
+        let errorMessage = `ElevenLabs API error: ${response.status}`;
+        
+        try {
+          const errorText = await response.text();
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch {
+          // If we can't parse the error, use the status text
+          errorMessage = `${errorMessage} - ${response.statusText}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
-      return await response.blob();
+      const blob = await response.blob();
+      
+      // Validate that we received audio data
+      if (blob.size === 0) {
+        throw new Error('Received empty audio response');
+      }
+
+      return blob;
     } catch (error) {
       console.error('Error generating speech:', error);
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('403')) {
+          throw new Error('Premium subscription required for voice features');
+        } else if (error.message.includes('429')) {
+          throw new Error('Voice generation rate limit exceeded. Please try again later.');
+        } else if (error.message.includes('500')) {
+          throw new Error('Voice service temporarily unavailable. Please try again later.');
+        }
+      }
+      
       throw error;
     }
   }
@@ -79,20 +117,47 @@ export class ElevenLabsService {
    */
   static async playAudio(audioBlob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        resolve();
-      };
-      
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl);
-        reject(new Error('Failed to play audio'));
-      };
-      
-      audio.play().catch(reject);
+      try {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        
+        audio.onerror = (error) => {
+          URL.revokeObjectURL(audioUrl);
+          reject(new Error(`Failed to play audio: ${error}`));
+        };
+        
+        audio.oncanplaythrough = () => {
+          audio.play().catch(reject);
+        };
+        
+        // Set a timeout to prevent hanging
+        setTimeout(() => {
+          if (audio.readyState < 3) { // HAVE_FUTURE_DATA
+            URL.revokeObjectURL(audioUrl);
+            reject(new Error('Audio loading timeout'));
+          }
+        }, 10000);
+        
+      } catch (error) {
+        reject(new Error(`Audio setup failed: ${error}`));
+      }
     });
+  }
+
+  /**
+   * Check if audio playback is supported
+   */
+  static isAudioSupported(): boolean {
+    try {
+      const audio = new Audio();
+      return !!(audio.canPlayType && audio.canPlayType('audio/mpeg'));
+    } catch {
+      return false;
+    }
   }
 }

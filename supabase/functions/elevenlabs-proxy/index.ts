@@ -83,18 +83,38 @@ serve(async (req) => {
       });
     }
 
+    // Validate text length
+    if (text.length > 5000) {
+      return new Response(JSON.stringify({ error: "Text too long for speech generation" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check if ElevenLabs API key is configured
+    if (!elevenLabsApiKey) {
+      console.error("ElevenLabs API key not configured");
+      return new Response(JSON.stringify({ error: "Voice service not configured" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Get voice ID for persona
     const voiceId = VOICE_IDS[persona] || VOICE_IDS['encouraging-emma'];
 
-    // Call ElevenLabs API
+    console.log(`Generating speech for persona: ${persona}, voice: ${voiceId}, text length: ${text.length}`);
+
+    // Call ElevenLabs API with improved error handling
     const elevenLabsResponse = await fetch(`${elevenLabsApiUrl}/text-to-speech/${voiceId}`, {
       method: "POST",
       headers: {
         "xi-api-key": elevenLabsApiKey,
         "Content-Type": "application/json",
+        "Accept": "audio/mpeg",
       },
       body: JSON.stringify({
-        text,
+        text: text.trim(),
         model_id: "eleven_monolingual_v1",
         voice_settings: {
           stability: 0.5,
@@ -107,16 +127,42 @@ serve(async (req) => {
 
     if (!elevenLabsResponse.ok) {
       const errorText = await elevenLabsResponse.text();
-      throw new Error(`ElevenLabs API error: ${elevenLabsResponse.status} - ${errorText}`);
+      console.error(`ElevenLabs API error: ${elevenLabsResponse.status} - ${errorText}`);
+      
+      // Provide more specific error messages
+      let errorMessage = "Voice generation failed";
+      if (elevenLabsResponse.status === 401) {
+        errorMessage = "Voice service authentication failed";
+      } else if (elevenLabsResponse.status === 429) {
+        errorMessage = "Voice generation rate limit exceeded";
+      } else if (elevenLabsResponse.status === 500) {
+        errorMessage = "Voice service temporarily unavailable";
+      }
+      
+      return new Response(JSON.stringify({ error: errorMessage }), {
+        status: elevenLabsResponse.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Return audio data
+    // Get the audio data
     const audioData = await elevenLabsResponse.arrayBuffer();
     
+    if (audioData.byteLength === 0) {
+      return new Response(JSON.stringify({ error: "Empty audio response" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`Successfully generated speech: ${audioData.byteLength} bytes`);
+    
+    // Return audio data
     return new Response(audioData, {
       headers: {
         ...corsHeaders,
         "Content-Type": "audio/mpeg",
+        "Content-Length": audioData.byteLength.toString(),
       },
     });
   } catch (error) {
