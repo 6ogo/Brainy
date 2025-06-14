@@ -177,7 +177,7 @@ export const FAQPage: React.FC = () => {
     {
       id: '21',
       question: 'How do I contact customer support?',
-      answer: 'You can reach our support team through the contact form on our website, by emailing support@brainbud.com, or through the live chat feature (available to premium subscribers). We typically respond within 24 hours.',
+      answer: 'You can reach our support team through the contact form on our website, by emailing info@learny.se, or through the live chat feature (available to premium subscribers). We typically respond within 24 hours.',
       category: 'account'
     }
   ];
@@ -350,7 +350,7 @@ export const FAQPage: React.FC = () => {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => window.location.href = 'mailto:support@brainbud.com'}
+                  onClick={() => window.location.href = 'mailto:info@learny.se'}
                 >
                   Email Us
                 </Button>
@@ -359,6 +359,55 @@ export const FAQPage: React.FC = () => {
           </Card>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="bg-white py-12 px-4 border-t border-gray-200 mt-16">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Product</h3>
+              <ul className="space-y-4">
+                <li><a href="/pricing" className="text-base text-gray-600 hover:text-primary-600">Pricing</a></li>
+                <li><a href="/faq" className="text-base text-gray-600 hover:text-primary-600">FAQ</a></li>
+                <li><a href="/help" className="text-base text-gray-600 hover:text-primary-600">Help Center</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">Blog</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Company</h3>
+              <ul className="space-y-4">
+                <li><a href="/about" className="text-base text-gray-600 hover:text-primary-600">About Us</a></li>
+                <li><a href="/careers" className="text-base text-gray-600 hover:text-primary-600">Careers</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Contact</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">News</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Resources</h3>
+              <ul className="space-y-4">
+                <li><a href="/help" className="text-base text-gray-600 hover:text-primary-600">Help Center</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Support</a></li>
+                <li><a href="/blog" className="text-base text-gray-600 hover:text-primary-600">Learning Tips</a></li>
+                <li><a href="/contact" className="text-base text-gray-600 hover:text-primary-600">Partners</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Legal</h3>
+              <ul className="space-y-4">
+                <li><a href="/privacy" className="text-base text-gray-600 hover:text-primary-600">Privacy</a></li>
+                <li><a href="/terms" className="text-base text-gray-600 hover:text-primary-600">Terms</a></li>
+                <li><a href="/privacy" className="text-base text-gray-600 hover:text-primary-600">Cookie Policy</a></li>
+                <li><a href="/terms" className="text-base text-gray-600 hover:text-primary-600">Licenses</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="mt-12 pt-8 border-t border-gray-200">
+            <p className="text-base text-gray-400 text-center">
+              &copy; {new Date().getFullYear()} Brainbud Education, Inc. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

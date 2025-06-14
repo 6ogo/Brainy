@@ -149,7 +149,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       
       return false;
     }
-  }, [audioChunks]);
+  }, []);
   
   // Declare startListening and stopListening before using them in voiceCommands
   const startListening = useCallback(async (): Promise<boolean> => {

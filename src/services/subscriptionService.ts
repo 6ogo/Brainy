@@ -148,10 +148,26 @@ export const checkDailyUsageLimit = async (usageType: 'conversation' | 'video'):
 
 export const trackDailyUsage = async (conversationMinutes: number = 0, videoMinutes: number = 0): Promise<void> => {
   try {
-    const { error } = await supabase.rpc('track_daily_usage', {
-      user_uuid: (await supabase.auth.getUser()).data.user?.id,
-      conversation_mins: conversationMinutes,
-      video_mins: videoMinutes
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+    
+    // Get current date in YYYY-MM format for month_year
+    const now = new Date();
+    const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Insert or update the user_usage record
+    const { error } = await supabase.from('user_usage').upsert({
+      user_id: user.id,
+      month_year: monthYear,
+      date: dateStr,
+      conversation_minutes: conversationMinutes,
+      video_call_minutes: videoMinutes,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: 'user_id,date'
     });
 
     if (error) throw error;

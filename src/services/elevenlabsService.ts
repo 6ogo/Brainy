@@ -43,6 +43,11 @@ export class ElevenLabsService {
 
   static async generateSpeech(text: string, persona: string): Promise<Blob> {
     try {
+      // Check if API key is configured
+      if (!API_CONFIG.ELEVENLABS_API_KEY) {
+        throw new Error('Voice service not configured');
+      }
+      
       // Get current session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -105,6 +110,8 @@ export class ElevenLabsService {
           throw new Error('Voice generation rate limit exceeded. Please try again later.');
         } else if (error.message.includes('500')) {
           throw new Error('Voice service temporarily unavailable. Please try again later.');
+        } else if (error.message.includes('not configured')) {
+          throw new Error('Voice service not configured');
         }
       }
       
