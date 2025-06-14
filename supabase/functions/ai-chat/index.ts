@@ -1,201 +1,191 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import Groq from 'npm:groq-sdk';
+// Follow Deno and Oak conventions for Supabase Edge Functions
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import { Groq } from "https://esm.sh/groq-sdk@0.3.1";
 
+// Initialize Supabase client
+const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Initialize Groq client
+const groqApiKey = Deno.env.get("GROQ_API_KEY") || "";
+const groq = new Groq({ apiKey: groqApiKey });
+
+// CORS headers
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
-
-interface ChatRequest {
-  message: string;
-  subject: string;
-  difficultyLevel: string;
-  type: 'chat' | 'summary';
-  context?: {
-    userMessage?: string;
-    aiResponse?: string;
-  };
-}
-
-// Rate limiting storage
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
-
-// Input validation and sanitization
-function validateAndSanitizeInput(input: string, maxLength: number = 2000): string {
-  if (typeof input !== 'string') {
-    throw new Error('Input must be a string');
-  }
-  
-  if (input.length > maxLength) {
-    throw new Error(`Input exceeds maximum length of ${maxLength} characters`);
-  }
-  
-  // Basic sanitization - remove potentially harmful characters
-  return input.replace(/[<>\"'&]/g, '').trim();
-}
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const userLimit = rateLimitMap.get(userId);
-  
-  if (!userLimit || now > userLimit.resetTime) {
-    // Reset or initialize rate limit
-    rateLimitMap.set(userId, { count: 1, resetTime: now + 60000 }); // 1 minute window
-    return true;
-  }
-  
-  if (userLimit.count >= 50) { // 50 requests per minute
-    return false;
-  }
-  
-  userLimit.count++;
-  return true;
-}
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { 
-      status: 200,
-      headers: corsHeaders 
-    });
-  }
-
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: corsHeaders,
+      status: 204,
     });
   }
 
   try {
-    // Get user ID from auth header for rate limiting
-    const authHeader = req.headers.get('authorization');
-    const userId = authHeader ? authHeader.split(' ')[1] : 'anonymous';
-    
-    // Check rate limit
-    if (!checkRateLimit(userId)) {
-      return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+    // Verify authentication
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body
+    const { message, subject, difficultyLevel, type, context } = await req.json();
+
+    // Rate limiting check
+    const rateLimitKey = `rate_limit:${user.id}`;
+    const { data: rateLimit } = await supabase
+      .from("rate_limits")
+      .select("count, last_reset")
+      .eq("key", rateLimitKey)
+      .single();
+
+    const now = new Date();
+    const resetTime = rateLimit?.last_reset ? new Date(rateLimit.last_reset) : new Date(0);
+    resetTime.setHours(resetTime.getHours() + 1);
+
+    if (resetTime < now) {
+      // Reset rate limit if an hour has passed
+      await supabase
+        .from("rate_limits")
+        .upsert({ key: rateLimitKey, count: 1, last_reset: now.toISOString() });
+    } else if (rateLimit && rateLimit.count >= 100) {
+      // Rate limit exceeded
+      return new Response(JSON.stringify({ error: "Rate limit exceeded" }), {
         status: 429,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    } else {
+      // Increment rate limit counter
+      await supabase
+        .from("rate_limits")
+        .upsert({
+          key: rateLimitKey,
+          count: (rateLimit?.count || 0) + 1,
+          last_reset: rateLimit?.last_reset || now.toISOString(),
+        });
     }
 
-    const groqApiKey = Deno.env.get('GROQ_API_KEY');
+    // Check subscription limits
+    const { data: subscription } = await supabase
+      .from("user_subscription_status")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
 
-    if (!groqApiKey) {
-      return new Response(JSON.stringify({ error: 'AI service not configured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+    // Handle different request types
+    let response;
+    if (type === "chat") {
+      // Create system prompt based on subject and difficulty
+      const systemPrompt = createSystemPrompt(subject, difficultyLevel);
 
-    const groq = new Groq({
-      apiKey: groqApiKey,
-    });
+      // Get conversation history
+      const { data: history } = await supabase
+        .from("conversations")
+        .select("user_message, ai_response")
+        .eq("user_id", user.id)
+        .order("timestamp", { ascending: false })
+        .limit(5);
 
-    const requestBody = await req.json() as ChatRequest;
-    const { message, subject, difficultyLevel, type, context } = requestBody;
+      // Build messages array
+      const messages = [
+        { role: "system", content: systemPrompt },
+      ];
 
-    // Validate and sanitize inputs
-    if (!message || !subject || !difficultyLevel || !type) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
+      // Add conversation history
+      if (history && history.length > 0) {
+        for (const item of history.reverse()) {
+          messages.push({ role: "user", content: item.user_message });
+          messages.push({ role: "assistant", content: item.ai_response });
+        }
+      }
 
-    const sanitizedMessage = validateAndSanitizeInput(message);
-    const sanitizedSubject = validateAndSanitizeInput(subject, 100);
-    const sanitizedDifficultyLevel = validateAndSanitizeInput(difficultyLevel, 50);
+      // Add current message
+      messages.push({ role: "user", content: message });
 
-    if (type === 'chat') {
-      const systemPrompt = `You are an expert ${sanitizedSubject} tutor teaching at the ${sanitizedDifficultyLevel} level. 
-      Provide clear, accurate, and engaging explanations appropriate for this level.
-      Keep responses focused and concise while ensuring accuracy and depth of understanding.
-      Be encouraging and supportive in your teaching style.
-      Never include harmful, inappropriate, or off-topic content.
-      If asked about topics outside your subject area, politely redirect to ${sanitizedSubject}.`;
-
+      // Call Groq API
       const completion = await groq.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt
-          },
-          {
-            role: "user",
-            content: sanitizedMessage
-          }
-        ],
+        messages,
         model: "llama-3.3-70b-versatile",
         temperature: 0.7,
         max_tokens: 1024,
       });
 
-      const textResponse = completion.choices[0]?.message?.content || '';
-
-      // Validate response length
-      if (textResponse.length > 5000) {
-        return new Response(JSON.stringify({ error: 'Response too long' }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      return new Response(
-        JSON.stringify({ response: textResponse }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-
-    } else if (type === 'summary' && context) {
-      const sanitizedUserMessage = validateAndSanitizeInput(context.userMessage || '', 2000);
-      const sanitizedAiResponse = validateAndSanitizeInput(context.aiResponse || '', 5000);
+      response = completion.choices[0]?.message?.content || "";
+    } else if (type === "summary") {
+      // Generate summary of conversation
+      const systemPrompt = `You are an AI assistant that creates concise summaries of educational conversations. 
+      Create a brief 1-2 sentence summary of the key learning points from this conversation.`;
 
       const completion = await groq.chat.completions.create({
         messages: [
-          {
-            role: "system",
-            content: "Generate a concise, educational summary of the learning interaction, highlighting key concepts and learning outcomes. Keep it under 200 characters."
-          },
-          {
-            role: "user",
-            content: `Summarize this ${sanitizedSubject} learning interaction:\nQuestion: ${sanitizedUserMessage}\nAnswer: ${sanitizedAiResponse}`
-          }
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `User question: ${context.userMessage}\n\nAI response: ${context.aiResponse}` }
         ],
         model: "llama-3.3-70b-versatile",
         temperature: 0.3,
-        max_tokens: 256,
+        max_tokens: 100,
       });
 
-      const summaryResponse = completion.choices[0]?.message?.content || '';
-
-      return new Response(
-        JSON.stringify({ response: summaryResponse }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      response = completion.choices[0]?.message?.content || "";
+    } else {
+      return new Response(JSON.stringify({ error: "Invalid request type" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ error: 'Invalid request type' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    return new Response(JSON.stringify({ response }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error) {
-    console.error('AI chat error:', error);
-    
-    // Don't expose internal error details
-    const errorMessage = error instanceof Error && error.message.includes('Rate limit') 
-      ? 'Rate limit exceeded' 
-      : 'Service temporarily unavailable';
-    
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    console.error("Error processing request:", error);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
+
+function createSystemPrompt(subject: string, difficultyLevel: string): string {
+  return `You are an expert ${subject} tutor teaching at the ${difficultyLevel} level. Your role is to:
+
+1. Provide clear, accurate explanations appropriate for ${difficultyLevel} students
+2. Ask follow-up questions to check understanding
+3. Break down complex concepts into digestible parts
+4. Use examples and analogies relevant to the student's level
+5. Encourage active learning and critical thinking
+6. Adapt your teaching style based on the student's responses
+7. Stay focused on ${subject} topics
+8. Be patient and supportive while maintaining academic rigor
+
+Guidelines:
+- Keep responses conversational and engaging
+- Use the student's name when appropriate
+- Provide step-by-step explanations for problem-solving
+- Encourage questions and curiosity
+- Celebrate progress and learning milestones
+- If a student seems confused, try explaining the concept differently
+- Always maintain a positive, encouraging tone
+
+Remember: You're not just providing answers, you're facilitating learning and understanding.`;
+}

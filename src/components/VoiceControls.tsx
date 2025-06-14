@@ -2,6 +2,7 @@ import React from 'react';
 import { Mic, MicOff, Volume2, Volume1, VolumeX, Download } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
+import { useVoiceChat } from '../hooks/useVoiceChat';
 import { VoiceMode } from '../types';
 import toast from 'react-hot-toast';
 
@@ -16,6 +17,7 @@ export const VoiceControls: React.FC = () => {
   } = useStore();
   
   const { startListening, stopListening, hasPermission } = useVoiceRecognition();
+  const { isActive, startVoiceChat, stopVoiceChat } = useVoiceChat();
 
   const handleVoiceModeChange = (mode: VoiceMode) => {
     if (!hasPermission) {
@@ -25,6 +27,9 @@ export const VoiceControls: React.FC = () => {
     setVoiceMode(mode);
     if (mode === 'muted') {
       stopListening();
+      stopVoiceChat();
+    } else if (mode === 'continuous') {
+      startVoiceChat();
     }
   };
 
@@ -44,6 +49,7 @@ export const VoiceControls: React.FC = () => {
 
   const toggleMute = () => {
     setIsSpeaking(false);
+    stopVoiceChat();
   };
 
   return (

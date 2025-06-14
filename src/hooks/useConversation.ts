@@ -20,7 +20,8 @@ export const useConversation = () => {
     sessionStats,
     socialStats,
     updateSocialStats,
-    learningMode
+    learningMode,
+    difficultyLevel
   } = useStore();
   
   const { user } = useAuth();
@@ -91,7 +92,8 @@ export const useConversation = () => {
         sanitizedMessage,
         currentSubject,
         currentAvatar,
-        useVoice
+        useVoice,
+        difficultyLevel
       );
 
       // Validate AI response

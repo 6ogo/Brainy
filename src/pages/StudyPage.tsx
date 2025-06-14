@@ -8,6 +8,7 @@ import { ProgressSidebar } from '../components/ProgressSidebar';
 import { DifficultySlider } from '../components/DifficultySlider';
 import { SocialFeatures } from '../components/SocialFeatures';
 import { ConversationHistory } from '../components/ConversationHistory';
+import { StudySessionControls } from '../components/StudySessionControls';
 import { Button } from '../components/Button';
 import { useStore } from '../store/store';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +19,6 @@ export const StudyPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [sessionStarted, setSessionStarted] = useState(false);
-  const [isEnding, setIsEnding] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const userId = user?.id;
 
@@ -40,20 +40,6 @@ export const StudyPage: React.FC = () => {
   if (!currentSubject || !currentAvatar || !learningMode || !userId) {
     return null;
   }
-  
-  const handleEndSession = useCallback(async () => {
-    if (userId) {
-      setIsEnding(true);
-      try {
-        await endStudySession(userId);
-        navigate('/analytics');
-      } catch (error) {
-        console.error('Failed to end session:', error);
-      } finally {
-        setIsEnding(false);
-      }
-    }
-  }, [userId, navigate]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -100,17 +86,7 @@ export const StudyPage: React.FC = () => {
           <SocialFeatures />
           
           {/* End Session Button */}
-          <div className="bg-white rounded-lg shadow-sm p-4">
-            <h3 className="text-lg font-semibold mb-4">Session Controls</h3>
-            <Button 
-              variant="primary" 
-              className="w-full" 
-              onClick={handleEndSession}
-              isLoading={isEnding}
-            >
-              End Session & View Analytics
-            </Button>
-          </div>
+          <StudySessionControls />
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { API_CONFIG } from '../config/api';
+import { supabase } from '../lib/supabase';
 
 interface Voice {
   voice_id: string;
@@ -20,7 +21,6 @@ interface TextToSpeechRequest {
 }
 
 export class ElevenLabsService {
-  private static API_URL = 'https://api.elevenlabs.io/v1';
   private static DEFAULT_MODEL = 'eleven_monolingual_v1';
 
   // Voice IDs for our personas
@@ -43,65 +43,33 @@ export class ElevenLabsService {
 
   static async generateSpeech(text: string, persona: string): Promise<Blob> {
     try {
-      const voiceId = this.VOICE_IDS[persona as keyof typeof this.VOICE_IDS];
-      if (!voiceId) {
-        throw new Error(`Invalid persona: ${persona}`);
+      // Get current session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No active session');
       }
 
-      if (!API_CONFIG.ELEVENLABS_API_KEY) {
-        throw new Error('ElevenLabs API key not configured');
-      }
-
-      const response = await fetch(`${this.API_URL}/text-to-speech/${voiceId}`, {
+      // Use our secure edge function to proxy the request to ElevenLabs
+      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/elevenlabs-proxy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'xi-api-key': API_CONFIG.ELEVENLABS_API_KEY
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           text,
-          model_id: this.DEFAULT_MODEL,
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.5,
-            use_speaker_boost: true
-          }
-        } as TextToSpeechRequest)
+          persona
+        })
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`ElevenLabs API error: ${response.status} ${response.statusText} - ${errorText}`);
+        throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
       }
 
       return await response.blob();
     } catch (error) {
       console.error('Error generating speech:', error);
-      throw error;
-    }
-  }
-
-  static async getVoices(): Promise<Voice[]> {
-    try {
-      if (!API_CONFIG.ELEVENLABS_API_KEY) {
-        throw new Error('ElevenLabs API key not configured');
-      }
-
-      const response = await fetch(`${this.API_URL}/voices`, {
-        headers: {
-          'xi-api-key': API_CONFIG.ELEVENLABS_API_KEY
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data.voices;
-    } catch (error) {
-      console.error('Error fetching voices:', error);
       throw error;
     }
   }

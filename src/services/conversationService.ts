@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ElevenLabsService } from './elevenlabsService';
+import { GroqService } from './groqService';
 import { SecurityUtils } from '../utils/security';
 import { Subject, AvatarPersonality, DifficultyLevel } from '../types';
 
@@ -29,31 +30,17 @@ export class ConversationService {
         throw new Error('Invalid message format');
       }
 
-      // Get AI response using Edge Function
-      const chatResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: sanitizedMessage,
-          subject,
-          difficultyLevel,
-          type: 'chat'
-        })
-      });
+      // Get user ID from session
+      const userId = session.user.id;
 
-      if (!chatResponse.ok) {
-        if (chatResponse.status === 429) {
-          throw new Error('Rate limit exceeded. Please wait a moment.');
-        }
-        const errorText = await chatResponse.text();
-        throw new Error(`AI service error: ${chatResponse.status}`);
-      }
-
-      const data = await chatResponse.json();
-      const textResponse = data.response;
+      // Generate AI response using GROQ
+      const textResponse = await GroqService.generateResponse(
+        sanitizedMessage,
+        subject,
+        currentAvatar,
+        difficultyLevel,
+        userId
+      );
 
       if (!textResponse) {
         throw new Error('No response received from AI');
@@ -77,28 +64,12 @@ export class ConversationService {
         }
       }
 
-      // Get summary
+      // Generate summary
       let summary: string | undefined;
       try {
-        const summaryResponse = await fetch(`${supabase.supabaseUrl}/functions/v1/ai-chat`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'summary',
-            subject,
-            context: {
-              userMessage: sanitizedMessage,
-              aiResponse: sanitizedResponse
-            }
-          })
-        });
-
-        if (summaryResponse.ok) {
-          const { response: summaryText } = await summaryResponse.json();
-          summary = SecurityUtils.sanitizeInput(summaryText);
+        summary = await GroqService.generateSummary(sanitizedMessage, sanitizedResponse);
+        if (summary) {
+          summary = SecurityUtils.sanitizeInput(summary);
         }
       } catch (summaryError) {
         console.error('Summary generation error:', summaryError);
