@@ -13,19 +13,25 @@ export async function createCheckoutSession(productId: ProductId, promotionCode?
       throw new Error('No active session');
     }
 
+    const requestBody: any = {
+      price_id: product.priceId,
+      success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${window.location.origin}/pricing`,
+      mode: product.mode,
+    };
+
+    // Only include promotion_code if it's provided and not empty
+    if (promotionCode && promotionCode.trim()) {
+      requestBody.promotion_code = promotionCode.trim();
+    }
+
     const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-checkout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({
-        price_id: product.priceId,
-        success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${window.location.origin}/pricing`,
-        mode: product.mode,
-        promotion_code: promotionCode,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

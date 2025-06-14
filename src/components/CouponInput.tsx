@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Tag, Check, X } from 'lucide-react';
+import { Tag, Check, X, AlertCircle } from 'lucide-react';
 import { Input } from './Input';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
@@ -74,12 +74,12 @@ export const CouponInput: React.FC<CouponInputProps> = ({
           Have a coupon code?
         </Button>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex space-x-2">
             <Input
               value={couponCode}
               onChange={handleInputChange}
-              placeholder="Enter coupon code (case-sensitive)"
+              placeholder="Enter coupon code"
               className="flex-1"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -97,9 +97,21 @@ export const CouponInput: React.FC<CouponInputProps> = ({
               Apply
             </Button>
           </div>
-          <div className="text-xs text-gray-500">
-            Coupon codes are case-sensitive. Enter exactly as provided.
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-blue-700">
+                <p className="font-medium mb-1">Coupon Code Tips:</p>
+                <ul className="space-y-1">
+                  <li>• Codes are case-sensitive - enter exactly as provided</li>
+                  <li>• Some coupons may be specific to certain subscription plans</li>
+                  <li>• Check expiration dates and usage limits</li>
+                </ul>
+              </div>
+            </div>
           </div>
+          
           <Button
             variant="text"
             size="sm"

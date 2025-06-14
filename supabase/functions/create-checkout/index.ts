@@ -161,6 +161,7 @@ Deno.serve(async (req) => {
     // Handle coupon/promotion code application
     if (promotion_code && promotion_code.trim()) {
       const trimmedCode = promotion_code.trim();
+      console.log(`Attempting to apply coupon/promotion code: ${trimmedCode}`);
       
       try {
         // First, try to find it as a promotion code (case-sensitive)
@@ -184,15 +185,27 @@ Deno.serve(async (req) => {
               sessionConfig.discounts = [{
                 coupon: coupon.id,
               }];
+            } else {
+              console.log(`Coupon ${trimmedCode} exists but is not valid`);
+              return new Response(JSON.stringify({ error: 'Invalid or expired coupon code' }), {
+                status: 400,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
             }
-          } catch (couponError) {
-            console.log(`Coupon ${trimmedCode} not found or invalid`);
-            // Continue without the coupon if it's not valid
+          } catch (couponError: any) {
+            console.log(`Coupon ${trimmedCode} not found: ${couponError.message}`);
+            return new Response(JSON.stringify({ error: 'Invalid or expired coupon code' }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error applying coupon/promotion code:', error);
-        // Continue without the coupon if there's an error
+        return new Response(JSON.stringify({ error: 'Failed to apply coupon code' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
     }
 

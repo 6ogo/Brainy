@@ -53,7 +53,12 @@ export const PricingPage: React.FC = () => {
       await purchaseSubscription(planId as keyof typeof products, appliedCoupon);
     } catch (error) {
       console.error('Subscription error:', error);
-      toast.error('Failed to process subscription. Please try again.');
+      if (error instanceof Error && error.message.includes('coupon')) {
+        toast.error('Invalid or expired coupon code. Please check and try again.');
+        setAppliedCoupon(''); // Clear the invalid coupon
+      } else {
+        toast.error('Failed to process subscription. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -78,9 +83,9 @@ export const PricingPage: React.FC = () => {
       const isValid = await validateCoupon(couponCode);
       if (isValid) {
         setAppliedCoupon(couponCode);
-        toast.success('Coupon applied successfully!');
+        toast.success(`Coupon "${couponCode}" applied successfully!`);
       } else {
-        toast.error('Invalid or expired coupon code.');
+        toast.error('Invalid or expired coupon code. Please check the code and try again.');
       }
     } catch (error) {
       console.error('Error validating coupon:', error);
@@ -189,26 +194,6 @@ export const PricingPage: React.FC = () => {
               </Button>
             </motion.div>
           )}
-
-          {user && (
-            <motion.div 
-              className="max-w-md mx-auto mb-8"
-              variants={animations.slideUp}
-            >
-              <Card className="p-4">
-                <div className="flex items-center space-x-2 mb-3">
-                  <Gift className="h-5 w-5 text-primary-600" />
-                  <span className="font-medium text-gray-900">Have a coupon?</span>
-                </div>
-                <CouponInput
-                  onCouponApply={handleCouponApply}
-                  onCouponRemove={handleCouponRemove}
-                  appliedCoupon={appliedCoupon}
-                  isLoading={isCouponLoading}
-                />
-              </Card>
-            </motion.div>
-          )}
         </motion.div>
 
         <motion.div 
@@ -227,6 +212,31 @@ export const PricingPage: React.FC = () => {
             />
           ))}
         </motion.div>
+
+        {user && (
+          <motion.div 
+            className="max-w-md mx-auto mt-12"
+            variants={animations.slideUp}
+          >
+            <Card className="p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <Gift className="h-5 w-5 text-primary-600" />
+                <span className="font-medium text-gray-900">Have a coupon code?</span>
+              </div>
+              <CouponInput
+                onCouponApply={handleCouponApply}
+                onCouponRemove={handleCouponRemove}
+                appliedCoupon={appliedCoupon}
+                isLoading={isCouponLoading}
+              />
+              {appliedCoupon && (
+                <div className="mt-3 text-sm text-green-600">
+                  Your coupon will be applied at checkout
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        )}
 
         {user && currentPlanId !== 'free_tier' && (
           <motion.div 
@@ -312,7 +322,7 @@ export const PricingPage: React.FC = () => {
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-2">How do coupon codes work?</h3>
-              <p className="text-gray-600">Enter your coupon code during checkout to apply discounts to your subscription.</p>
+              <p className="text-gray-600">Enter your coupon code before selecting a plan. The discount will be applied at checkout and validated with Stripe.</p>
             </div>
             <div>
               <h3 className="font-semibold text-lg mb-2">Can I get a refund?</h3>
