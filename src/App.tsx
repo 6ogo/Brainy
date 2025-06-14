@@ -29,6 +29,7 @@ function App() {
             <Route path="/signup" element={<SignUp />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/auth/callback" element={<ResetPassword />} />
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/onboarding" element={<PrivateRoute><Onboarding /></PrivateRoute>} />
             <Route path="/subjects" element={<PrivateRoute><SubjectSelection /></PrivateRoute>} />

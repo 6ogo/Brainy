@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Brain, ArrowLeft, Shield, CheckCircle, AlertTriangle, Lock } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 
 export const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { csrfToken, sanitizeInput, validateInput } = useSecurity();
   
@@ -30,6 +31,31 @@ export const ResetPassword: React.FC = () => {
   const type = searchParams.get('type');
   const accessToken = searchParams.get('access_token');
   const refreshToken = searchParams.get('refresh_token');
+
+  // Also check for hash parameters (Supabase sometimes uses hash)
+  useEffect(() => {
+    const hash = location.hash;
+    if (hash) {
+      const hashParams = new URLSearchParams(hash.substring(1));
+      const hashAccessToken = hashParams.get('access_token');
+      const hashRefreshToken = hashParams.get('refresh_token');
+      const hashType = hashParams.get('type');
+      
+      if (hashAccessToken && hashRefreshToken && hashType === 'recovery') {
+        // Set session immediately
+        supabase.auth.setSession({
+          access_token: hashAccessToken,
+          refresh_token: hashRefreshToken
+        }).then(({ error }) => {
+          if (!error) {
+            setIsValidToken(true);
+          }
+          setIsValidating(false);
+        });
+        return;
+      }
+    }
+  }, [location.hash]);
 
   // Validate password in real-time
   useEffect(() => {
@@ -59,12 +85,17 @@ export const ResetPassword: React.FC = () => {
       try {
         setIsValidating(true);
 
-        // Check if we have the required parameters
-        if (!token || type !== 'recovery') {
+        // Check if we already handled hash parameters
+        if (location.hash && location.hash.includes('access_token')) {
+          return; // Let the hash effect handle this
+        }
+
+        // Check if we have the required parameters from query string
+        if (!token && !accessToken) {
           throw new Error('Invalid or missing reset token');
         }
 
-        // If we have access_token and refresh_token, set the session
+        // If we have access_token and refresh_token from query params, set the session
         if (accessToken && refreshToken) {
           const { error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -76,22 +107,29 @@ export const ResetPassword: React.FC = () => {
           }
 
           setIsValidToken(true);
+        } else if (token && type === 'recovery') {
+          // Try to verify the token hash
+          try {
+            const { data, error } = await supabase.auth.verifyOtp({
+              token_hash: token,
+              type: 'recovery'
+            });
+
+            if (error) {
+              throw new Error('Invalid or expired reset link');
+            }
+
+            if (data.session) {
+              setIsValidToken(true);
+            } else {
+              throw new Error('Unable to verify reset token');
+            }
+          } catch (verifyError) {
+            // If OTP verification fails, the user might need to use the direct link
+            throw new Error('Invalid or expired reset link. Please request a new password reset.');
+          }
         } else {
-          // Verify the token with Supabase
-          const { data, error } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'recovery'
-          });
-
-          if (error) {
-            throw new Error('Invalid or expired reset link');
-          }
-
-          if (data.session) {
-            setIsValidToken(true);
-          } else {
-            throw new Error('Unable to verify reset token');
-          }
+          throw new Error('Invalid reset parameters');
         }
       } catch (error) {
         console.error('Token validation error:', error);
@@ -103,7 +141,7 @@ export const ResetPassword: React.FC = () => {
     };
 
     validateToken();
-  }, [token, type, accessToken, refreshToken]);
+  }, [token, type, accessToken, refreshToken, location.hash]);
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -233,6 +271,20 @@ export const ResetPassword: React.FC = () => {
               Back to Sign In
             </Button>
           </div>
+          
+          {/* Debug info for development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-6 p-4 bg-gray-100 rounded-md text-left">
+              <h4 className="font-semibold text-sm mb-2">Debug Info:</h4>
+              <div className="text-xs text-gray-600 space-y-1">
+                <div>Token: {token || 'None'}</div>
+                <div>Type: {type || 'None'}</div>
+                <div>Access Token: {accessToken ? 'Present' : 'None'}</div>
+                <div>Refresh Token: {refreshToken ? 'Present' : 'None'}</div>
+                <div>Hash: {location.hash || 'None'}</div>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
     );
