@@ -95,6 +95,11 @@ export const useAchievements = () => {
             });
 
           if (insertError) {
+            // Handle duplicate key constraint violation gracefully
+            if (insertError.code === '23505') {
+              console.warn(`Achievement ${achievement.id} already exists for user ${user.id}`);
+              continue;
+            }
             console.error('Error unlocking achievement:', insertError);
             continue;
           }
