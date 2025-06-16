@@ -5,7 +5,6 @@ import { cn, commonStyles } from '../styles/utils';
 import { useStore } from '../store/store';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { useAchievements } from '../hooks/useAchievements';
 import { Line, Doughnut, Bar, Radar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -75,6 +74,16 @@ interface UserUsageData {
   updated_at: string;
 }
 
+interface AchievementData {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  icon: string;
+  xp_reward: number;
+  unlocked_at: string;
+}
+
 interface AnalyticsCache {
   conversations: ConversationData[];
   usage: UserUsageData[];
@@ -84,9 +93,9 @@ interface AnalyticsCache {
 export const LearningAnalytics: React.FC = () => {
   const { socialStats, currentSubject } = useStore();
   const { user } = useAuth();
-  const { userAchievements, checkAchievements, loading: achievementsLoading } = useAchievements();
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [usageData, setUsageData] = useState<UserUsageData[]>([]);
+  const [userAchievements, setUserAchievements] = useState<AchievementData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState('week');
@@ -126,8 +135,43 @@ export const LearningAnalytics: React.FC = () => {
           throw new Error(`Failed to fetch usage data: ${usageError.message}`);
         }
 
+        // Fetch user achievements
+        const { data: achievementsData, error: achievementsError } = await supabase
+          .from('user_achievements')
+          .select(`
+            id,
+            unlocked_at,
+            achievements (
+              id,
+              title,
+              description,
+              category,
+              icon,
+              xp_reward
+            )
+          `)
+          .eq('user_id', user.id)
+          .order('unlocked_at', { ascending: false });
+
+        if (achievementsError) {
+          console.error('Error fetching achievements:', achievementsError);
+          // Continue without achievements data
+        }
+
+        // Transform achievements data
+        const formattedAchievements = (achievementsData || []).map((item: any) => ({
+          id: item.achievements.id,
+          title: item.achievements.title,
+          description: item.achievements.description,
+          category: item.achievements.category,
+          icon: item.achievements.icon,
+          xp_reward: item.achievements.xp_reward,
+          unlocked_at: item.unlocked_at
+        }));
+
         setConversations(conversationData || []);
         setUsageData(usageDataResult || []);
+        setUserAchievements(formattedAchievements);
         
         // Calculate subject distribution
         const subjects: Record<string, number> = {
@@ -155,18 +199,6 @@ export const LearningAnalytics: React.FC = () => {
         // Generate skills data based on conversation analysis
         setSkillsData(generateSkillsData(conversationData || []));
 
-        // Check for new achievements
-        const totalStudyMinutes = (usageDataResult || []).reduce((sum, day) => 
-          sum + (day.conversation_minutes || 0) + (day.video_call_minutes || 0), 0);
-        
-        await checkAchievements({
-          totalConversations: (conversationData || []).length,
-          totalStudyMinutes,
-          currentStreak: socialStats.streak.current,
-          totalXP: socialStats.totalXP,
-          subjectCounts: subjects
-        });
-
       } catch (err) {
         console.error('Error fetching analytics:', err);
         setError(err instanceof Error ? err.message : 'Failed to load analytics');
@@ -176,7 +208,7 @@ export const LearningAnalytics: React.FC = () => {
     };
 
     fetchAnalyticsData();
-  }, [user, checkAchievements, socialStats]);
+  }, [user]);
 
   // Generate skills data based on conversation analysis
   const generateSkillsData = (conversations: ConversationData[]) => {
@@ -351,7 +383,7 @@ export const LearningAnalytics: React.FC = () => {
     
     doc.setFontSize(12);
     doc.text(`Generated on ${format(new Date(), 'PPP')}`, 20, 30);
-    doc.text(`Student: ${user?.user_metadata?.full_name || user?.email || 'Student'}`, 20, 40);
+    doc.text(`Student: ${user?.full_name || 'Student'}`, 20, 40);
     
     // Stats
     doc.setFontSize(14);
@@ -375,7 +407,7 @@ export const LearningAnalytics: React.FC = () => {
     doc.save('learning-analytics.pdf');
   };
 
-  if (loading || achievementsLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -675,20 +707,20 @@ export const LearningAnalytics: React.FC = () => {
               </p>
             ) : (
               <div className="space-y-3">
-                {userAchievements.slice(0, 5).map((userAchievement) => (
+                {userAchievements.slice(0, 5).map((achievement) => (
                   <div
-                    key={userAchievement.id}
+                    key={achievement.id}
                     className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg"
                   >
                     <div className="p-2 bg-yellow-100 rounded-full">
                       <Trophy className="h-5 w-5 text-yellow-600" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{userAchievement.achievement.title}</h4>
-                      <p className="text-sm text-gray-500">{userAchievement.achievement.description}</p>
+                      <h4 className="font-medium text-gray-900">{achievement.title}</h4>
+                      <p className="text-sm text-gray-500">{achievement.description}</p>
                     </div>
                     <span className="text-xs text-gray-400">
-                      {format(new Date(userAchievement.unlocked_at), 'MMM dd')}
+                      {achievement.unlocked_at && format(new Date(achievement.unlocked_at), 'MMM dd')}
                     </span>
                   </div>
                 ))}
@@ -743,3 +775,5 @@ export const LearningAnalytics: React.FC = () => {
     </div>
   );
 };
+
+export default LearningAnalytics;
