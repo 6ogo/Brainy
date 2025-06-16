@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store/store';
-import { Video, VideoOff, Image as ImageIcon, SwordIcon as Record, StopCircle, Settings, Mic, MicOff } from 'lucide-react';
+import { Video, VideoOff, Image as ImageIcon, StopCircle, Settings, Mic, MicOff, Pause, Play } from 'lucide-react';
+import { cn } from '../styles/utils';
 
 const backgrounds = [
   { id: 'classroom', name: 'Classroom' },
@@ -18,13 +19,20 @@ export const VideoControls: React.FC = () => {
     toggleRecording,
     setCurrentBackground,
     voiceMode,
-    setVoiceMode
+    setVoiceMode,
+    isSpeaking
   } = useStore();
 
-  const [showBackgrounds, setShowBackgrounds] = React.useState(false);
+  const [showBackgrounds, setShowBackgrounds] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const handlePauseResume = () => {
+    setIsPaused(!isPaused);
+    // In a real implementation, this would pause/resume the voice chat
+  };
 
   return (
-    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-2 bg-black/50 rounded-full px-4 py-2">
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3 bg-black/50 rounded-full px-4 py-2">
       <button
         onClick={toggleVideo}
         className={`p-2 rounded-full ${
@@ -50,7 +58,7 @@ export const VideoControls: React.FC = () => {
           </button>
 
           {showBackgrounds && (
-            <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg py-2 min-w-[160px]">
+            <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg py-2 min-w-[160px] z-10">
               {backgrounds.map((bg) => (
                 <button
                   key={bg.id}
@@ -73,20 +81,6 @@ export const VideoControls: React.FC = () => {
       )}
 
       <button
-        onClick={toggleRecording}
-        className={`p-2 rounded-full ${
-          isRecording ? 'bg-error-500 text-white' : 'hover:bg-gray-700/50 text-white'
-        }`}
-        title={isRecording ? 'Stop recording' : 'Start recording'}
-      >
-        {isRecording ? (
-          <StopCircle className="h-5 w-5" />
-        ) : (
-          <Record className="h-5 w-5" />
-        )}
-      </button>
-
-      <button
         onClick={() => setVoiceMode(voiceMode === 'muted' ? 'push-to-talk' : 'muted')}
         className={`p-2 rounded-full ${
           voiceMode !== 'muted' ? 'bg-primary-500 text-white' : 'bg-gray-600 text-gray-200'
@@ -98,6 +92,30 @@ export const VideoControls: React.FC = () => {
         ) : (
           <Mic className="h-5 w-5" />
         )}
+      </button>
+
+      <button
+        onClick={handlePauseResume}
+        className={`p-2 rounded-full ${
+          isPaused ? 'bg-green-500 text-white' : 'bg-gray-600 text-white'
+        }`}
+        title={isPaused ? 'Resume conversation' : 'Pause conversation'}
+      >
+        {isPaused ? (
+          <Play className="h-5 w-5" />
+        ) : (
+          <Pause className="h-5 w-5" />
+        )}
+      </button>
+
+      <button
+        onClick={toggleRecording}
+        className={`p-2 rounded-full ${
+          isRecording ? 'bg-error-500 text-white' : 'hover:bg-gray-700/50 text-white'
+        }`}
+        title={isRecording ? 'Stop recording' : 'Start recording'}
+      >
+        <StopCircle className={`h-5 w-5 ${isRecording ? 'animate-pulse' : ''}`} />
       </button>
 
       <button

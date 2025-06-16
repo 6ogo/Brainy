@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Video, VideoOff, Image as ImageIcon, StopCircle, Settings, Pause, Play } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
@@ -21,10 +21,11 @@ export const VideoArea: React.FC = () => {
   
   const { user } = useAuth();
   const { error: recognitionError } = useVoiceRecognition();
-  const { isActive: voiceChatActive, error: voiceChatError } = useVoiceChat();
+  const { isActive: voiceChatActive, error: voiceChatError, toggleVoiceChat } = useVoiceChat();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -58,9 +59,14 @@ export const VideoArea: React.FC = () => {
     );
   }
 
+  const handlePauseResume = () => {
+    setIsPaused(!isPaused);
+    toggleVoiceChat();
+  };
+
   return (
     <div className="relative h-full flex flex-col">
-      <div className="flex-1 bg-gray-900 rounded-lg overflow-hidden relative">
+      <div className="flex-1 bg-gray-900 rounded-t-lg overflow-hidden relative">
         {!videoLoaded ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
@@ -97,14 +103,14 @@ export const VideoArea: React.FC = () => {
                   />
                 ) : (
                   <div className="relative z-10 flex flex-col items-center justify-center">
-                    <div className={`w-64 h-64 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300 ${
+                    <div className={`w-48 h-48 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300 ${
                       avatarEmotion === 'thinking' ? 'scale-105' :
                       avatarEmotion === 'excited' ? 'scale-110' :
                       'scale-100'
                     }`}>
                       <div className="absolute inset-0 bg-gradient-to-b from-primary-300 to-primary-600 opacity-50"></div>
-                      <div className="w-40 h-40 rounded-full bg-primary-200 flex items-center justify-center z-10">
-                        <span className="text-6xl font-bold text-primary-700">AI</span>
+                      <div className="w-32 h-32 rounded-full bg-primary-200 flex items-center justify-center z-10">
+                        <span className="text-5xl font-bold text-primary-700">AI</span>
                       </div>
                       
                       {isSpeaking && (
@@ -143,7 +149,7 @@ export const VideoArea: React.FC = () => {
         </div>
         
         {(recognitionError || voiceChatError) && (
-          <div className="absolute top-4 right-4 bg-error-500 text-white text-xs rounded-md px-2 py-1">
+          <div className="absolute top-4 left-4 bg-error-500 text-white text-xs rounded-md px-2 py-1">
             {recognitionError || voiceChatError}
           </div>
         )}

@@ -19,6 +19,7 @@ export const useVoiceChat = () => {
   const { user } = useAuth();
   const [isActive, setIsActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
   const voiceServiceRef = useRef<VoiceConversationService | null>(null);
 
   // Initialize voice service
@@ -89,6 +90,7 @@ export const useVoiceChat = () => {
       setIsActive(true);
       setAvatarEmotion('neutral');
       setError(null);
+      setIsPaused(false);
     } catch (error) {
       console.error('Failed to start voice chat:', error);
       setError('Failed to start voice chat');
@@ -109,13 +111,16 @@ export const useVoiceChat = () => {
   const toggleVoiceChat = useCallback(() => {
     if (isActive) {
       stopVoiceChat();
+      setIsPaused(true);
     } else {
       startVoiceChat();
+      setIsPaused(false);
     }
   }, [isActive, startVoiceChat, stopVoiceChat]);
 
   return {
     isActive,
+    isPaused,
     error,
     startVoiceChat,
     stopVoiceChat,
