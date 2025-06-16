@@ -7,7 +7,6 @@ import { VoiceControls } from './VoiceControls';
 import { VideoControls } from './VideoControls';
 import { TavusService } from '../services/tavusService';
 import { useAuth } from '../contexts/AuthContext';
-import toast from 'react-hot-toast';
 
 export const VideoArea: React.FC = () => {
   const { 
@@ -26,7 +25,6 @@ export const VideoArea: React.FC = () => {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
-  const [isLoadingTavus, setIsLoadingTavus] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -46,26 +44,6 @@ export const VideoArea: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [user]);
-
-  const handleTavusVideo = async () => {
-    if (!user) return;
-
-    try {
-      setIsLoadingTavus(true);
-      const video = await TavusService.createStudyTipVideo(
-        user.id,
-        'Math' // Using current subject would be better
-      );
-
-      setTavusVideoUrl(video.url);
-      toast.success('Your personalized study counselor video is ready!');
-    } catch (error) {
-      console.error('Error generating Tavus video:', error);
-      toast.error('Failed to generate study counselor video');
-    } finally {
-      setIsLoadingTavus(false);
-    }
-  };
 
   if (!isEligibleForTavus) {
     return (
@@ -133,14 +111,6 @@ export const VideoArea: React.FC = () => {
                         <div className="absolute inset-0 bg-primary-500 rounded-full animate-pulse-slow opacity-20"></div>
                       )}
                     </div>
-                    
-                    <button
-                      onClick={handleTavusVideo}
-                      disabled={isLoadingTavus}
-                      className="mt-6 px-4 py-2 bg-white text-primary-600 rounded-lg shadow-md hover:bg-primary-50 transition-colors"
-                    >
-                      {isLoadingTavus ? 'Loading video...' : 'Get personalized study tips'}
-                    </button>
                   </div>
                 )}
               </>
