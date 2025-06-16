@@ -17,7 +17,8 @@ import {
   BookOpen,
   Clock,
   BarChart,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -31,6 +32,7 @@ export const StudyAdvisorPage: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [learningInsights, setLearningInsights] = useState<any>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const checkEligibility = async () => {
@@ -100,9 +102,23 @@ export const StudyAdvisorPage: React.FC = () => {
 
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     console.error('Video playback error:', e);
-    setVideoError('Error playing video. Please try again.');
-    // Set a fallback video
-    setVideoUrl('https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+    
+    // Only retry a few times to avoid infinite loops
+    if (retryCount < 3) {
+      setRetryCount(prev => prev + 1);
+      setVideoError('Error playing video. Trying fallback...');
+      
+      // Set a fallback video with a different URL to force reload
+      const fallbackUrls = [
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+      ];
+      
+      setVideoUrl(fallbackUrls[retryCount % fallbackUrls.length]);
+    } else {
+      setVideoError('Unable to play video. Please try again later.');
+    }
   };
 
   if (isLoading) {
@@ -214,16 +230,17 @@ export const StudyAdvisorPage: React.FC = () => {
             <div className="lg:col-span-2">
               <Card className="overflow-hidden">
                 {videoUrl ? (
-                  <div className="aspect-video bg-black">
+                  <div className="aspect-video bg-black relative">
                     <video 
                       src={videoUrl} 
                       controls 
                       className="w-full h-full" 
                       autoPlay
                       onError={handleVideoError}
+                      key={videoUrl} // Force remount when URL changes
                     />
                     {videoError && (
-                      <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-sm">
+                      <div className="absolute bottom-0 left-0 right-0 p-4 bg-red-50 border-t border-red-200 text-red-700 text-sm">
                         {videoError}
                       </div>
                     )}
@@ -252,9 +269,21 @@ export const StudyAdvisorPage: React.FC = () => {
                 
                 {videoUrl && (
                   <div className="p-6">
-                    <h2 className={cn(commonStyles.heading.h3, "mb-4")}>
-                      Your Personalized Study Advice
-                    </h2>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className={cn(commonStyles.heading.h3)}>
+                        Your Personalized Study Advice
+                      </h2>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<RefreshCw className="h-4 w-4" />}
+                        onClick={handleGenerateVideo}
+                        isLoading={isGenerating}
+                      >
+                        Regenerate
+                      </Button>
+                    </div>
                     <p className={cn(commonStyles.text.base, "mb-4")}>
                       Based on your learning patterns, your AI study advisor has created this personalized 
                       video with tips and strategies to help you learn more effectively.
