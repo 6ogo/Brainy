@@ -90,19 +90,25 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       // Check if we already have permission
       if (navigator.permissions) {
         const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        setPermissionState(permission.state);
         
         if (permission.state === 'granted') {
-          setHasPermission(true);
+          if (isMounted.current) {
+            setHasPermission(true);
+            setPermissionState('granted');
+          }
           return true;
         } else if (permission.state === 'denied') {
-          setHasPermission(false);
-          setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
+          if (isMounted.current) {
+            setHasPermission(false);
+            setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
+            setPermissionState('denied');
+          }
           return false;
         }
       }
 
       // Request permission by trying to access the microphone
+      console.log('Requesting microphone permission...');
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -148,6 +154,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       mediaRecorderRef.current = recorder;
       
       toast.success('Microphone access granted!');
+      console.log('Microphone permission granted');
       return true;
     } catch (err) {
       console.error('Microphone permission error:', err);
@@ -408,6 +415,14 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
             if (isMounted.current) {
               setPermissionState(permission.state);
               setHasPermission(permission.state === 'granted');
+              
+              // If permission was just granted, initialize recognition
+              if (permission.state === 'granted' && !recognitionRef.current) {
+                const recognition = initSpeechRecognition();
+                if (recognition) {
+                  recognitionRef.current = recognition;
+                }
+              }
             }
           };
         } catch (error) {
@@ -417,7 +432,16 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     };
     
     checkPermission();
-  }, []);
+    
+    // Try to start listening if we're in continuous mode
+    if (voiceMode === 'continuous') {
+      requestPermission().then(granted => {
+        if (granted) {
+          startListening();
+        }
+      });
+    }
+  }, [initSpeechRecognition, requestPermission, startListening, voiceMode]);
 
   return {
     isListening,
