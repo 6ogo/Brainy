@@ -61,10 +61,18 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     return () => {
       isMounted.current = false;
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          // Ignore errors on unmount
+        }
       }
       if (mediaRecorderRef.current?.state === 'recording') {
-        mediaRecorderRef.current.stop();
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (e) {
+          // Ignore errors on unmount
+        }
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -75,6 +83,8 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   // Request microphone permission
   const requestPermission = useCallback(async (): Promise<boolean> => {
     try {
+      if (!isMounted.current) return false;
+      
       setError(null);
       
       // Check if we already have permission
@@ -102,20 +112,25 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       });
       
       streamRef.current = stream;
-      setHasPermission(true);
-      setPermissionState('granted');
-      setError(null);
+      
+      if (isMounted.current) {
+        setHasPermission(true);
+        setPermissionState('granted');
+        setError(null);
+      }
       
       // Initialize MediaRecorder for recording functionality
       const recorder = new MediaRecorder(stream);
       
       recorder.ondataavailable = (e: BlobEvent) => {
-        if (e.data.size > 0) {
+        if (e.data.size > 0 && isMounted.current) {
           setAudioChunks((chunks) => [...chunks, e.data]);
         }
       };
       
       recorder.onstop = () => {
+        if (!isMounted.current) return;
+        
         const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
         const audioUrl = URL.createObjectURL(audioBlob);
         
@@ -136,14 +151,17 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       return true;
     } catch (err) {
       console.error('Microphone permission error:', err);
-      setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
-      setHasPermission(false);
-      setPermissionState('denied');
       
-      // Show helpful toast with instructions
-      toast.error('Microphone access required for voice features. Please check your browser permissions.', {
-        duration: 5000,
-      });
+      if (isMounted.current) {
+        setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
+        setHasPermission(false);
+        setPermissionState('denied');
+        
+        // Show helpful toast with instructions
+        toast.error('Microphone access required for voice features. Please check your browser permissions.', {
+          duration: 5000,
+        });
+      }
       
       return false;
     }
@@ -151,6 +169,8 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   
   // Declare startListening and stopListening before using them in voiceCommands
   const startListening = useCallback(async (): Promise<boolean> => {
+    if (!isMounted.current) return false;
+    
     if (!hasPermission) {
       const granted = await requestPermission();
       if (!granted) {
@@ -168,8 +188,10 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       return true;
     } catch (err) {
       console.error('Failed to start listening:', err);
-      setError('Failed to start listening.');
-      toast.error('Failed to start voice recognition.');
+      if (isMounted.current) {
+        setError('Failed to start listening.');
+        toast.error('Failed to start voice recognition.');
+      }
       return false;
     }
   }, [hasPermission, requestPermission, toggleListening]);
@@ -185,7 +207,9 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       return true;
     } catch (err) {
       console.error('Failed to stop listening:', err);
-      setError('Failed to stop listening.');
+      if (isMounted.current) {
+        setError('Failed to stop listening.');
+      }
       return false;
     }
   }, [toggleListening]);
@@ -218,6 +242,8 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
 
   // Process final transcript
   useEffect(() => {
+    if (!isMounted.current) return;
+    
     if (isFinalTranscript && transcript) {
       // Check if it's a voice command
       const isCommand = handleVoiceCommand(transcript);
@@ -237,15 +263,19 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
 
   // Handle recording state changes
   useEffect(() => {
-    if (!mediaRecorderRef.current || !hasPermission) return;
+    if (!mediaRecorderRef.current || !hasPermission || !isMounted.current) return;
     
-    if (isRecording && mediaRecorderRef.current.state === 'inactive') {
-      setAudioChunks([]);
-      mediaRecorderRef.current.start();
-      toast.success('Recording started');
-    } else if (!isRecording && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      toast.success('Recording saved! Check your downloads.');
+    try {
+      if (isRecording && mediaRecorderRef.current.state === 'inactive') {
+        setAudioChunks([]);
+        mediaRecorderRef.current.start();
+        toast.success('Recording started');
+      } else if (!isRecording && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+        toast.success('Recording saved! Check your downloads.');
+      }
+    } catch (error) {
+      console.error('Error managing recording state:', error);
     }
   }, [isRecording, hasPermission]);
 
@@ -255,7 +285,9 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setError('Speech recognition is not supported in this browser');
+      if (isMounted.current) {
+        setError('Speech recognition is not supported in this browser');
+      }
       return null;
     }
     
@@ -290,6 +322,8 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     }
     
     const handleResult = (event: SpeechRecognitionEvent) => {
+      if (!isMounted.current) return;
+      
       const results = event.results;
       const latestResult = results[results.length - 1];
       
@@ -306,6 +340,8 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     };
     
     const handleError = (event: SpeechRecognitionErrorEvent) => {
+      if (!isMounted.current) return;
+      
       const errorMessage = getErrorMessage(event.error as string);
       setError(errorMessage);
       
@@ -321,10 +357,12 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     recognition.onresult = handleResult;
     recognition.onerror = handleError;
     recognition.onend = () => {
+      if (!isMounted.current) return;
+      
       if (voiceMode === 'continuous' && isListening) {
         try {
           setTimeout(() => {
-            if (recognition && voiceMode === 'continuous' && isListening) {
+            if (recognition && voiceMode === 'continuous' && isListening && isMounted.current) {
               recognition.start();
               console.log('Restarted continuous recognition');
             }
@@ -336,6 +374,22 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         toggleListening(false);
       }
     };
+    
+    // Clean up function
+    return () => {
+      try {
+        if (recognition) {
+          recognition.onresult = null;
+          recognition.onerror = null;
+          recognition.onend = null;
+          if (recognition.state !== 'inactive') {
+            recognition.stop();
+          }
+        }
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
+    };
   }, [initSpeechRecognition, setVoiceMode, toggleListening, isListening, voiceMode, hasPermission]);
 
   // Check permission on mount
@@ -344,13 +398,17 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       if (navigator.permissions) {
         try {
           const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-          setPermissionState(permission.state);
-          setHasPermission(permission.state === 'granted');
+          if (isMounted.current) {
+            setPermissionState(permission.state);
+            setHasPermission(permission.state === 'granted');
+          }
           
           // Listen for permission changes
           permission.onchange = () => {
-            setPermissionState(permission.state);
-            setHasPermission(permission.state === 'granted');
+            if (isMounted.current) {
+              setPermissionState(permission.state);
+              setHasPermission(permission.state === 'granted');
+            }
           };
         } catch (error) {
           console.error('Error checking microphone permission:', error);
@@ -370,5 +428,5 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     handleVoiceCommand,
     requestPermission,
     transcript
-  } as const;
+  };
 };

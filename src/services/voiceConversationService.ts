@@ -127,9 +127,13 @@ export class VoiceConversationService {
 
   stopListening(): void {
     if (this.recognition && this.isListening) {
-      this.recognition.stop();
-      this.isListening = false;
-      console.log('Voice recognition stopped');
+      try {
+        this.recognition.stop();
+        this.isListening = false;
+        console.log('Voice recognition stopped');
+      } catch (error) {
+        console.error('Error stopping recognition:', error);
+      }
     }
   }
 
@@ -203,15 +207,27 @@ export class VoiceConversationService {
       this.config.onAudioStart?.();
       
       let audioBlob;
-      if (!API_CONFIG.ELEVENLABS_API_KEY) {
-        // Use fallback if ElevenLabs API key is not configured
-        audioBlob = await createFallbackResponse('elevenlabs', aiResponse) as Blob;
-      } else {
-        audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
+      try {
+        if (!API_CONFIG.ELEVENLABS_API_KEY) {
+          // Use fallback if ElevenLabs API key is not configured
+          audioBlob = await createFallbackResponse('elevenlabs', aiResponse) as Blob;
+        } else {
+          audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
+        }
+        
+        if (audioBlob) {
+          await this.playAudio(audioBlob);
+        }
+      } catch (audioError) {
+        console.error('Audio generation or playback error:', audioError);
+        // Use browser's speech synthesis as fallback
+        if ('speechSynthesis' in window) {
+          const utterance = new SpeechSynthesisUtterance(aiResponse);
+          window.speechSynthesis.speak(utterance);
+        }
+      } finally {
+        this.config.onAudioEnd?.();
       }
-      
-      await this.playAudio(audioBlob);
-      this.config.onAudioEnd?.();
     } catch (error) {
       console.error('Error in voice conversation:', error);
       this.config.onError?.(error instanceof Error ? error.message : 'An error occurred');
@@ -225,10 +241,9 @@ export class VoiceConversationService {
     return new Promise((resolve, reject) => {
       try {
         const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
+        const audio = new Audio();
         
-        this.currentAudio = audio;
-        
+        // Set up event handlers before setting the source
         audio.onended = () => {
           URL.revokeObjectURL(audioUrl);
           this.currentAudio = null;
@@ -244,6 +259,11 @@ export class VoiceConversationService {
           reject(new Error(errorMessage));
         };
         
+        // Set the source and load the audio
+        audio.src = audioUrl;
+        this.currentAudio = audio;
+        
+        // Play the audio
         audio.play().catch((playError) => {
           URL.revokeObjectURL(audioUrl);
           this.currentAudio = null;

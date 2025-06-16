@@ -48,7 +48,7 @@ export class ElevenLabsService {
         console.error('ElevenLabs API key not configured');
         
         // Create a fallback audio blob with a beep sound
-        return this.createFallbackAudio();
+        return await this.createFallbackAudio(text);
       }
       
       // Get current session
@@ -96,13 +96,13 @@ export class ElevenLabsService {
           if (!response.ok) {
             const errorText = await response.text();
             console.error('ElevenLabs direct API error:', errorText);
-            return this.createFallbackAudio();
+            return await this.createFallbackAudio(text);
           }
 
           return await response.blob();
         } catch (directError) {
           console.error('Direct ElevenLabs API call failed:', directError);
-          return this.createFallbackAudio();
+          return await this.createFallbackAudio(text);
         }
       }
 
@@ -137,7 +137,7 @@ export class ElevenLabsService {
         }
         
         console.error(errorMessage);
-        return this.createFallbackAudio();
+        return await this.createFallbackAudio(text);
       }
 
       const blob = await response.blob();
@@ -145,7 +145,7 @@ export class ElevenLabsService {
       // Validate that we received audio data
       if (blob.size === 0) {
         console.error('Received empty audio response');
-        return this.createFallbackAudio();
+        return await this.createFallbackAudio(text);
       }
 
       return blob;
@@ -153,19 +153,19 @@ export class ElevenLabsService {
       console.error('Error generating speech:', error);
       
       // Create a fallback audio blob
-      return this.createFallbackAudio();
+      return await this.createFallbackAudio(text);
     }
   }
 
   /**
    * Create a fallback audio blob with a beep sound
    */
-  static createFallbackAudio(): Promise<Blob> {
+  static async createFallbackAudio(text?: string): Promise<Blob> {
     return new Promise((resolve) => {
       // Try to use browser's speech synthesis first
-      if ('speechSynthesis' in window) {
+      if ('speechSynthesis' in window && text) {
         try {
-          const utterance = new SpeechSynthesisUtterance("I'm sorry, but I can't use my normal voice right now. Please check your API keys in the environment variables.");
+          const utterance = new SpeechSynthesisUtterance(text);
           utterance.rate = 1;
           utterance.pitch = 1;
           utterance.volume = 1;
@@ -181,56 +181,101 @@ export class ElevenLabsService {
           }
           
           window.speechSynthesis.speak(utterance);
+          
+          // Create a simple audio blob to return
+          const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gainNode = audioContext.createGain();
+          
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+          gainNode.gain.setValueAtTime(0.01, audioContext.currentTime); // Very quiet beep
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          
+          const mediaStreamDestination = audioContext.createMediaStreamDestination();
+          gainNode.connect(mediaStreamDestination);
+          
+          const mediaRecorder = new MediaRecorder(mediaStreamDestination.stream);
+          const audioChunks: BlobPart[] = [];
+          
+          mediaRecorder.ondataavailable = (event) => {
+            audioChunks.push(event.data);
+          };
+          
+          mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+            resolve(audioBlob);
+          };
+          
+          mediaRecorder.start();
+          oscillator.start();
+          
+          setTimeout(() => {
+            oscillator.stop();
+            mediaRecorder.stop();
+            audioContext.close();
+          }, 100); // Very short beep
+          
+          return;
         } catch (e) {
           console.error('Speech synthesis failed:', e);
         }
       }
       
-      // Create an audio context
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      // Configure the oscillator
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
-      
-      // Configure the gain node
-      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 1);
-      
-      // Connect the nodes
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      // Start the oscillator
-      oscillator.start();
-      
-      // Record the audio
-      const mediaStreamDestination = audioContext.createMediaStreamDestination();
-      gainNode.connect(mediaStreamDestination);
-      
-      const mediaRecorder = new MediaRecorder(mediaStreamDestination.stream);
-      const audioChunks: BlobPart[] = [];
-      
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunks.push(event.data);
-      };
-      
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        resolve(audioBlob);
-      };
-      
-      // Start recording
-      mediaRecorder.start();
-      
-      // Stop after 1 second
-      setTimeout(() => {
-        mediaRecorder.stop();
-        oscillator.stop();
-        audioContext.close();
-      }, 1000);
+      // Fallback to just a beep sound
+      try {
+        // Create an audio context
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        // Configure the oscillator
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+        
+        // Configure the gain node
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 1);
+        
+        // Connect the nodes
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Start the oscillator
+        oscillator.start();
+        
+        // Record the audio
+        const mediaStreamDestination = audioContext.createMediaStreamDestination();
+        gainNode.connect(mediaStreamDestination);
+        
+        const mediaRecorder = new MediaRecorder(mediaStreamDestination.stream);
+        const audioChunks: BlobPart[] = [];
+        
+        mediaRecorder.ondataavailable = (event) => {
+          audioChunks.push(event.data);
+        };
+        
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+          resolve(audioBlob);
+        };
+        
+        // Start recording
+        mediaRecorder.start();
+        
+        // Stop after 1 second
+        setTimeout(() => {
+          mediaRecorder.stop();
+          oscillator.stop();
+          audioContext.close();
+        }, 1000);
+      } catch (error) {
+        console.error('Failed to create fallback audio:', error);
+        // Return an empty blob as last resort
+        resolve(new Blob([], { type: 'audio/wav' }));
+      }
     });
   }
 
@@ -239,23 +284,23 @@ export class ElevenLabsService {
    */
   static async playAudio(audioBlob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        resolve();
-      };
-      
-      audio.onerror = (event) => {
-        URL.revokeObjectURL(audioUrl);
-        const errorMessage = event.target && (event.target as HTMLAudioElement).error 
-          ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
-          : 'Failed to play audio: Unknown error';
-        reject(new Error(errorMessage));
-      };
-      
-      audio.oncanplaythrough = () => {
+      try {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        
+        audio.onerror = (event) => {
+          URL.revokeObjectURL(audioUrl);
+          const errorMessage = event.target && (event.target as HTMLAudioElement).error 
+            ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
+            : 'Failed to play audio: Unknown error';
+          reject(new Error(errorMessage));
+        };
+        
         audio.play().catch((playError) => {
           URL.revokeObjectURL(audioUrl);
           const errorMessage = playError instanceof Error 
@@ -263,15 +308,12 @@ export class ElevenLabsService {
             : 'Audio playback failed: Unknown error';
           reject(new Error(errorMessage));
         });
-      };
-      
-      // Set a timeout to prevent hanging
-      setTimeout(() => {
-        if (audio.readyState < 3) { // HAVE_FUTURE_DATA
-          URL.revokeObjectURL(audioUrl);
-          reject(new Error('Audio loading timeout'));
-        }
-      }, 10000);
+      } catch (error) {
+        const errorMessage = error instanceof Error 
+          ? `Audio setup failed: ${error.message}`
+          : 'Audio setup failed: Unknown error';
+        reject(new Error(errorMessage));
+      }
     });
   }
 

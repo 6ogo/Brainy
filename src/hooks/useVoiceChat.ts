@@ -23,6 +23,18 @@ export const useVoiceChat = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentTranscript, setCurrentTranscript] = useState('');
   const voiceServiceRef = useRef<VoiceConversationService | null>(null);
+  const isMounted = useRef(true);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+      if (voiceServiceRef.current) {
+        voiceServiceRef.current.stopListening();
+        voiceServiceRef.current.stopSpeaking();
+      }
+    };
+  }, []);
 
   // Initialize voice service
   useEffect(() => {
@@ -35,24 +47,34 @@ export const useVoiceChat = () => {
         avatarPersonality: currentAvatar,
         difficultyLevel: difficultyLevel,
         onResponse: (text) => {
-          addMessage(text, 'ai');
+          if (isMounted.current) {
+            addMessage(text, 'ai');
+          }
         },
         onAudioStart: () => {
-          setIsSpeaking(true);
-          setAvatarEmotion('neutral');
+          if (isMounted.current) {
+            setIsSpeaking(true);
+            setAvatarEmotion('neutral');
+          }
         },
         onAudioEnd: () => {
-          setIsSpeaking(false);
-          setAvatarEmotion('neutral');
+          if (isMounted.current) {
+            setIsSpeaking(false);
+            setAvatarEmotion('neutral');
+          }
         },
         onError: (errorMessage) => {
-          setError(errorMessage);
-          toast.error(errorMessage);
+          if (isMounted.current) {
+            setError(errorMessage);
+            toast.error(errorMessage);
+          }
         },
         onTranscript: (text, isFinal) => {
-          setCurrentTranscript(text);
-          if (isFinal) {
-            toggleListening(true);
+          if (isMounted.current) {
+            setCurrentTranscript(text);
+            if (isFinal && text.trim()) {
+              toggleListening(true);
+            }
           }
         }
       });
@@ -60,13 +82,6 @@ export const useVoiceChat = () => {
       console.error('Failed to initialize voice service:', error);
       setError('Failed to initialize voice service');
     }
-
-    return () => {
-      if (voiceServiceRef.current) {
-        voiceServiceRef.current.stopListening();
-        voiceServiceRef.current.stopSpeaking();
-      }
-    };
   }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening]);
 
   // Handle voice mode changes
@@ -89,7 +104,7 @@ export const useVoiceChat = () => {
 
   // Update voice service when difficulty level changes
   useEffect(() => {
-    if (voiceServiceRef.current && user) {
+    if (voiceServiceRef.current && user && isMounted.current) {
       // Reinitialize the service with the new difficulty level
       voiceServiceRef.current = new VoiceConversationService({
         userId: user.id,
@@ -97,24 +112,34 @@ export const useVoiceChat = () => {
         avatarPersonality: currentAvatar,
         difficultyLevel: difficultyLevel,
         onResponse: (text) => {
-          addMessage(text, 'ai');
+          if (isMounted.current) {
+            addMessage(text, 'ai');
+          }
         },
         onAudioStart: () => {
-          setIsSpeaking(true);
-          setAvatarEmotion('neutral');
+          if (isMounted.current) {
+            setIsSpeaking(true);
+            setAvatarEmotion('neutral');
+          }
         },
         onAudioEnd: () => {
-          setIsSpeaking(false);
-          setAvatarEmotion('neutral');
+          if (isMounted.current) {
+            setIsSpeaking(false);
+            setAvatarEmotion('neutral');
+          }
         },
         onError: (errorMessage) => {
-          setError(errorMessage);
-          toast.error(errorMessage);
+          if (isMounted.current) {
+            setError(errorMessage);
+            toast.error(errorMessage);
+          }
         },
         onTranscript: (text, isFinal) => {
-          setCurrentTranscript(text);
-          if (isFinal) {
-            toggleListening(true);
+          if (isMounted.current) {
+            setCurrentTranscript(text);
+            if (isFinal && text.trim()) {
+              toggleListening(true);
+            }
           }
         }
       });
@@ -131,15 +156,19 @@ export const useVoiceChat = () => {
 
     try {
       await voiceServiceRef.current.startListening();
-      setIsActive(true);
-      setIsPaused(false);
-      setAvatarEmotion('neutral');
-      setError(null);
-      toast.success('Voice chat started');
+      if (isMounted.current) {
+        setIsActive(true);
+        setIsPaused(false);
+        setAvatarEmotion('neutral');
+        setError(null);
+        toast.success('Voice chat started');
+      }
     } catch (error) {
       console.error('Failed to start voice chat:', error);
-      setError('Failed to start voice chat. Please check your microphone permissions.');
-      toast.error('Failed to start voice chat. Please check your microphone permissions.');
+      if (isMounted.current) {
+        setError('Failed to start voice chat. Please check your microphone permissions.');
+        toast.error('Failed to start voice chat. Please check your microphone permissions.');
+      }
     }
   }, [setAvatarEmotion]);
 
@@ -148,26 +177,34 @@ export const useVoiceChat = () => {
 
     voiceServiceRef.current.stopListening();
     voiceServiceRef.current.stopSpeaking();
-    setIsActive(false);
-    setIsSpeaking(false);
-    setAvatarEmotion('neutral');
+    if (isMounted.current) {
+      setIsActive(false);
+      setIsPaused(false);
+      setIsSpeaking(false);
+      setAvatarEmotion('neutral');
+      setCurrentTranscript('');
+    }
   }, [setIsSpeaking, setAvatarEmotion]);
 
   const pauseVoiceChat = useCallback(() => {
     if (!voiceServiceRef.current) return;
     
     voiceServiceRef.current.pauseConversation();
-    setIsPaused(true);
-    setIsSpeaking(false);
-    toast.success('Conversation paused');
+    if (isMounted.current) {
+      setIsPaused(true);
+      setIsSpeaking(false);
+      toast.success('Conversation paused');
+    }
   }, [setIsSpeaking]);
 
   const resumeVoiceChat = useCallback(() => {
     if (!voiceServiceRef.current) return;
     
     voiceServiceRef.current.resumeConversation();
-    setIsPaused(false);
-    toast.success('Conversation resumed');
+    if (isMounted.current) {
+      setIsPaused(false);
+      toast.success('Conversation resumed');
+    }
   }, []);
 
   const toggleVoiceChat = useCallback(() => {

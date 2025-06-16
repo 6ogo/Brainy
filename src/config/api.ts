@@ -43,7 +43,7 @@ export const createFallbackResponse = (service: string, text: string) => {
         utterance.volume = 1;
         
         // Find a good voice
-        const voices = speechSynthesis.getVoices();
+        const voices = window.speechSynthesis.getVoices();
         const englishVoice = voices.find(voice => 
           voice.lang.includes('en') && voice.name.includes('Female')
         );
@@ -52,7 +52,7 @@ export const createFallbackResponse = (service: string, text: string) => {
           utterance.voice = englishVoice;
         }
         
-        speechSynthesis.speak(utterance);
+        window.speechSynthesis.speak(utterance);
         
         // Create a simple beep sound as a blob
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -61,7 +61,7 @@ export const createFallbackResponse = (service: string, text: string) => {
         
         oscillator.type = 'sine';
         oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.01, audioContext.currentTime); // Very quiet
         
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
@@ -88,7 +88,7 @@ export const createFallbackResponse = (service: string, text: string) => {
           oscillator.stop();
           mediaRecorder.stop();
           audioContext.close();
-        }, 500);
+        }, 100); // Very short beep
       } else {
         // If speech synthesis is not available, just create a beep
         const audioBlob = new Blob([], { type: 'audio/wav' });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Mic, MicOff, Volume2, VolumeX, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
@@ -27,6 +27,7 @@ export const VideoArea: React.FC = () => {
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
+  const avatarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -46,6 +47,17 @@ export const VideoArea: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [user]);
+
+  // Add subtle animation to avatar when speaking
+  useEffect(() => {
+    if (avatarRef.current) {
+      if (isSpeaking && !isPaused) {
+        avatarRef.current.classList.add('animate-pulse-slow');
+      } else {
+        avatarRef.current.classList.remove('animate-pulse-slow');
+      }
+    }
+  }, [isSpeaking, isPaused]);
 
   if (!isEligibleForTavus) {
     return (
@@ -99,21 +111,20 @@ export const VideoArea: React.FC = () => {
                   />
                 ) : (
                   <div className="relative z-10 flex flex-col items-center justify-center">
-                    <div className={cn(
-                      "w-48 h-48 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300",
-                      avatarEmotion === 'thinking' ? 'scale-105' :
-                      avatarEmotion === 'excited' ? 'scale-110' :
-                      'scale-100',
-                      isPaused && "opacity-60"
-                    )}>
+                    <div 
+                      ref={avatarRef}
+                      className={cn(
+                        "w-48 h-48 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300",
+                        avatarEmotion === 'thinking' ? 'scale-105' :
+                        avatarEmotion === 'excited' ? 'scale-110' :
+                        'scale-100',
+                        isPaused && "opacity-60"
+                      )}
+                    >
                       <div className="absolute inset-0 bg-gradient-to-b from-primary-300 to-primary-600 opacity-50"></div>
                       <div className="w-32 h-32 rounded-full bg-primary-200 flex items-center justify-center z-10">
                         <span className="text-5xl font-bold text-primary-700">AI</span>
                       </div>
-                      
-                      {isSpeaking && !isPaused && (
-                        <div className="absolute inset-0 bg-primary-500 rounded-full animate-pulse-slow opacity-20"></div>
-                      )}
                     </div>
                     
                     {/* Live transcript bubble */}
