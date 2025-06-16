@@ -3,6 +3,7 @@ import { useStore } from '../store/store';
 import toast from 'react-hot-toast';
 import { storage } from '../utils/storage';
 import { VoiceMode } from '../types';
+import { useConversation } from './useConversation';
 
 // Utility to get error message from error code
 function getErrorMessage(error: string): string {
@@ -40,15 +41,9 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     toggleListening,
     addMessage,
     isRecording
-  }: {
-    isListening: boolean;
-    voiceMode: VoiceMode;
-    setVoiceMode: (mode: VoiceMode) => void;
-    toggleListening: (force?: boolean) => void;
-    addMessage: (text: string, sender: 'user' | 'ai', isBreakthrough?: boolean) => void;
-    isRecording: boolean;
   } = useStore();
   
+  const { sendMessage } = useConversation();
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -57,6 +52,8 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   const [hasPermission, setHasPermission] = useState<boolean>(false);
   const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const isMounted = useRef(true);
+  const [transcript, setTranscript] = useState<string>('');
+  const [isFinalTranscript, setIsFinalTranscript] = useState<boolean>(false);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -163,6 +160,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     try {
       if (recognitionRef.current) {
         recognitionRef.current.start();
+        toggleListening(true);
         setError(null);
       }
       return true;
@@ -172,13 +170,14 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       toast.error('Failed to start voice recognition.');
       return false;
     }
-  }, [hasPermission, requestPermission]);
+  }, [hasPermission, requestPermission, toggleListening]);
 
   const stopListening = useCallback(async (): Promise<boolean> => {
     try {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
+      toggleListening(false);
       setError(null);
       return true;
     } catch (err) {
@@ -186,7 +185,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       setError('Failed to stop listening.');
       return false;
     }
-  }, []);
+  }, [toggleListening]);
 
   // Voice commands configuration
   const voiceCommands = useMemo(() => ({
@@ -198,10 +197,10 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   }), [setVoiceMode, startListening, stopListening]);
 
   // Handle voice commands
-  const handleVoiceCommand = useCallback((transcript: string): boolean => {
-    if (!transcript) return false;
+  const handleVoiceCommand = useCallback((text: string): boolean => {
+    if (!text) return false;
     
-    const command = transcript.toLowerCase().trim();
+    const command = text.toLowerCase().trim();
     const matchedCommand = Object.keys(voiceCommands).find(cmd => 
       command.includes(cmd)
     ) as keyof typeof voiceCommands | undefined;
@@ -213,6 +212,24 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     }
     return false;
   }, [voiceCommands]);
+
+  // Process final transcript
+  useEffect(() => {
+    if (isFinalTranscript && transcript) {
+      // Check if it's a voice command
+      const isCommand = handleVoiceCommand(transcript);
+      
+      // If not a command, send as a message
+      if (!isCommand) {
+        addMessage(transcript, 'user');
+        sendMessage(transcript, true);
+      }
+      
+      // Reset transcript
+      setTranscript('');
+      setIsFinalTranscript(false);
+    }
+  }, [transcript, isFinalTranscript, handleVoiceCommand, addMessage, sendMessage]);
 
   // Handle recording state changes
   useEffect(() => {
@@ -269,9 +286,17 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     }
     
     const handleResult = (event: SpeechRecognitionEvent) => {
-      const transcript = event.results[0][0].transcript;
-      if (transcript.trim()) {
-        addMessage(transcript, 'user');
+      const results = event.results;
+      const latestResult = results[results.length - 1];
+      
+      if (latestResult && latestResult[0]) {
+        const newTranscript = latestResult[0].transcript;
+        setTranscript(newTranscript);
+        
+        // If this is a final result
+        if (latestResult.isFinal) {
+          setIsFinalTranscript(true);
+        }
       }
     };
     
@@ -297,7 +322,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         toggleListening(false);
       }
     };
-  }, [initSpeechRecognition, setVoiceMode, toggleListening, addMessage, isListening, voiceMode, hasPermission]);
+  }, [initSpeechRecognition, setVoiceMode, toggleListening, isListening, voiceMode, hasPermission]);
 
   // Check permission on mount
   useEffect(() => {

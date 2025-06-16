@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Mic, MicOff, Volume2, Volume1, VolumeX, Download, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
@@ -13,7 +13,8 @@ export const VoiceControls: React.FC = () => {
     isListening,
     setIsSpeaking,
     isRecording,
-    toggleRecording
+    toggleRecording,
+    learningMode
   } = useStore();
   
   const { 
@@ -24,6 +25,14 @@ export const VoiceControls: React.FC = () => {
     error: recognitionError 
   } = useVoiceRecognition();
   const { isActive, startVoiceChat, stopVoiceChat } = useVoiceChat();
+  const [volume, setVolume] = useState(70);
+
+  // Ensure voice mode is appropriate for learning mode
+  useEffect(() => {
+    if (learningMode === 'videocall' && voiceMode === 'muted') {
+      setVoiceMode('push-to-talk');
+    }
+  }, [learningMode, voiceMode, setVoiceMode]);
 
   const handleVoiceModeChange = async (mode: VoiceMode) => {
     if (!hasPermission) {
@@ -72,6 +81,17 @@ export const VoiceControls: React.FC = () => {
     }
   };
 
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVolume = parseInt(e.target.value, 10);
+    setVolume(newVolume);
+    
+    // Apply volume to all audio elements
+    const audioElements = document.querySelectorAll('audio');
+    audioElements.forEach(audio => {
+      audio.volume = newVolume / 100;
+    });
+  };
+
   return (
     <div className="p-4 bg-white border-t border-gray-200 rounded-b-lg">
       {/* Permission Request Banner */}
@@ -117,43 +137,41 @@ export const VoiceControls: React.FC = () => {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex space-x-3">
-          {/* Voice mode selector */}
-          <div className="flex p-1 bg-gray-100 rounded-lg">
-            <button
-              onClick={() => handleVoiceModeChange('muted')}
-              className={`px-3 py-1.5 rounded-md text-sm flex items-center ${
-                voiceMode === 'muted'
-                  ? 'bg-white shadow-sm text-gray-800'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <MicOff className="h-4 w-4 mr-1" /> Off
-            </button>
-            <button
-              onClick={() => handleVoiceModeChange('push-to-talk')}
-              className={`px-3 py-1.5 rounded-md text-sm flex items-center ${
-                voiceMode === 'push-to-talk'
-                  ? 'bg-white shadow-sm text-gray-800'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-              disabled={!hasPermission}
-            >
-              <Mic className="h-4 w-4 mr-1" /> Push-to-Talk
-            </button>
-            <button
-              onClick={() => handleVoiceModeChange('continuous')}
-              className={`px-3 py-1.5 rounded-md text-sm flex items-center ${
-                voiceMode === 'continuous'
-                  ? 'bg-white shadow-sm text-gray-800'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-              disabled={!hasPermission}
-            >
-              <Volume2 className="h-4 w-4 mr-1" /> Continuous
-            </button>
-          </div>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        {/* Voice mode selector */}
+        <div className="flex p-1 bg-gray-100 rounded-lg">
+          <button
+            onClick={() => handleVoiceModeChange('muted')}
+            className={`px-3 py-1.5 rounded-md text-sm flex items-center ${
+              voiceMode === 'muted'
+                ? 'bg-white shadow-sm text-gray-800'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+          >
+            <MicOff className="h-4 w-4 mr-1" /> Off
+          </button>
+          <button
+            onClick={() => handleVoiceModeChange('push-to-talk')}
+            className={`px-3 py-1.5 rounded-md text-sm flex items-center ${
+              voiceMode === 'push-to-talk'
+                ? 'bg-white shadow-sm text-gray-800'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+            disabled={!hasPermission}
+          >
+            <Mic className="h-4 w-4 mr-1" /> Push-to-Talk
+          </button>
+          <button
+            onClick={() => handleVoiceModeChange('continuous')}
+            className={`px-3 py-1.5 rounded-md text-sm flex items-center ${
+              voiceMode === 'continuous'
+                ? 'bg-white shadow-sm text-gray-800'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
+            disabled={!hasPermission}
+          >
+            <Volume2 className="h-4 w-4 mr-1" /> Continuous
+          </button>
         </div>
 
         <div className="flex items-center space-x-3">
@@ -205,7 +223,8 @@ export const VoiceControls: React.FC = () => {
               type="range"
               min="0"
               max="100"
-              defaultValue="70"
+              value={volume}
+              onChange={handleVolumeChange}
               className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
               aria-label="Volume"
             />

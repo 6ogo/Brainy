@@ -170,7 +170,35 @@ export const trackDailyUsage = async (conversationMinutes: number = 0, videoMinu
       onConflict: 'user_id,date'
     });
 
-    if (error) throw error;
+    if (error) {
+      // If there's a conflict, try to update the existing record
+      if (error.code === '23505') {
+        // Get current values
+        const { data: currentUsage } = await supabase
+          .from('user_usage')
+          .select('conversation_minutes, video_call_minutes')
+          .eq('user_id', user.id)
+          .eq('date', dateStr)
+          .single();
+          
+        if (currentUsage) {
+          // Update with incremented values
+          const { error: updateError } = await supabase
+            .from('user_usage')
+            .update({
+              conversation_minutes: (currentUsage.conversation_minutes || 0) + conversationMinutes,
+              video_call_minutes: (currentUsage.video_call_minutes || 0) + videoMinutes,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.id)
+            .eq('date', dateStr);
+            
+          if (updateError) throw updateError;
+        }
+      } else {
+        throw error;
+      }
+    }
   } catch (error) {
     console.error('Error tracking daily usage:', error);
     throw error;

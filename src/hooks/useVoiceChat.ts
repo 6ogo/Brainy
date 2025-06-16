@@ -12,7 +12,8 @@ export const useVoiceChat = () => {
     voiceMode,
     setIsSpeaking,
     addMessage,
-    setAvatarEmotion
+    setAvatarEmotion,
+    isListening
   } = useStore();
   
   const { user } = useAuth();
@@ -69,6 +70,13 @@ export const useVoiceChat = () => {
       stopVoiceChat();
     }
   }, [voiceMode]);
+
+  // Monitor isListening state to handle user speech
+  useEffect(() => {
+    if (isListening && voiceServiceRef.current && !isActive) {
+      setIsActive(true);
+    }
+  }, [isListening, isActive]);
 
   const startVoiceChat = useCallback(async () => {
     if (!voiceServiceRef.current) {
