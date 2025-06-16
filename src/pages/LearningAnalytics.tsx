@@ -5,6 +5,7 @@ import { cn, commonStyles } from '../styles/utils';
 import { useStore } from '../store/store';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useAchievements } from '../hooks/useAchievements';
 import { Line, Doughnut, Bar, Radar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -83,6 +84,7 @@ interface AnalyticsCache {
 export const LearningAnalytics: React.FC = () => {
   const { socialStats, currentSubject } = useStore();
   const { user } = useAuth();
+  const { userAchievements, checkAchievements, loading: achievementsLoading } = useAchievements();
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [usageData, setUsageData] = useState<UserUsageData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,6 +155,18 @@ export const LearningAnalytics: React.FC = () => {
         // Generate skills data based on conversation analysis
         setSkillsData(generateSkillsData(conversationData || []));
 
+        // Check for new achievements
+        const totalStudyMinutes = (usageDataResult || []).reduce((sum, day) => 
+          sum + (day.conversation_minutes || 0) + (day.video_call_minutes || 0), 0);
+        
+        await checkAchievements({
+          totalConversations: (conversationData || []).length,
+          totalStudyMinutes,
+          currentStreak: socialStats.streak.current,
+          totalXP: socialStats.totalXP,
+          subjectCounts: subjects
+        });
+
       } catch (err) {
         console.error('Error fetching analytics:', err);
         setError(err instanceof Error ? err.message : 'Failed to load analytics');
@@ -162,7 +176,7 @@ export const LearningAnalytics: React.FC = () => {
     };
 
     fetchAnalyticsData();
-  }, [user]);
+  }, [user, checkAchievements, socialStats]);
 
   // Generate skills data based on conversation analysis
   const generateSkillsData = (conversations: ConversationData[]) => {
@@ -337,7 +351,7 @@ export const LearningAnalytics: React.FC = () => {
     
     doc.setFontSize(12);
     doc.text(`Generated on ${format(new Date(), 'PPP')}`, 20, 30);
-    doc.text(`Student: ${user?.full_name || 'Student'}`, 20, 40);
+    doc.text(`Student: ${user?.user_metadata?.full_name || user?.email || 'Student'}`, 20, 40);
     
     // Stats
     doc.setFontSize(14);
@@ -361,7 +375,7 @@ export const LearningAnalytics: React.FC = () => {
     doc.save('learning-analytics.pdf');
   };
 
-  if (loading) {
+  if (loading || achievementsLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -652,7 +666,7 @@ export const LearningAnalytics: React.FC = () => {
           {/* Achievements */}
           <Card className="p-6">
             <h3 className={cn(commonStyles.heading.h3, "mb-4")}>Recent Achievements</h3>
-            {achievements.length === 0 ? (
+            {userAchievements.length === 0 ? (
               <p className="text-center py-10">
                 <Trophy className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                 <span className="text-gray-500 text-sm">
@@ -661,20 +675,20 @@ export const LearningAnalytics: React.FC = () => {
               </p>
             ) : (
               <div className="space-y-3">
-                {achievements.slice(0, 5).map((achievement) => (
+                {userAchievements.slice(0, 5).map((userAchievement) => (
                   <div
-                    key={achievement.id}
+                    key={userAchievement.id}
                     className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg"
                   >
                     <div className="p-2 bg-yellow-100 rounded-full">
                       <Trophy className="h-5 w-5 text-yellow-600" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{achievement.title}</h4>
-                      <p className="text-sm text-gray-500">{achievement.description}</p>
+                      <h4 className="font-medium text-gray-900">{userAchievement.achievement.title}</h4>
+                      <p className="text-sm text-gray-500">{userAchievement.achievement.description}</p>
                     </div>
                     <span className="text-xs text-gray-400">
-                      {achievement.unlockedAt && format(achievement.unlockedAt, 'MMM dd')}
+                      {format(new Date(userAchievement.unlocked_at), 'MMM dd')}
                     </span>
                   </div>
                 ))}
