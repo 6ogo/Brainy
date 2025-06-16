@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Card } from '../components/Card';
@@ -33,6 +33,7 @@ export const StudyAdvisorPage: React.FC = () => {
   const [learningInsights, setLearningInsights] = useState<any>(null);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const checkEligibility = async () => {
@@ -74,7 +75,7 @@ export const StudyAdvisorPage: React.FC = () => {
       console.error('Error generating Tavus video:', error);
       setVideoError('Failed to generate video. Using fallback video instead.');
       // Set a fallback video URL
-      setVideoUrl('https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+      setVideoUrl('https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4');
       toast.error('Using fallback video due to generation error');
     } finally {
       setIsGenerating(false);
@@ -232,6 +233,7 @@ export const StudyAdvisorPage: React.FC = () => {
                 {videoUrl ? (
                   <div className="aspect-video bg-black relative">
                     <video 
+                      ref={videoRef}
                       src={videoUrl} 
                       controls 
                       className="w-full h-full" 

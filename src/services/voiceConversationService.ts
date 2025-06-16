@@ -27,6 +27,7 @@ export class VoiceConversationService {
   private recognitionLanguage = 'en-US';
   private audioQueue: Blob[] = [];
   private isPlayingAudio = false;
+  private stream: MediaStream | null = null;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -73,6 +74,7 @@ export class VoiceConversationService {
     };
 
     this.recognition.onend = () => {
+      console.log('Speech recognition ended');
       this.isListening = false;
       
       // Restart if we're supposed to be listening continuously
@@ -107,7 +109,7 @@ export class VoiceConversationService {
 
     try {
       // Request microphone permission
-      await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -115,10 +117,13 @@ export class VoiceConversationService {
         } 
       });
       
+      // Save the stream reference to stop it later
+      this.stream = stream;
+      
       this.isPaused = false;
       this.isListening = true;
       this.recognition.start();
-      console.log('Voice recognition started');
+      console.log('Speech recognition started');
     } catch (error) {
       console.error('Failed to start listening:', error);
       this.config.onError?.('Failed to access microphone. Please check your browser permissions.');
@@ -130,10 +135,16 @@ export class VoiceConversationService {
       try {
         this.recognition.stop();
         this.isListening = false;
-        console.log('Voice recognition stopped');
+        console.log('Speech recognition stopped');
       } catch (error) {
         console.error('Error stopping recognition:', error);
       }
+    }
+    
+    // Stop the media stream if it exists
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop());
+      this.stream = null;
     }
   }
 
@@ -161,6 +172,11 @@ export class VoiceConversationService {
     // Clear audio queue
     this.audioQueue = [];
     this.isPlayingAudio = false;
+    
+    // Also stop any browser speech synthesis
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
   }
 
   setLanguage(languageCode: string): void {
@@ -224,6 +240,20 @@ export class VoiceConversationService {
         if ('speechSynthesis' in window) {
           const utterance = new SpeechSynthesisUtterance(aiResponse);
           window.speechSynthesis.speak(utterance);
+          
+          // Wait for speech to complete
+          return new Promise<void>((resolve) => {
+            utterance.onend = () => {
+              this.config.onAudioEnd?.();
+              resolve();
+            };
+            
+            // Fallback timeout in case onend doesn't fire
+            setTimeout(() => {
+              this.config.onAudioEnd?.();
+              resolve();
+            }, aiResponse.length * 50); // Rough estimate of speech duration
+          });
         }
       } finally {
         this.config.onAudioEnd?.();
