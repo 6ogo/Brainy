@@ -124,12 +124,13 @@ export class SecurityUtils {
   // Content Security Policy helper
   static getCSPHeader(): string {
     return [
-      "default-src 'self'",
+      "default-src 'self' blob:",
       "script-src 'self' 'unsafe-inline' https://js.stripe.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https: blob:",
-      "connect-src 'self' https://*.supabase.co https://api.elevenlabs.io https://api.groq.com https://api.stripe.com",
+      "media-src 'self' blob: data:",
+      "connect-src 'self' https://*.supabase.co https://api.elevenlabs.io https://api.groq.com https://api.stripe.com https://api.tavus.io",
       "frame-src https://js.stripe.com",
       "object-src 'none'",
       "base-uri 'self'",
