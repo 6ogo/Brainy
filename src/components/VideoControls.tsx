@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/store';
 import { Video, VideoOff, Image as ImageIcon, StopCircle, Settings, Mic, MicOff, Pause, Play } from 'lucide-react';
+import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn } from '../styles/utils';
 
 const backgrounds = [
@@ -22,22 +23,20 @@ export const VideoControls: React.FC = () => {
     setVoiceMode,
     isSpeaking
   } = useStore();
-
+  
+  const { isPaused, toggleVoiceChat } = useVoiceChat();
   const [showBackgrounds, setShowBackgrounds] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-
-  const handlePauseResume = () => {
-    setIsPaused(!isPaused);
-    // In a real implementation, this would pause/resume the voice chat
-  };
 
   return (
-    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3 bg-black/50 rounded-full px-4 py-2">
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3 bg-black/60 rounded-full px-4 py-2 shadow-lg">
       <button
         onClick={toggleVideo}
-        className={`p-2 rounded-full ${
-          isVideoEnabled ? 'bg-primary-500 text-white' : 'bg-gray-600 text-gray-200'
-        }`}
+        className={cn(
+          "p-2.5 rounded-full transition-colors",
+          isVideoEnabled 
+            ? "bg-primary-500 text-white hover:bg-primary-600" 
+            : "bg-gray-600 text-gray-200 hover:bg-gray-700"
+        )}
         title={isVideoEnabled ? 'Switch to voice-only mode' : 'Enable video mode'}
       >
         {isVideoEnabled ? (
@@ -51,10 +50,10 @@ export const VideoControls: React.FC = () => {
         <div className="relative">
           <button
             onClick={() => setShowBackgrounds(!showBackgrounds)}
-            className="p-2 rounded-full hover:bg-gray-700/50"
+            className="p-2.5 rounded-full text-white hover:bg-gray-700/50 transition-colors"
             title="Change background"
           >
-            <ImageIcon className="h-5 w-5 text-white" />
+            <ImageIcon className="h-5 w-5" />
           </button>
 
           {showBackgrounds && (
@@ -62,11 +61,12 @@ export const VideoControls: React.FC = () => {
               {backgrounds.map((bg) => (
                 <button
                   key={bg.id}
-                  className={`w-full px-4 py-2 text-left text-sm ${
+                  className={cn(
+                    "w-full px-4 py-2 text-left text-sm transition-colors",
                     currentBackground === bg.id
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'hover:bg-gray-50 text-gray-700'
-                  }`}
+                      ? "bg-primary-50 text-primary-700"
+                      : "hover:bg-gray-50 text-gray-700"
+                  )}
                   onClick={() => {
                     setCurrentBackground(bg.id as any);
                     setShowBackgrounds(false);
@@ -82,9 +82,12 @@ export const VideoControls: React.FC = () => {
 
       <button
         onClick={() => setVoiceMode(voiceMode === 'muted' ? 'push-to-talk' : 'muted')}
-        className={`p-2 rounded-full ${
-          voiceMode !== 'muted' ? 'bg-primary-500 text-white' : 'bg-gray-600 text-gray-200'
-        }`}
+        className={cn(
+          "p-2.5 rounded-full transition-colors",
+          voiceMode !== 'muted' 
+            ? "bg-primary-500 text-white hover:bg-primary-600" 
+            : "bg-gray-600 text-gray-200 hover:bg-gray-700"
+        )}
         title={voiceMode === 'muted' ? 'Enable microphone' : 'Disable microphone'}
       >
         {voiceMode === 'muted' ? (
@@ -95,10 +98,13 @@ export const VideoControls: React.FC = () => {
       </button>
 
       <button
-        onClick={handlePauseResume}
-        className={`p-2 rounded-full ${
-          isPaused ? 'bg-green-500 text-white' : 'bg-gray-600 text-white'
-        }`}
+        onClick={toggleVoiceChat}
+        className={cn(
+          "p-2.5 rounded-full transition-colors",
+          isPaused 
+            ? "bg-green-500 text-white hover:bg-green-600" 
+            : "bg-gray-600 text-white hover:bg-gray-700"
+        )}
         title={isPaused ? 'Resume conversation' : 'Pause conversation'}
       >
         {isPaused ? (
@@ -110,19 +116,22 @@ export const VideoControls: React.FC = () => {
 
       <button
         onClick={toggleRecording}
-        className={`p-2 rounded-full ${
-          isRecording ? 'bg-error-500 text-white' : 'hover:bg-gray-700/50 text-white'
-        }`}
+        className={cn(
+          "p-2.5 rounded-full transition-colors",
+          isRecording 
+            ? "bg-red-500 text-white hover:bg-red-600" 
+            : "bg-gray-600 text-white hover:bg-gray-700"
+        )}
         title={isRecording ? 'Stop recording' : 'Start recording'}
       >
-        <StopCircle className={`h-5 w-5 ${isRecording ? 'animate-pulse' : ''}`} />
+        <StopCircle className={cn("h-5 w-5", isRecording && "animate-pulse")} />
       </button>
 
       <button
-        className="p-2 rounded-full hover:bg-gray-700/50"
+        className="p-2.5 rounded-full text-white hover:bg-gray-700/50 transition-colors"
         title="Video settings"
       >
-        <Settings className="h-5 w-5 text-white" />
+        <Settings className="h-5 w-5" />
       </button>
     </div>
   );

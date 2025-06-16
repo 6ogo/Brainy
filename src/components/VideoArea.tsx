@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, Video, VideoOff, Image as ImageIcon, StopCircle, Settings, Pause, Play } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
@@ -7,6 +7,7 @@ import { VoiceControls } from './VoiceControls';
 import { VideoControls } from './VideoControls';
 import { TavusService } from '../services/tavusService';
 import { useAuth } from '../contexts/AuthContext';
+import { cn } from '../styles/utils';
 
 export const VideoArea: React.FC = () => {
   const { 
@@ -21,11 +22,10 @@ export const VideoArea: React.FC = () => {
   
   const { user } = useAuth();
   const { error: recognitionError } = useVoiceRecognition();
-  const { isActive: voiceChatActive, error: voiceChatError, toggleVoiceChat } = useVoiceChat();
+  const { isActive: voiceChatActive, error: voiceChatError, isPaused, toggleVoiceChat } = useVoiceChat();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
-  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -58,11 +58,6 @@ export const VideoArea: React.FC = () => {
       </div>
     );
   }
-
-  const handlePauseResume = () => {
-    setIsPaused(!isPaused);
-    toggleVoiceChat();
-  };
 
   return (
     <div className="relative h-full flex flex-col">
@@ -103,17 +98,19 @@ export const VideoArea: React.FC = () => {
                   />
                 ) : (
                   <div className="relative z-10 flex flex-col items-center justify-center">
-                    <div className={`w-48 h-48 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300 ${
+                    <div className={cn(
+                      "w-48 h-48 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300",
                       avatarEmotion === 'thinking' ? 'scale-105' :
                       avatarEmotion === 'excited' ? 'scale-110' :
-                      'scale-100'
-                    }`}>
+                      'scale-100',
+                      isPaused && "opacity-60"
+                    )}>
                       <div className="absolute inset-0 bg-gradient-to-b from-primary-300 to-primary-600 opacity-50"></div>
                       <div className="w-32 h-32 rounded-full bg-primary-200 flex items-center justify-center z-10">
                         <span className="text-5xl font-bold text-primary-700">AI</span>
                       </div>
                       
-                      {isSpeaking && (
+                      {isSpeaking && !isPaused && (
                         <div className="absolute inset-0 bg-primary-500 rounded-full animate-pulse-slow opacity-20"></div>
                       )}
                     </div>
@@ -128,28 +125,28 @@ export const VideoArea: React.FC = () => {
         
         <div className="absolute top-4 right-4 flex space-x-2">
           {isListening && voiceMode !== 'muted' ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-500 text-white">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-success-500 text-white">
               <Mic className="w-3 h-3 mr-1" /> Listening
             </span>
           ) : (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-500 text-white">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-500 text-white">
               <MicOff className="w-3 h-3 mr-1" /> Mic Off
             </span>
           )}
           
           {isSpeaking ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-500 text-white">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-500 text-white">
               <Volume2 className="w-3 h-3 mr-1" /> Speaking
             </span>
           ) : (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-500 text-white">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-500 text-white">
               <VolumeX className="w-3 h-3 mr-1" /> Silent
             </span>
           )}
         </div>
         
         {(recognitionError || voiceChatError) && (
-          <div className="absolute top-4 left-4 bg-error-500 text-white text-xs rounded-md px-2 py-1">
+          <div className="absolute top-4 left-4 bg-error-500 text-white text-xs rounded-md px-3 py-1.5 shadow-md">
             {recognitionError || voiceChatError}
           </div>
         )}

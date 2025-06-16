@@ -27,9 +27,8 @@ export const VoiceControls: React.FC = () => {
     error: recognitionError 
   } = useVoiceRecognition();
   
-  const { isActive, startVoiceChat, stopVoiceChat } = useVoiceChat();
+  const { isActive, isPaused, startVoiceChat, stopVoiceChat, toggleVoiceChat } = useVoiceChat();
   const [volume, setVolume] = useState(70);
-  const [isPaused, setIsPaused] = useState(false);
 
   // Ensure voice mode is appropriate for learning mode
   useEffect(() => {
@@ -96,15 +95,6 @@ export const VoiceControls: React.FC = () => {
     });
   };
 
-  const handlePauseResume = () => {
-    setIsPaused(!isPaused);
-    if (isPaused) {
-      startVoiceChat();
-    } else {
-      stopVoiceChat();
-    }
-  };
-
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
       {/* Permission Request Banner */}
@@ -151,53 +141,60 @@ export const VoiceControls: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
+        <div>
           {/* Voice mode selector */}
-          <div className="flex p-1 bg-gray-100 rounded-lg">
-            <button
-              onClick={() => handleVoiceModeChange('muted')}
-              className={`flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center ${
-                voiceMode === 'muted'
-                  ? 'bg-white shadow-sm text-gray-800'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              <MicOff className="h-4 w-4 mr-2" /> Off
-            </button>
-            <button
-              onClick={() => handleVoiceModeChange('push-to-talk')}
-              className={`flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center ${
-                voiceMode === 'push-to-talk'
-                  ? 'bg-white shadow-sm text-gray-800'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-              disabled={!hasPermission}
-            >
-              <Mic className="h-4 w-4 mr-2" /> Push-to-Talk
-            </button>
-            <button
-              onClick={() => handleVoiceModeChange('continuous')}
-              className={`flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center ${
-                voiceMode === 'continuous'
-                  ? 'bg-white shadow-sm text-gray-800'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-              disabled={!hasPermission}
-            >
-              <Volume2 className="h-4 w-4 mr-2" /> Continuous
-            </button>
+          <div className="p-4 bg-gray-50 rounded-lg mb-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Voice Mode</h3>
+            <div className="flex p-1 bg-gray-100 rounded-lg">
+              <button
+                onClick={() => handleVoiceModeChange('muted')}
+                className={cn(
+                  "flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center transition-colors",
+                  voiceMode === 'muted'
+                    ? "bg-white shadow-sm text-gray-800"
+                    : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                )}
+              >
+                <MicOff className="h-4 w-4 mr-2" /> Off
+              </button>
+              <button
+                onClick={() => handleVoiceModeChange('push-to-talk')}
+                className={cn(
+                  "flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center transition-colors",
+                  voiceMode === 'push-to-talk'
+                    ? "bg-white shadow-sm text-gray-800"
+                    : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                )}
+                disabled={!hasPermission}
+              >
+                <Mic className="h-4 w-4 mr-2" /> Push-to-Talk
+              </button>
+              <button
+                onClick={() => handleVoiceModeChange('continuous')}
+                className={cn(
+                  "flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center transition-colors",
+                  voiceMode === 'continuous'
+                    ? "bg-white shadow-sm text-gray-800"
+                    : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
+                )}
+                disabled={!hasPermission}
+              >
+                <Volume2 className="h-4 w-4 mr-2" /> Continuous
+              </button>
+            </div>
           </div>
 
           {/* Push to talk button */}
-          <div className="flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <p className="text-sm text-gray-500 mb-2">Push to Talk</p>
             <button
               className={cn(
-                "h-16 w-16 rounded-full flex items-center justify-center focus:outline-none transition-all",
+                "h-20 w-20 rounded-full flex items-center justify-center focus:outline-none transition-all",
                 isListening && voiceMode === 'push-to-talk'
                   ? "bg-primary-500 text-white scale-110 shadow-lg"
                   : hasPermission
                     ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                    : "bg-gray-50 text-gray-300 cursor-not-allowed"
+                    : "bg-gray-50 text-gray-300 cursor-not-allowed opacity-60"
               )}
               disabled={voiceMode !== 'push-to-talk' || !hasPermission}
               onMouseDown={() => handlePushToTalk(true)}
@@ -206,65 +203,78 @@ export const VoiceControls: React.FC = () => {
               onTouchEnd={() => handlePushToTalk(false)}
               aria-label="Push to talk"
             >
-              <Mic className="h-8 w-8" />
+              <Mic className="h-10 w-10" />
             </button>
+            <p className="text-xs text-gray-500 mt-2">
+              {isListening ? "Release to stop" : "Press and hold to speak"}
+            </p>
           </div>
         </div>
 
         <div className="space-y-4">
           {/* Pause/Resume and Recording controls */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handlePauseResume}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
-                isPaused
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-              title={isPaused ? 'Resume Conversation' : 'Pause Conversation'}
-              disabled={!hasPermission}
-            >
-              {isPaused ? (
-                <>
-                  <Play className="h-5 w-5 mr-2" />
-                  <span>Resume</span>
-                </>
-              ) : (
-                <>
-                  <Pause className="h-5 w-5 mr-2" />
-                  <span>Pause</span>
-                </>
-              )}
-            </button>
-            
-            <button
-              onClick={() => toggleRecording()}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-md ${
-                isRecording
-                  ? 'bg-red-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-              title={isRecording ? 'Stop Recording' : 'Start Recording'}
-              disabled={!hasPermission}
-            >
-              <Download className="h-5 w-5 mr-2" />
-              <span>{isRecording ? 'Stop Recording' : 'Record'}</span>
-            </button>
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Call Controls</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={toggleVoiceChat}
+                className={cn(
+                  "flex items-center justify-center space-x-2 px-4 py-3 rounded-md transition-colors",
+                  isPaused
+                    ? "bg-green-500 text-white hover:bg-green-600"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                )}
+                title={isPaused ? 'Resume Conversation' : 'Pause Conversation'}
+                disabled={!hasPermission}
+              >
+                {isPaused ? (
+                  <>
+                    <Play className="h-5 w-5 mr-2" />
+                    <span>Resume</span>
+                  </>
+                ) : (
+                  <>
+                    <Pause className="h-5 w-5 mr-2" />
+                    <span>Pause</span>
+                  </>
+                )}
+              </button>
+              
+              <button
+                onClick={() => toggleRecording()}
+                className={cn(
+                  "flex items-center justify-center space-x-2 px-4 py-3 rounded-md transition-colors",
+                  isRecording
+                    ? "bg-red-500 text-white hover:bg-red-600"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                )}
+                title={isRecording ? 'Stop Recording' : 'Start Recording'}
+                disabled={!hasPermission}
+              >
+                <Download className="h-5 w-5 mr-2" />
+                <span>{isRecording ? 'Stop' : 'Record'}</span>
+              </button>
+            </div>
           </div>
           
           {/* Volume control */}
           <div className="p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">Volume</span>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700">Volume Control</h3>
               <span className="text-sm text-gray-500">{volume}%</span>
             </div>
             <div className="flex items-center space-x-3">
               <button
                 onClick={toggleMute}
-                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200"
-                aria-label="Mute"
+                className={cn(
+                  "p-2 rounded-full transition-colors",
+                  isSpeaking 
+                    ? "bg-gray-100 hover:bg-gray-200 text-gray-700" 
+                    : "bg-primary-100 text-primary-700 hover:bg-primary-200"
+                )}
+                aria-label={isSpeaking ? "Mute" : "Unmute"}
               >
-                <VolumeX className="h-5 w-5 text-gray-700" />
+                {isSpeaking ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
               </button>
               
               <input
@@ -277,23 +287,43 @@ export const VoiceControls: React.FC = () => {
                 aria-label="Volume"
               />
               
-              <Volume2 className="h-5 w-5 text-gray-700" />
+              <div className="w-8 text-center">
+                {volume > 66 ? (
+                  <Volume2 className="h-5 w-5 text-gray-700 mx-auto" />
+                ) : volume > 33 ? (
+                  <Volume1 className="h-5 w-5 text-gray-700 mx-auto" />
+                ) : (
+                  <VolumeX className="h-5 w-5 text-gray-700 mx-auto" />
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Status indicators */}
-      <div className="mt-4 flex items-center justify-between text-sm text-gray-500 border-t border-gray-200 pt-4">
-        <div className="flex items-center space-x-4">
-          <span className={`flex items-center ${hasPermission ? 'text-green-600' : 'text-red-600'}`}>
-            <div className={`w-2 h-2 rounded-full mr-2 ${hasPermission ? 'bg-green-500' : 'bg-red-500'}`}></div>
+      <div className="mt-6 flex items-center justify-between text-sm text-gray-500 border-t border-gray-200 pt-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className={cn(
+            "flex items-center",
+            hasPermission ? "text-green-600" : "text-red-600"
+          )}>
+            <div className={cn(
+              "w-2 h-2 rounded-full mr-2",
+              hasPermission ? "bg-green-500" : "bg-red-500"
+            )}></div>
             {hasPermission ? 'Microphone Ready' : 'Microphone Access Needed'}
           </span>
           
           {voiceMode !== 'muted' && hasPermission && (
-            <span className={`flex items-center ${isListening ? 'text-blue-600' : 'text-gray-500'}`}>
-              <div className={`w-2 h-2 rounded-full mr-2 ${isListening ? 'bg-blue-500 animate-pulse' : 'bg-gray-400'}`}></div>
+            <span className={cn(
+              "flex items-center",
+              isListening ? "text-blue-600" : "text-gray-500"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full mr-2",
+                isListening ? "bg-blue-500 animate-pulse" : "bg-gray-400"
+              )}></div>
               {isListening ? 'Listening...' : 'Ready to Listen'}
             </span>
           )}
@@ -306,7 +336,7 @@ export const VoiceControls: React.FC = () => {
           )}
         </div>
         
-        <div className="text-xs">
+        <div className="text-xs font-medium px-2 py-1 bg-gray-100 rounded-full">
           Mode: {voiceMode === 'muted' ? 'Off' : voiceMode === 'push-to-talk' ? 'Push-to-Talk' : 'Continuous'}
         </div>
       </div>

@@ -18,8 +18,8 @@ export const useVoiceChat = () => {
   
   const { user } = useAuth();
   const [isActive, setIsActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const voiceServiceRef = useRef<VoiceConversationService | null>(null);
 
   // Initialize voice service
@@ -88,12 +88,12 @@ export const useVoiceChat = () => {
     try {
       await voiceServiceRef.current.startListening();
       setIsActive(true);
+      setIsPaused(false);
       setAvatarEmotion('neutral');
       setError(null);
-      setIsPaused(false);
     } catch (error) {
       console.error('Failed to start voice chat:', error);
-      setError('Failed to start voice chat');
+      setError('Failed to start voice chat. Please check your microphone permissions.');
       toast.error('Failed to start voice chat. Please check your microphone permissions.');
     }
   }, [setAvatarEmotion]);
