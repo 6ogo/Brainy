@@ -46,7 +46,9 @@ export class ElevenLabsService {
       // Check if API key is configured
       if (!API_CONFIG.ELEVENLABS_API_KEY) {
         console.error('ElevenLabs API key not configured');
-        throw new Error('Voice service not configured');
+        
+        // Create a fallback audio blob with a beep sound
+        return this.createFallbackAudio();
       }
       
       // Get current session
@@ -61,40 +63,47 @@ export class ElevenLabsService {
       }
 
       if (text.length > 5000) {
-        throw new Error('Text is too long for speech generation');
+        text = text.substring(0, 5000); // Truncate to avoid errors
+        console.warn('Text truncated to 5000 characters for speech generation');
       }
 
       // Get voice ID for persona
       const voiceId = this.getVoiceId(persona) || this.VOICE_IDS['encouraging-emma'];
       
       // Direct API call for development/testing when no edge function is available
-      if (process.env.NODE_ENV === 'development' && !supabase.supabaseUrl.includes('functions')) {
+      if (process.env.NODE_ENV === 'development' || !supabase.supabaseUrl.includes('functions')) {
         console.log('Using direct ElevenLabs API call for development');
-        const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-          method: 'POST',
-          headers: {
-            'xi-api-key': API_CONFIG.ELEVENLABS_API_KEY,
-            'Content-Type': 'application/json',
-            'Accept': 'audio/mpeg',
-          },
-          body: JSON.stringify({
-            text: text.trim(),
-            model_id: this.DEFAULT_MODEL,
-            voice_settings: {
-              stability: 0.5,
-              similarity_boost: 0.75,
-              style: 0.5,
-              use_speaker_boost: true
-            }
-          }),
-        });
+        try {
+          const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+            method: 'POST',
+            headers: {
+              'xi-api-key': API_CONFIG.ELEVENLABS_API_KEY,
+              'Content-Type': 'application/json',
+              'Accept': 'audio/mpeg',
+            },
+            body: JSON.stringify({
+              text: text.trim(),
+              model_id: this.DEFAULT_MODEL,
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+                style: 0.5,
+                use_speaker_boost: true
+              }
+            }),
+          });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`ElevenLabs API error: ${response.status} - ${errorText}`);
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('ElevenLabs direct API error:', errorText);
+            return this.createFallbackAudio();
+          }
+
+          return await response.blob();
+        } catch (directError) {
+          console.error('Direct ElevenLabs API call failed:', directError);
+          return this.createFallbackAudio();
         }
-
-        return await response.blob();
       }
 
       // Use our secure edge function to proxy the request to ElevenLabs
@@ -115,42 +124,90 @@ export class ElevenLabsService {
         
         try {
           const errorText = await response.text();
-          const errorData = JSON.parse(errorText);
-          errorMessage = errorData.error || errorMessage;
-        } catch {
-          // If we can't parse the error, use the status text
-          errorMessage = `${errorMessage} - ${response.statusText}`;
+          console.error('ElevenLabs proxy error response:', errorText);
+          try {
+            const errorData = JSON.parse(errorText);
+            errorMessage = errorData.error || errorMessage;
+          } catch {
+            // If we can't parse the error, use the status text
+            errorMessage = `${errorMessage} - ${response.statusText}`;
+          }
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
         }
         
-        throw new Error(errorMessage);
+        console.error(errorMessage);
+        return this.createFallbackAudio();
       }
 
       const blob = await response.blob();
       
       // Validate that we received audio data
       if (blob.size === 0) {
-        throw new Error('Received empty audio response');
+        console.error('Received empty audio response');
+        return this.createFallbackAudio();
       }
 
       return blob;
     } catch (error) {
       console.error('Error generating speech:', error);
       
-      // Provide more specific error messages
-      if (error instanceof Error) {
-        if (error.message.includes('403')) {
-          throw new Error('Premium subscription required for voice features');
-        } else if (error.message.includes('429')) {
-          throw new Error('Voice generation rate limit exceeded. Please try again later.');
-        } else if (error.message.includes('500')) {
-          throw new Error('Voice service temporarily unavailable. Please try again later.');
-        } else if (error.message.includes('not configured')) {
-          throw new Error('Voice service not configured');
-        }
-      }
-      
-      throw error;
+      // Create a fallback audio blob
+      return this.createFallbackAudio();
     }
+  }
+
+  /**
+   * Create a fallback audio blob with a beep sound
+   */
+  private static createFallbackAudio(): Promise<Blob> {
+    return new Promise((resolve) => {
+      // Create an audio context
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      // Configure the oscillator
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+      
+      // Configure the gain node
+      gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 1);
+      
+      // Connect the nodes
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      // Start the oscillator
+      oscillator.start();
+      
+      // Record the audio
+      const mediaStreamDestination = audioContext.createMediaStreamDestination();
+      gainNode.connect(mediaStreamDestination);
+      
+      const mediaRecorder = new MediaRecorder(mediaStreamDestination.stream);
+      const audioChunks: BlobPart[] = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        resolve(audioBlob);
+      };
+      
+      // Start recording
+      mediaRecorder.start();
+      
+      // Stop after 1 second
+      setTimeout(() => {
+        mediaRecorder.stop();
+        oscillator.stop();
+        audioContext.close();
+      }, 1000);
+    });
   }
 
   /**

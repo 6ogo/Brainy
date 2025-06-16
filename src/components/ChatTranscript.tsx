@@ -3,11 +3,13 @@ import { format } from 'date-fns';
 import { Search, Send, Mic, Phone, PhoneOff } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
+import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn, commonStyles } from '../styles/utils';
 
 export const ChatTranscript: React.FC = () => {
   const { messages, learningMode, isSpeaking, setLearningMode } = useStore();
   const { sendMessage, isProcessing } = useConversation();
+  const { currentTranscript } = useVoiceChat();
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -17,7 +19,7 @@ export const ChatTranscript: React.FC = () => {
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, currentTranscript]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -137,6 +139,23 @@ export const ChatTranscript: React.FC = () => {
               </div>
             </div>
           ))
+        )}
+        
+        {/* Live transcript */}
+        {currentTranscript && (
+          <div className="flex justify-end">
+            <div className="max-w-[80%] rounded-lg px-4 py-2 bg-blue-50 text-blue-800 border border-blue-100">
+              <div className="flex items-center space-x-2 mb-1">
+                <div className="flex space-x-1">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                </div>
+                <span className="text-xs font-medium">Listening...</span>
+              </div>
+              <div className="text-sm">{currentTranscript}</div>
+            </div>
+          </div>
         )}
         
         {/* Speaking indicator */}

@@ -206,6 +206,8 @@ export const useConversation = () => {
           toast.error('Voice features require a premium subscription.');
         } else if (error.message.includes('Voice service')) {
           toast.error('Voice service temporarily unavailable. Please try text mode.');
+        } else if (error.message.includes('not configured')) {
+          toast.error('Voice service not configured. Please add your API keys to the .env file.');
         } else {
           toast.error('Failed to process message. Please try again.');
         }

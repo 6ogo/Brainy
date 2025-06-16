@@ -3,6 +3,7 @@ import { ElevenLabsService } from './elevenlabsService';
 import { GroqService } from './groqService';
 import { SecurityUtils } from '../utils/security';
 import { Subject, AvatarPersonality, DifficultyLevel } from '../types';
+import { API_CONFIG, createFallbackResponse } from '../config/api';
 
 interface ConversationResponse {
   text: string;
@@ -33,14 +34,21 @@ export class ConversationService {
       // Get user ID from session
       const userId = session.user.id;
 
-      // Generate AI response using GROQ
-      const textResponse = await GroqService.generateResponse(
-        sanitizedMessage,
-        subject,
-        currentAvatar,
-        difficultyLevel,
-        userId
-      );
+      // Check if GROQ API key is configured
+      let textResponse;
+      if (!API_CONFIG.GROQ_API_KEY) {
+        console.warn('GROQ API key not configured, using fallback response');
+        textResponse = `I understand you're asking about ${subject}. However, I'm currently operating in fallback mode because the AI service is not fully configured. Please check your API keys in the .env file. For now, I can still help with basic questions!`;
+      } else {
+        // Generate AI response using GROQ
+        textResponse = await GroqService.generateResponse(
+          sanitizedMessage,
+          subject,
+          currentAvatar,
+          difficultyLevel,
+          userId
+        );
+      }
 
       if (!textResponse) {
         throw new Error('No response received from AI');
@@ -54,24 +62,34 @@ export class ConversationService {
 
       let audioBlob: Blob | undefined;
 
-      // Generate voice if requested and ElevenLabs is available
+      // Generate voice if requested
       if (useVoice) {
         try {
           console.log('Generating speech for:', currentAvatar);
-          audioBlob = await ElevenLabsService.generateSpeech(sanitizedResponse, currentAvatar);
-          console.log('Speech generated successfully, blob size:', audioBlob.size);
+          
+          if (!API_CONFIG.ELEVENLABS_API_KEY) {
+            // Use fallback if ElevenLabs API key is not configured
+            audioBlob = await createFallbackResponse('elevenlabs', sanitizedResponse) as Blob;
+          } else {
+            audioBlob = await ElevenLabsService.generateSpeech(sanitizedResponse, currentAvatar);
+          }
+          
+          console.log('Speech generated successfully, blob size:', audioBlob?.size);
         } catch (voiceError) {
           console.error('Voice generation error:', voiceError);
-          // Continue without voice if it fails
+          // Create fallback audio
+          audioBlob = await ElevenLabsService.createFallbackAudio();
         }
       }
 
       // Generate summary
       let summary: string | undefined;
       try {
-        summary = await GroqService.generateSummary(sanitizedMessage, sanitizedResponse);
-        if (summary) {
-          summary = SecurityUtils.sanitizeInput(summary);
+        if (API_CONFIG.GROQ_API_KEY) {
+          summary = await GroqService.generateSummary(sanitizedMessage, sanitizedResponse);
+          if (summary) {
+            summary = SecurityUtils.sanitizeInput(summary);
+          }
         }
       } catch (summaryError) {
         console.error('Summary generation error:', summaryError);

@@ -1,6 +1,7 @@
 import { ElevenLabsService } from './elevenlabsService';
 import { GroqService } from './groqService';
 import { SecurityUtils } from '../utils/security';
+import { API_CONFIG, createFallbackResponse } from '../config/api';
 
 interface VoiceConversationConfig {
   userId: string;
@@ -167,20 +168,33 @@ export class VoiceConversationService {
       }
 
       // Generate AI response
-      const aiResponse = await GroqService.generateResponse(
-        sanitizedTranscript,
-        this.config.subject,
-        this.config.avatarPersonality,
-        this.config.difficultyLevel,
-        this.config.userId
-      );
+      let aiResponse;
+      if (!API_CONFIG.GROQ_API_KEY) {
+        aiResponse = `I heard you say: "${sanitizedTranscript}". However, I'm currently operating in fallback mode because the AI service is not fully configured. Please check your API keys in the .env file.`;
+      } else {
+        aiResponse = await GroqService.generateResponse(
+          sanitizedTranscript,
+          this.config.subject,
+          this.config.avatarPersonality,
+          this.config.difficultyLevel,
+          this.config.userId
+        );
+      }
 
       // Notify about text response
       this.config.onResponse?.(aiResponse);
 
       // Generate and play speech
       this.config.onAudioStart?.();
-      const audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
+      
+      let audioBlob;
+      if (!API_CONFIG.ELEVENLABS_API_KEY) {
+        // Use fallback if ElevenLabs API key is not configured
+        audioBlob = await createFallbackResponse('elevenlabs', aiResponse) as Blob;
+      } else {
+        audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
+      }
+      
       await this.playAudio(audioBlob);
       this.config.onAudioEnd?.();
     } catch (error) {
