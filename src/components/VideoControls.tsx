@@ -24,7 +24,7 @@ export const VideoControls: React.FC = () => {
     isSpeaking
   } = useStore();
   
-  const { isPaused, toggleVoiceChat } = useVoiceChat();
+  const { isPaused, pauseVoiceChat, resumeVoiceChat } = useVoiceChat();
   const [showBackgrounds, setShowBackgrounds] = useState(false);
 
   return (
@@ -98,7 +98,7 @@ export const VideoControls: React.FC = () => {
       </button>
 
       <button
-        onClick={toggleVoiceChat}
+        onClick={isPaused ? resumeVoiceChat : pauseVoiceChat}
         className={cn(
           "p-2.5 rounded-full transition-colors",
           isPaused 

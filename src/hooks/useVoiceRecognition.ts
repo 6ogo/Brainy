@@ -31,6 +31,7 @@ interface UseVoiceRecognitionReturn {
   hasPermission: boolean;
   handleVoiceCommand: (transcript: string) => boolean;
   requestPermission: () => Promise<boolean>;
+  transcript: string;
 }
 
 export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
@@ -162,6 +163,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         recognitionRef.current.start();
         toggleListening(true);
         setError(null);
+        console.log('Speech recognition started');
       }
       return true;
     } catch (err) {
@@ -179,6 +181,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       }
       toggleListening(false);
       setError(null);
+      console.log('Speech recognition stopped');
       return true;
     } catch (err) {
       console.error('Failed to stop listening:', err);
@@ -221,6 +224,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       
       // If not a command, send as a message
       if (!isCommand) {
+        console.log('Sending voice message:', transcript);
         addMessage(transcript, 'user');
         sendMessage(transcript, true);
       }
@@ -292,6 +296,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       if (latestResult && latestResult[0]) {
         const newTranscript = latestResult[0].transcript;
         setTranscript(newTranscript);
+        console.log('Speech recognized:', newTranscript);
         
         // If this is a final result
         if (latestResult.isFinal) {
@@ -317,7 +322,16 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     recognition.onerror = handleError;
     recognition.onend = () => {
       if (voiceMode === 'continuous' && isListening) {
-        recognition.start();
+        try {
+          setTimeout(() => {
+            if (recognition && voiceMode === 'continuous' && isListening) {
+              recognition.start();
+              console.log('Restarted continuous recognition');
+            }
+          }, 300); // Small delay to prevent rapid restarts
+        } catch (error) {
+          console.error('Failed to restart continuous recognition:', error);
+        }
       } else if (voiceMode === 'push-to-talk') {
         toggleListening(false);
       }
@@ -355,5 +369,6 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     hasPermission,
     handleVoiceCommand,
     requestPermission,
+    transcript
   } as const;
 };

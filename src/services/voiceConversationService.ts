@@ -11,6 +11,7 @@ interface VoiceConversationConfig {
   onAudioStart?: () => void;
   onAudioEnd?: () => void;
   onError?: (error: string) => void;
+  onTranscript?: (text: string, isFinal: boolean) => void;
 }
 
 export class VoiceConversationService {
@@ -20,6 +21,8 @@ export class VoiceConversationService {
   private config: VoiceConversationConfig;
   private audioContext: AudioContext | null = null;
   private currentAudio: HTMLAudioElement | null = null;
+  private isPaused = false;
+  private currentTranscript = '';
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -37,13 +40,25 @@ export class VoiceConversationService {
     this.recognition = new SpeechRecognition();
     
     this.recognition.continuous = true;
-    this.recognition.interimResults = false;
+    this.recognition.interimResults = true;
     this.recognition.lang = 'en-US';
 
     this.recognition.onresult = (event) => {
-      const transcript = event.results[event.results.length - 1][0].transcript.trim();
-      if (transcript) {
-        this.handleUserSpeech(transcript);
+      const lastResult = event.results[event.results.length - 1];
+      const transcript = lastResult[0].transcript.trim();
+      
+      // Update current transcript
+      this.currentTranscript = transcript;
+      
+      // Notify about interim results for UI feedback
+      this.config.onTranscript?.(transcript, lastResult.isFinal);
+      
+      // Only process final results
+      if (lastResult.isFinal) {
+        console.log('Final transcript:', transcript);
+        if (transcript) {
+          this.handleUserSpeech(transcript);
+        }
       }
     };
 
@@ -55,6 +70,21 @@ export class VoiceConversationService {
 
     this.recognition.onend = () => {
       this.isListening = false;
+      
+      // Restart if we're supposed to be listening continuously
+      if (!this.isPaused && this.recognition) {
+        try {
+          setTimeout(() => {
+            if (!this.isPaused && !this.isListening) {
+              this.recognition?.start();
+              this.isListening = true;
+              console.log('Restarted speech recognition');
+            }
+          }, 300); // Small delay to prevent rapid restarts
+        } catch (error) {
+          console.error('Failed to restart speech recognition:', error);
+        }
+      }
     };
   }
 
@@ -67,16 +97,24 @@ export class VoiceConversationService {
   }
 
   async startListening(): Promise<void> {
-    if (!this.recognition || this.isListening || this.isProcessing) {
+    if (!this.recognition || this.isListening) {
       return;
     }
 
     try {
       // Request microphone permission
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
       
+      this.isPaused = false;
       this.isListening = true;
       this.recognition.start();
+      console.log('Voice recognition started');
     } catch (error) {
       console.error('Failed to start listening:', error);
       this.config.onError?.('Failed to access microphone. Please check permissions.');
@@ -87,7 +125,21 @@ export class VoiceConversationService {
     if (this.recognition && this.isListening) {
       this.recognition.stop();
       this.isListening = false;
+      console.log('Voice recognition stopped');
     }
+  }
+
+  pauseConversation(): void {
+    this.isPaused = true;
+    this.stopListening();
+    this.stopSpeaking();
+    console.log('Conversation paused');
+  }
+
+  resumeConversation(): void {
+    this.isPaused = false;
+    this.startListening();
+    console.log('Conversation resumed');
   }
 
   stopSpeaking(): void {
@@ -100,12 +152,13 @@ export class VoiceConversationService {
   }
 
   private async handleUserSpeech(transcript: string): Promise<void> {
-    if (this.isProcessing) {
+    if (this.isProcessing || this.isPaused) {
       return;
     }
 
     try {
       this.isProcessing = true;
+      console.log('Processing speech input:', transcript);
       
       // Sanitize input
       const sanitizedTranscript = SecurityUtils.sanitizeInput(transcript);
@@ -135,6 +188,7 @@ export class VoiceConversationService {
       this.config.onError?.(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       this.isProcessing = false;
+      this.currentTranscript = '';
     }
   }
 
@@ -173,5 +227,13 @@ export class VoiceConversationService {
 
   isActive(): boolean {
     return this.isListening || this.isProcessing;
+  }
+
+  isPauseActive(): boolean {
+    return this.isPaused;
+  }
+
+  getCurrentTranscript(): string {
+    return this.currentTranscript;
   }
 }

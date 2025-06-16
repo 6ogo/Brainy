@@ -13,13 +13,15 @@ export const useVoiceChat = () => {
     setIsSpeaking,
     addMessage,
     setAvatarEmotion,
-    isListening
+    isListening,
+    toggleListening
   } = useStore();
   
   const { user } = useAuth();
   const [isActive, setIsActive] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentTranscript, setCurrentTranscript] = useState('');
   const voiceServiceRef = useRef<VoiceConversationService | null>(null);
 
   // Initialize voice service
@@ -46,6 +48,12 @@ export const useVoiceChat = () => {
         onError: (errorMessage) => {
           setError(errorMessage);
           toast.error(errorMessage);
+        },
+        onTranscript: (text, isFinal) => {
+          setCurrentTranscript(text);
+          if (isFinal) {
+            toggleListening(true);
+          }
         }
       });
     } catch (error) {
@@ -59,7 +67,7 @@ export const useVoiceChat = () => {
         voiceServiceRef.current.stopSpeaking();
       }
     };
-  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion]);
+  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening]);
 
   // Handle voice mode changes
   useEffect(() => {
@@ -91,6 +99,7 @@ export const useVoiceChat = () => {
       setIsPaused(false);
       setAvatarEmotion('neutral');
       setError(null);
+      toast.success('Voice chat started');
     } catch (error) {
       console.error('Failed to start voice chat:', error);
       setError('Failed to start voice chat. Please check your microphone permissions.');
@@ -108,22 +117,40 @@ export const useVoiceChat = () => {
     setAvatarEmotion('neutral');
   }, [setIsSpeaking, setAvatarEmotion]);
 
+  const pauseVoiceChat = useCallback(() => {
+    if (!voiceServiceRef.current) return;
+    
+    voiceServiceRef.current.pauseConversation();
+    setIsPaused(true);
+    setIsSpeaking(false);
+    toast.success('Conversation paused');
+  }, [setIsSpeaking]);
+
+  const resumeVoiceChat = useCallback(() => {
+    if (!voiceServiceRef.current) return;
+    
+    voiceServiceRef.current.resumeConversation();
+    setIsPaused(false);
+    toast.success('Conversation resumed');
+  }, []);
+
   const toggleVoiceChat = useCallback(() => {
-    if (isActive) {
-      stopVoiceChat();
-      setIsPaused(true);
+    if (isPaused) {
+      resumeVoiceChat();
     } else {
-      startVoiceChat();
-      setIsPaused(false);
+      pauseVoiceChat();
     }
-  }, [isActive, startVoiceChat, stopVoiceChat]);
+  }, [isPaused, pauseVoiceChat, resumeVoiceChat]);
 
   return {
     isActive,
     isPaused,
     error,
+    currentTranscript,
     startVoiceChat,
     stopVoiceChat,
+    pauseVoiceChat,
+    resumeVoiceChat,
     toggleVoiceChat
   };
 };

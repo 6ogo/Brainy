@@ -24,11 +24,22 @@ export const VoiceControls: React.FC = () => {
     stopListening, 
     hasPermission, 
     requestPermission,
-    error: recognitionError 
+    error: recognitionError,
+    transcript
   } = useVoiceRecognition();
   
-  const { isActive, isPaused, startVoiceChat, stopVoiceChat, toggleVoiceChat } = useVoiceChat();
+  const { 
+    isActive, 
+    isPaused, 
+    startVoiceChat, 
+    stopVoiceChat, 
+    pauseVoiceChat, 
+    resumeVoiceChat,
+    currentTranscript
+  } = useVoiceChat();
+  
   const [volume, setVolume] = useState(70);
+  const [showTranscript, setShowTranscript] = useState(true);
 
   // Ensure voice mode is appropriate for learning mode
   useEffect(() => {
@@ -94,6 +105,8 @@ export const VoiceControls: React.FC = () => {
       audio.volume = newVolume / 100;
     });
   };
+
+  const displayedTranscript = currentTranscript || transcript;
 
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
@@ -208,6 +221,21 @@ export const VoiceControls: React.FC = () => {
             <p className="text-xs text-gray-500 mt-2">
               {isListening ? "Release to stop" : "Press and hold to speak"}
             </p>
+            
+            {/* Live transcript */}
+            {showTranscript && displayedTranscript && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 w-full max-w-xs">
+                <div className="flex justify-between items-center mb-1">
+                  <p className="text-xs text-gray-500">Hearing:</p>
+                  <div className="flex space-x-1">
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-700">{displayedTranscript}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -217,7 +245,7 @@ export const VoiceControls: React.FC = () => {
             <h3 className="text-sm font-medium text-gray-700 mb-3">Call Controls</h3>
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={toggleVoiceChat}
+                onClick={isPaused ? resumeVoiceChat : pauseVoiceChat}
                 className={cn(
                   "flex items-center justify-center space-x-2 px-4 py-3 rounded-md transition-colors",
                   isPaused
@@ -225,7 +253,7 @@ export const VoiceControls: React.FC = () => {
                     : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 )}
                 title={isPaused ? 'Resume Conversation' : 'Pause Conversation'}
-                disabled={!hasPermission}
+                disabled={!hasPermission || !isActive}
               >
                 {isPaused ? (
                   <>
@@ -298,6 +326,16 @@ export const VoiceControls: React.FC = () => {
               </div>
             </div>
           </div>
+          
+          {/* Transcript toggle */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => setShowTranscript(!showTranscript)}
+              className="text-sm text-primary-600 hover:text-primary-700"
+            >
+              {showTranscript ? 'Hide Transcript' : 'Show Transcript'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -332,6 +370,13 @@ export const VoiceControls: React.FC = () => {
             <span className="flex items-center text-primary-600">
               <div className="w-2 h-2 rounded-full mr-2 bg-primary-500 animate-pulse"></div>
               AI Speaking
+            </span>
+          )}
+          
+          {isPaused && (
+            <span className="flex items-center text-amber-600">
+              <div className="w-2 h-2 rounded-full mr-2 bg-amber-500"></div>
+              Conversation Paused
             </span>
           )}
         </div>
