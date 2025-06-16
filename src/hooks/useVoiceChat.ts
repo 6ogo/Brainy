@@ -121,7 +121,7 @@ export const useVoiceChat = () => {
       
       console.log(`Voice service updated with difficulty level: ${difficultyLevel}`);
     }
-  }, [difficultyLevel]);
+  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening]);
 
   const startVoiceChat = useCallback(async () => {
     if (!voiceServiceRef.current) {

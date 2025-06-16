@@ -25,6 +25,8 @@ export class VoiceConversationService {
   private isPaused = false;
   private currentTranscript = '';
   private recognitionLanguage = 'en-US';
+  private audioQueue: Blob[] = [];
+  private isPlayingAudio = false;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -119,7 +121,7 @@ export class VoiceConversationService {
       console.log('Voice recognition started');
     } catch (error) {
       console.error('Failed to start listening:', error);
-      this.config.onError?.('Failed to access microphone. Please check permissions.');
+      this.config.onError?.('Failed to access microphone. Please check your browser permissions.');
     }
   }
 
@@ -151,6 +153,10 @@ export class VoiceConversationService {
       this.currentAudio = null;
       this.config.onAudioEnd?.();
     }
+    
+    // Clear audio queue
+    this.audioQueue = [];
+    this.isPlayingAudio = false;
   }
 
   setLanguage(languageCode: string): void {
@@ -217,34 +223,41 @@ export class VoiceConversationService {
 
   private async playAudio(audioBlob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      
-      this.currentAudio = audio;
-      
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        this.currentAudio = null;
-        resolve();
-      };
-      
-      audio.onerror = (event) => {
-        URL.revokeObjectURL(audioUrl);
-        this.currentAudio = null;
-        const errorMessage = event.target && (event.target as HTMLAudioElement).error 
-          ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
-          : 'Failed to play audio: Unknown error';
+      try {
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        
+        this.currentAudio = audio;
+        
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          this.currentAudio = null;
+          resolve();
+        };
+        
+        audio.onerror = (event) => {
+          URL.revokeObjectURL(audioUrl);
+          this.currentAudio = null;
+          const errorMessage = event.target && (event.target as HTMLAudioElement).error 
+            ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
+            : 'Failed to play audio: Unknown error';
+          reject(new Error(errorMessage));
+        };
+        
+        audio.play().catch((playError) => {
+          URL.revokeObjectURL(audioUrl);
+          this.currentAudio = null;
+          const errorMessage = playError instanceof Error 
+            ? `Audio playback failed: ${playError.message}`
+            : 'Audio playback failed: Unknown error';
+          reject(new Error(errorMessage));
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error 
+          ? `Audio setup failed: ${error.message}`
+          : 'Audio setup failed: Unknown error';
         reject(new Error(errorMessage));
-      };
-      
-      audio.play().catch((playError) => {
-        URL.revokeObjectURL(audioUrl);
-        this.currentAudio = null;
-        const errorMessage = playError instanceof Error 
-          ? `Audio playback failed: ${playError.message}`
-          : 'Audio playback failed: Unknown error';
-        reject(new Error(errorMessage));
-      });
+      }
     });
   }
 
