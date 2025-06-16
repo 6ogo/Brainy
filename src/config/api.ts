@@ -22,7 +22,7 @@ export const validateApiKeys = () => {
   }
 
   if (missingKeys.length > 0) {
-    console.error(`Missing required API keys: ${missingKeys.join(', ')}. Add them to your .env file.`);
+    console.warn(`Some API keys are missing: ${missingKeys.join(', ')}. Add them to your .env file for full functionality.`);
     return false;
   }
   return true;

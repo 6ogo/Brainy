@@ -30,6 +30,7 @@ export const StudyAdvisorPage: React.FC = () => {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [learningInsights, setLearningInsights] = useState<any>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkEligibility = async () => {
@@ -62,13 +63,17 @@ export const StudyAdvisorPage: React.FC = () => {
     if (!user) return;
     
     setIsGenerating(true);
+    setVideoError(null);
     try {
       const video = await TavusService.createStudyTipVideo(user.id, currentSubject);
       setVideoUrl(video.url);
       toast.success('Your personalized study advisor video is ready!');
     } catch (error) {
       console.error('Error generating Tavus video:', error);
-      toast.error('Failed to generate study advisor video');
+      setVideoError('Failed to generate video. Using fallback video instead.');
+      // Set a fallback video URL
+      setVideoUrl('https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
+      toast.error('Using fallback video due to generation error');
     } finally {
       setIsGenerating(false);
     }
@@ -91,6 +96,13 @@ export const StudyAdvisorPage: React.FC = () => {
       navigator.clipboard.writeText(shareText)
         .then(() => toast.success('Share text copied to clipboard!'));
     }
+  };
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    console.error('Video playback error:', e);
+    setVideoError('Error playing video. Please try again.');
+    // Set a fallback video
+    setVideoUrl('https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4');
   };
 
   if (isLoading) {
@@ -208,7 +220,13 @@ export const StudyAdvisorPage: React.FC = () => {
                       controls 
                       className="w-full h-full" 
                       autoPlay
+                      onError={handleVideoError}
                     />
+                    {videoError && (
+                      <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-sm">
+                        {videoError}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="aspect-video bg-gradient-to-br from-primary-100 to-primary-200 flex flex-col items-center justify-center p-8 text-center">

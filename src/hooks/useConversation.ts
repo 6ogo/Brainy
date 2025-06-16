@@ -150,6 +150,10 @@ export const useConversation = () => {
 
       // Track daily usage
       try {
+        // Format the month_year field correctly (YYYY-MM)
+        const now = new Date();
+        const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        
         await trackDailyUsage(conversationMinutes, videoMinutes);
       } catch (usageError) {
         console.error('Error tracking daily usage:', usageError);

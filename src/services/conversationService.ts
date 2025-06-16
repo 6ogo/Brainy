@@ -57,7 +57,9 @@ export class ConversationService {
       // Generate voice if requested and ElevenLabs is available
       if (useVoice) {
         try {
+          console.log('Generating speech for:', currentAvatar);
           audioBlob = await ElevenLabsService.generateSpeech(sanitizedResponse, currentAvatar);
+          console.log('Speech generated successfully, blob size:', audioBlob.size);
         } catch (voiceError) {
           console.error('Voice generation error:', voiceError);
           // Continue without voice if it fails

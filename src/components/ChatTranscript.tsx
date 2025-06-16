@@ -6,7 +6,7 @@ import { useConversation } from '../hooks/useConversation';
 import { cn, commonStyles } from '../styles/utils';
 
 export const ChatTranscript: React.FC = () => {
-  const { messages, learningMode, isSpeaking } = useStore();
+  const { messages, learningMode, isSpeaking, setLearningMode } = useStore();
   const { sendMessage, isProcessing } = useConversation();
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
@@ -27,6 +27,11 @@ export const ChatTranscript: React.FC = () => {
     }
   }, [inputMessage]);
 
+  // Update voice mode based on learning mode
+  useEffect(() => {
+    setIsVoiceMode(learningMode === 'videocall');
+  }, [learningMode]);
+
   const filteredMessages = searchTerm
     ? messages.filter(msg => 
         msg.text.toLowerCase().includes(searchTerm.toLowerCase()))
@@ -42,7 +47,9 @@ export const ChatTranscript: React.FC = () => {
   };
 
   const toggleVoiceMode = () => {
-    setIsVoiceMode(!isVoiceMode);
+    const newVoiceMode = !isVoiceMode;
+    setIsVoiceMode(newVoiceMode);
+    setLearningMode(newVoiceMode ? 'videocall' : 'conversational');
   };
 
   return (

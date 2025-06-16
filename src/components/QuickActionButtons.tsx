@@ -5,7 +5,7 @@ import { useConversation } from '../hooks/useConversation';
 import toast from 'react-hot-toast';
 
 export const QuickActionButtons: React.FC = () => {
-  const { currentSubject } = useStore();
+  const { currentSubject, setLearningMode } = useStore();
   const { sendMessage, isProcessing } = useConversation();
 
   const handleAction = async (prompt: string, useVoice: boolean = false) => {
@@ -15,6 +15,13 @@ export const QuickActionButtons: React.FC = () => {
     }
 
     try {
+      // Set the learning mode based on the voice parameter
+      if (useVoice) {
+        setLearningMode('videocall');
+      } else {
+        setLearningMode('conversational');
+      }
+      
       await sendMessage(prompt, useVoice);
     } catch (error) {
       console.error('Error handling quick action:', error);
