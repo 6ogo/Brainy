@@ -7,7 +7,7 @@ import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn, commonStyles } from '../styles/utils';
 
 export const ChatTranscript: React.FC = () => {
-  const { messages, learningMode, isSpeaking, setLearningMode } = useStore();
+  const { messages, learningMode, isSpeaking, setLearningMode, difficultyLevel } = useStore();
   const { sendMessage, isProcessing } = useConversation();
   const { currentTranscript } = useVoiceChat();
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,6 +70,11 @@ export const ChatTranscript: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        
+        {/* Difficulty level indicator */}
+        <div className="mr-4 px-3 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full border border-primary-100">
+          {difficultyLevel} Level
         </div>
         
         {/* Voice/Text Mode Toggle */}
@@ -167,7 +172,7 @@ export const ChatTranscript: React.FC = () => {
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
               </div>
-              <span className="text-sm">Speaking...</span>
+              <span className="text-sm">AI Speaking...</span>
             </div>
           </div>
         )}

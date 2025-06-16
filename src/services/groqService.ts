@@ -37,10 +37,10 @@ export class GroqService {
       }
 
       // Get or create conversation history
-      const conversationKey = `${userId}-${subject}`;
+      const conversationKey = `${userId}-${subject}-${difficultyLevel}`;
       let history = this.conversationHistory.get(conversationKey) || [];
 
-      // Create system prompt based on avatar personality and subject
+      // Create system prompt based on avatar personality, subject and difficulty level
       const systemPrompt = this.createSystemPrompt(subject, avatarPersonality, difficultyLevel);
 
       // Build messages array
@@ -154,7 +154,15 @@ export class GroqService {
       'buddy-ben': 'You are Ben, a friendly peer-like tutor who explains things casually. Use simple language, relate to student experiences, and create a comfortable learning environment.'
     };
 
+    const difficultyGuidelines = {
+      'Elementary': 'Use simple vocabulary and basic concepts. Explain everything in very clear, straightforward terms with many examples. Avoid technical terminology. Use short sentences and simple explanations suitable for young learners or beginners.',
+      'High School': 'Use moderate vocabulary and introduce some field-specific terms with explanations. Provide clear examples and analogies. Balance depth with accessibility. Suitable for teenage students or adults with basic knowledge.',
+      'College': 'Use proper terminology and more complex concepts. Provide detailed explanations with academic rigor. Assume some background knowledge but still explain specialized concepts. Suitable for undergraduate level.',
+      'Advanced': 'Use specialized terminology and sophisticated concepts. Provide in-depth analysis and nuanced explanations. Assume strong background knowledge. Suitable for graduate level or professional specialists.'
+    };
+
     const personality = personalityTraits[avatarPersonality as keyof typeof personalityTraits] || personalityTraits['encouraging-emma'];
+    const difficultyGuideline = difficultyGuidelines[difficultyLevel as keyof typeof difficultyGuidelines] || difficultyGuidelines['High School'];
 
     return `${personality}
 
@@ -169,6 +177,9 @@ You are an expert ${subject} tutor teaching at the ${difficultyLevel} level. You
 7. Stay focused on ${subject} topics
 8. Be patient and supportive while maintaining academic rigor
 
+Difficulty Level Guidelines:
+${difficultyGuideline}
+
 Guidelines:
 - Keep responses conversational and engaging
 - Use the student's name when appropriate
@@ -181,10 +192,15 @@ Guidelines:
 Remember: You're not just providing answers, you're facilitating learning and understanding.`;
   }
 
-  static clearConversationHistory(userId: string, subject?: string): void {
-    if (subject) {
-      const conversationKey = `${userId}-${subject}`;
+  static clearConversationHistory(userId: string, subject?: string, difficultyLevel?: string): void {
+    if (subject && difficultyLevel) {
+      const conversationKey = `${userId}-${subject}-${difficultyLevel}`;
       this.conversationHistory.delete(conversationKey);
+    } else if (subject) {
+      // Clear all conversations for the user and subject across difficulty levels
+      const keysToDelete = Array.from(this.conversationHistory.keys())
+        .filter(key => key.startsWith(`${userId}-${subject}`));
+      keysToDelete.forEach(key => this.conversationHistory.delete(key));
     } else {
       // Clear all conversations for the user
       const keysToDelete = Array.from(this.conversationHistory.keys())
@@ -193,8 +209,8 @@ Remember: You're not just providing answers, you're facilitating learning and un
     }
   }
 
-  static getConversationHistory(userId: string, subject: string): GroqMessage[] {
-    const conversationKey = `${userId}-${subject}`;
+  static getConversationHistory(userId: string, subject: string, difficultyLevel: string): GroqMessage[] {
+    const conversationKey = `${userId}-${subject}-${difficultyLevel}`;
     return this.conversationHistory.get(conversationKey) || [];
   }
 }

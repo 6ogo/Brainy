@@ -1,13 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/store';
 import { DifficultyLevel } from '../types';
 import { Info } from 'lucide-react';
+import { GroqService } from '../services/groqService';
+import toast from 'react-hot-toast';
 
 export const DifficultySlider: React.FC = () => {
-  const { difficultyLevel, setDifficultyLevel, currentSubject } = useStore();
+  const { difficultyLevel, setDifficultyLevel, currentSubject, currentAvatar } = useStore();
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
+  const [prevDifficulty, setPrevDifficulty] = useState<DifficultyLevel>(difficultyLevel);
 
   const levels: DifficultyLevel[] = ['Elementary', 'High School', 'College', 'Advanced'];
+
+  // Clear conversation history when difficulty changes
+  useEffect(() => {
+    if (prevDifficulty !== difficultyLevel) {
+      // Get user ID from local storage or session
+      const userId = localStorage.getItem('userId') || sessionStorage.getItem('userId') || 'anonymous';
+      
+      // Clear conversation history for this subject at the previous difficulty level
+      GroqService.clearConversationHistory(userId, currentSubject, prevDifficulty);
+      
+      // Show toast notification
+      toast.success(`Difficulty changed to ${difficultyLevel}`, {
+        icon: '📚',
+        duration: 3000,
+      });
+      
+      // Update previous difficulty
+      setPrevDifficulty(difficultyLevel);
+    }
+  }, [difficultyLevel, currentSubject, prevDifficulty]);
 
   const handleDifficultyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const index = parseInt(e.target.value, 10);
@@ -21,21 +44,25 @@ export const DifficultySlider: React.FC = () => {
   const getDifficultyDescription = (level: DifficultyLevel) => {
     switch (level) {
       case 'Elementary':
-        return `Basic ${currentSubject} concepts with simple explanations`;
+        return `Basic ${currentSubject} concepts with simple explanations and examples suitable for beginners or young learners.`;
       case 'High School':
-        return `Standard ${currentSubject} curriculum with practical applications`;
+        return `Standard ${currentSubject} curriculum with practical applications and moderate complexity for teenage students.`;
       case 'College':
-        return `Advanced ${currentSubject} concepts with deeper analysis`;
+        return `Advanced ${currentSubject} concepts with deeper analysis and complex problem-solving for undergraduate level.`;
       case 'Advanced':
-        return `Expert-level ${currentSubject} with specialized topics`;
+        return `Expert-level ${currentSubject} with specialized topics and sophisticated theoretical frameworks for graduate students.`;
     }
   };
 
   return (
     <div className="w-full">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Difficulty Level: {difficultyLevel}
-      </label>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-sm font-medium text-gray-700">
+          Difficulty Level
+        </label>
+        <span className="text-sm font-medium text-primary-700">{difficultyLevel}</span>
+      </div>
+      
       <div className="flex items-center space-x-2">
         <input
           type="range"
@@ -47,6 +74,7 @@ export const DifficultySlider: React.FC = () => {
           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
         />
       </div>
+      
       <div className="flex justify-between text-xs text-gray-500 mt-1">
         {levels.map((level) => (
           <div 
@@ -69,6 +97,13 @@ export const DifficultySlider: React.FC = () => {
             )}
           </div>
         ))}
+      </div>
+      
+      <div className="mt-2 flex items-start">
+        <Info className="h-3.5 w-3.5 text-gray-400 mt-0.5 mr-1 flex-shrink-0" />
+        <p className="text-xs text-gray-500">
+          Changing difficulty will adjust the language complexity and depth of explanations.
+        </p>
       </div>
     </div>
   );

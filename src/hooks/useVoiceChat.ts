@@ -87,6 +87,42 @@ export const useVoiceChat = () => {
     }
   }, [isListening, isActive]);
 
+  // Update voice service when difficulty level changes
+  useEffect(() => {
+    if (voiceServiceRef.current && user) {
+      // Reinitialize the service with the new difficulty level
+      voiceServiceRef.current = new VoiceConversationService({
+        userId: user.id,
+        subject: currentSubject,
+        avatarPersonality: currentAvatar,
+        difficultyLevel: difficultyLevel,
+        onResponse: (text) => {
+          addMessage(text, 'ai');
+        },
+        onAudioStart: () => {
+          setIsSpeaking(true);
+          setAvatarEmotion('neutral');
+        },
+        onAudioEnd: () => {
+          setIsSpeaking(false);
+          setAvatarEmotion('neutral');
+        },
+        onError: (errorMessage) => {
+          setError(errorMessage);
+          toast.error(errorMessage);
+        },
+        onTranscript: (text, isFinal) => {
+          setCurrentTranscript(text);
+          if (isFinal) {
+            toggleListening(true);
+          }
+        }
+      });
+      
+      console.log(`Voice service updated with difficulty level: ${difficultyLevel}`);
+    }
+  }, [difficultyLevel]);
+
   const startVoiceChat = useCallback(async () => {
     if (!voiceServiceRef.current) {
       setError('Voice service not initialized');

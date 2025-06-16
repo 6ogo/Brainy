@@ -21,14 +21,15 @@ export const VideoControls: React.FC = () => {
     setCurrentBackground,
     voiceMode,
     setVoiceMode,
-    isSpeaking
+    isSpeaking,
+    difficultyLevel
   } = useStore();
   
   const { isPaused, pauseVoiceChat, resumeVoiceChat } = useVoiceChat();
   const [showBackgrounds, setShowBackgrounds] = useState(false);
 
   return (
-    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3 bg-black/60 rounded-full px-4 py-2 shadow-lg">
+    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3 bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg z-10">
       <button
         onClick={toggleVideo}
         className={cn(

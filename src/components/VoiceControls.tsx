@@ -16,7 +16,8 @@ export const VoiceControls: React.FC = () => {
     isRecording,
     toggleRecording,
     learningMode,
-    isSpeaking
+    isSpeaking,
+    difficultyLevel
   } = useStore();
   
   const { 
@@ -40,6 +41,7 @@ export const VoiceControls: React.FC = () => {
   
   const [volume, setVolume] = useState(70);
   const [showTranscript, setShowTranscript] = useState(true);
+  const [showPermissionBanner, setShowPermissionBanner] = useState(!hasPermission);
 
   // Ensure voice mode is appropriate for learning mode
   useEffect(() => {
@@ -47,6 +49,13 @@ export const VoiceControls: React.FC = () => {
       setVoiceMode('push-to-talk');
     }
   }, [learningMode, voiceMode, setVoiceMode]);
+
+  // Hide permission banner after successful permission grant
+  useEffect(() => {
+    if (hasPermission) {
+      setShowPermissionBanner(false);
+    }
+  }, [hasPermission]);
 
   const handleVoiceModeChange = async (mode: VoiceMode) => {
     if (!hasPermission) {
@@ -92,6 +101,7 @@ export const VoiceControls: React.FC = () => {
     const granted = await requestPermission();
     if (granted) {
       toast.success('Microphone access granted! You can now use voice features.');
+      setShowPermissionBanner(false);
     }
   };
 
@@ -111,7 +121,7 @@ export const VoiceControls: React.FC = () => {
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
       {/* Permission Request Banner */}
-      {!hasPermission && (
+      {showPermissionBanner && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-start space-x-3">
             <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />

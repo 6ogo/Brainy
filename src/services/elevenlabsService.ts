@@ -1,4 +1,4 @@
-import { API_CONFIG } from '../config/api';
+import { API_CONFIG, createFallbackResponse } from '../config/api';
 import { supabase } from '../lib/supabase';
 
 interface Voice {
@@ -160,8 +160,32 @@ export class ElevenLabsService {
   /**
    * Create a fallback audio blob with a beep sound
    */
-  private static createFallbackAudio(): Promise<Blob> {
+  static createFallbackAudio(): Promise<Blob> {
     return new Promise((resolve) => {
+      // Try to use browser's speech synthesis first
+      if ('speechSynthesis' in window) {
+        try {
+          const utterance = new SpeechSynthesisUtterance("I'm sorry, but I can't use my normal voice right now. Please check your API keys in the environment variables.");
+          utterance.rate = 1;
+          utterance.pitch = 1;
+          utterance.volume = 1;
+          
+          // Find a good voice
+          const voices = window.speechSynthesis.getVoices();
+          const englishVoice = voices.find(voice => 
+            voice.lang.includes('en') && voice.name.includes('Female')
+          );
+          
+          if (englishVoice) {
+            utterance.voice = englishVoice;
+          }
+          
+          window.speechSynthesis.speak(utterance);
+        } catch (e) {
+          console.error('Speech synthesis failed:', e);
+        }
+      }
+      
       // Create an audio context
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const oscillator = audioContext.createOscillator();
@@ -215,47 +239,39 @@ export class ElevenLabsService {
    */
   static async playAudio(audioBlob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
-      try {
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-        
-        audio.onerror = (event) => {
-          URL.revokeObjectURL(audioUrl);
-          const errorMessage = event.target && (event.target as HTMLAudioElement).error 
-            ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
-            : 'Failed to play audio: Unknown error';
-          reject(new Error(errorMessage));
-        };
-        
-        audio.oncanplaythrough = () => {
-          audio.play().catch((playError) => {
-            URL.revokeObjectURL(audioUrl);
-            const errorMessage = playError instanceof Error 
-              ? `Audio playback failed: ${playError.message}`
-              : 'Audio playback failed: Unknown error';
-            reject(new Error(errorMessage));
-          });
-        };
-        
-        // Set a timeout to prevent hanging
-        setTimeout(() => {
-          if (audio.readyState < 3) { // HAVE_FUTURE_DATA
-            URL.revokeObjectURL(audioUrl);
-            reject(new Error('Audio loading timeout'));
-          }
-        }, 10000);
-        
-      } catch (error) {
-        const errorMessage = error instanceof Error 
-          ? `Audio setup failed: ${error.message}`
-          : 'Audio setup failed: Unknown error';
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        resolve();
+      };
+      
+      audio.onerror = (event) => {
+        URL.revokeObjectURL(audioUrl);
+        const errorMessage = event.target && (event.target as HTMLAudioElement).error 
+          ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
+          : 'Failed to play audio: Unknown error';
         reject(new Error(errorMessage));
-      }
+      };
+      
+      audio.oncanplaythrough = () => {
+        audio.play().catch((playError) => {
+          URL.revokeObjectURL(audioUrl);
+          const errorMessage = playError instanceof Error 
+            ? `Audio playback failed: ${playError.message}`
+            : 'Audio playback failed: Unknown error';
+          reject(new Error(errorMessage));
+        });
+      };
+      
+      // Set a timeout to prevent hanging
+      setTimeout(() => {
+        if (audio.readyState < 3) { // HAVE_FUTURE_DATA
+          URL.revokeObjectURL(audioUrl);
+          reject(new Error('Audio loading timeout'));
+        }
+      }, 10000);
     });
   }
 

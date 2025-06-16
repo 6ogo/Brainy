@@ -24,6 +24,7 @@ export class VoiceConversationService {
   private currentAudio: HTMLAudioElement | null = null;
   private isPaused = false;
   private currentTranscript = '';
+  private recognitionLanguage = 'en-US';
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -42,7 +43,7 @@ export class VoiceConversationService {
     
     this.recognition.continuous = true;
     this.recognition.interimResults = true;
-    this.recognition.lang = 'en-US';
+    this.recognition.lang = this.recognitionLanguage;
 
     this.recognition.onresult = (event) => {
       const lastResult = event.results[event.results.length - 1];
@@ -76,8 +77,8 @@ export class VoiceConversationService {
       if (!this.isPaused && this.recognition) {
         try {
           setTimeout(() => {
-            if (!this.isPaused && !this.isListening) {
-              this.recognition?.start();
+            if (!this.isPaused && !this.isListening && this.recognition) {
+              this.recognition.start();
               this.isListening = true;
               console.log('Restarted speech recognition');
             }
@@ -149,6 +150,14 @@ export class VoiceConversationService {
       this.currentAudio.currentTime = 0;
       this.currentAudio = null;
       this.config.onAudioEnd?.();
+    }
+  }
+
+  setLanguage(languageCode: string): void {
+    this.recognitionLanguage = languageCode;
+    if (this.recognition) {
+      this.recognition.lang = languageCode;
+      console.log(`Speech recognition language set to: ${languageCode}`);
     }
   }
 

@@ -17,12 +17,13 @@ export const VideoArea: React.FC = () => {
     currentBackground,
     avatarEmotion,
     voiceMode,
-    learningMode
+    learningMode,
+    difficultyLevel
   } = useStore();
   
   const { user } = useAuth();
   const { error: recognitionError } = useVoiceRecognition();
-  const { isActive: voiceChatActive, error: voiceChatError, isPaused } = useVoiceChat();
+  const { isActive: voiceChatActive, error: voiceChatError, isPaused, currentTranscript } = useVoiceChat();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
@@ -114,6 +115,21 @@ export const VideoArea: React.FC = () => {
                         <div className="absolute inset-0 bg-primary-500 rounded-full animate-pulse-slow opacity-20"></div>
                       )}
                     </div>
+                    
+                    {/* Live transcript bubble */}
+                    {currentTranscript && (
+                      <div className="absolute top-full mt-4 max-w-xs bg-white rounded-lg p-3 shadow-lg border border-gray-200">
+                        <div className="flex items-center space-x-2 mb-1">
+                          <div className="flex space-x-1">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                          </div>
+                          <span className="text-xs font-medium text-blue-600">Hearing you say...</span>
+                        </div>
+                        <p className="text-sm text-gray-800">{currentTranscript}</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
@@ -125,29 +141,37 @@ export const VideoArea: React.FC = () => {
         
         <div className="absolute top-4 right-4 flex space-x-2">
           {isListening && voiceMode !== 'muted' ? (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-success-500 text-white">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-success-500 text-white shadow-md">
               <Mic className="w-3 h-3 mr-1" /> Listening
             </span>
           ) : (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-500 text-white">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-500 text-white shadow-md">
               <MicOff className="w-3 h-3 mr-1" /> Mic Off
             </span>
           )}
           
           {isSpeaking ? (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-500 text-white">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-500 text-white shadow-md">
               <Volume2 className="w-3 h-3 mr-1" /> Speaking
             </span>
           ) : (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-500 text-white">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-500 text-white shadow-md">
               <VolumeX className="w-3 h-3 mr-1" /> Silent
             </span>
           )}
         </div>
         
+        {/* Difficulty level indicator */}
+        <div className="absolute top-4 left-4 bg-white/90 text-primary-700 text-xs font-medium rounded-full px-3 py-1 shadow-md">
+          {difficultyLevel} Level
+        </div>
+        
         {(recognitionError || voiceChatError) && (
-          <div className="absolute top-4 left-4 bg-error-500 text-white text-xs rounded-md px-3 py-1.5 shadow-md">
-            {recognitionError || voiceChatError}
+          <div className="absolute top-14 left-4 bg-error-500 text-white text-xs rounded-md px-3 py-1.5 shadow-md max-w-xs">
+            <div className="flex items-start space-x-2">
+              <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+              <span>{recognitionError || voiceChatError}</span>
+            </div>
           </div>
         )}
 
