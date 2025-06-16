@@ -167,13 +167,22 @@ export class ElevenLabsService {
           resolve();
         };
         
-        audio.onerror = (error) => {
+        audio.onerror = (event) => {
           URL.revokeObjectURL(audioUrl);
-          reject(new Error(`Failed to play audio: ${error}`));
+          const errorMessage = event.target && (event.target as HTMLAudioElement).error 
+            ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
+            : 'Failed to play audio: Unknown error';
+          reject(new Error(errorMessage));
         };
         
         audio.oncanplaythrough = () => {
-          audio.play().catch(reject);
+          audio.play().catch((playError) => {
+            URL.revokeObjectURL(audioUrl);
+            const errorMessage = playError instanceof Error 
+              ? `Audio playback failed: ${playError.message}`
+              : 'Audio playback failed: Unknown error';
+            reject(new Error(errorMessage));
+          });
         };
         
         // Set a timeout to prevent hanging
@@ -185,7 +194,10 @@ export class ElevenLabsService {
         }, 10000);
         
       } catch (error) {
-        reject(new Error(`Audio setup failed: ${error}`));
+        const errorMessage = error instanceof Error 
+          ? `Audio setup failed: ${error.message}`
+          : 'Audio setup failed: Unknown error';
+        reject(new Error(errorMessage));
       }
     });
   }

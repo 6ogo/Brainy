@@ -69,21 +69,27 @@ export interface Database {
           id: string
           user_id: string
           month_year: string
-          minutes_used: number
+          date: string
+          conversation_minutes: number
+          video_call_minutes: number
           updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
           month_year: string
-          minutes_used?: number
+          date: string
+          conversation_minutes?: number
+          video_call_minutes?: number
           updated_at?: string
         }
         Update: {
           id?: string
           user_id?: string
           month_year?: string
-          minutes_used?: number
+          date?: string
+          conversation_minutes?: number
+          video_call_minutes?: number
           updated_at?: string
         }
       }

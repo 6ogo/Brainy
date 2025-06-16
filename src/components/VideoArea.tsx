@@ -5,7 +5,6 @@ import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { VoiceControls } from './VoiceControls';
 import { VideoControls } from './VideoControls';
-import { AvatarSelector } from './AvatarSelector';
 import { TavusService } from '../services/tavusService';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
@@ -83,10 +82,6 @@ export const VideoArea: React.FC = () => {
 
   return (
     <div className="relative h-full flex flex-col">
-      <div className="absolute top-4 left-4 z-10">
-        <AvatarSelector />
-      </div>
-
       <div className="flex-1 bg-gray-900 rounded-lg overflow-hidden relative">
         {!videoLoaded ? (
           <div className="absolute inset-0 flex items-center justify-center">
