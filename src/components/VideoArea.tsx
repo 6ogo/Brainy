@@ -3,8 +3,8 @@ import { Mic, MicOff, Volume2, VolumeX, AlertCircle } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
-import { VoiceControls } from './VoiceControls';
 import { VideoControls } from './VideoControls';
+import { VoiceControls } from './VoiceControls';
 import { TavusService } from '../services/tavusService';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../styles/utils';
@@ -22,7 +22,7 @@ export const VideoArea: React.FC = () => {
   
   const { user } = useAuth();
   const { error: recognitionError } = useVoiceRecognition();
-  const { isActive: voiceChatActive, error: voiceChatError, isPaused, toggleVoiceChat } = useVoiceChat();
+  const { isActive: voiceChatActive, error: voiceChatError, isPaused } = useVoiceChat();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
