@@ -9,7 +9,9 @@ import {
   Award,
   Lightbulb,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  BarChart,
+  BookOpen
 } from 'lucide-react';
 
 interface AnalyticsInsightsProps {
@@ -96,7 +98,25 @@ export const AnalyticsInsights: React.FC<AnalyticsInsightsProps> = ({
         description: 'Your study time has increased this week compared to last week.',
         action: 'You\'re on an upward trajectory!'
       });
+    } else if (recentProgress.length >= 2) {
+      insights.push({
+        type: 'info',
+        icon: <BarChart className="h-5 w-5" />,
+        title: 'Steady Progress',
+        description: 'Your study time has been consistent recently.',
+        action: 'Consider setting a goal to increase your weekly study time.'
+      });
     }
+
+    // Learning style insight based on patterns
+    const learningStyle = determineLearningStyle(totalConversations, averageSessionLength, totalStudyTime);
+    insights.push({
+      type: 'info',
+      icon: <BookOpen className="h-5 w-5" />,
+      title: 'Learning Style Analysis',
+      description: `Your patterns suggest you're primarily a ${learningStyle} learner.`,
+      action: getLearningStyleRecommendation(learningStyle)
+    });
 
     // XP milestone insight
     if (totalXP >= 1000) {
@@ -110,6 +130,36 @@ export const AnalyticsInsights: React.FC<AnalyticsInsightsProps> = ({
     }
 
     return insights.slice(0, 3); // Show top 3 insights
+  };
+
+  const determineLearningStyle = (conversations: number, avgSessionLength: number, studyTime: number): string => {
+    // This is a simplified algorithm to determine learning style based on usage patterns
+    // In a real implementation, this would be more sophisticated and based on actual user behavior
+    
+    if (conversations > 50 && avgSessionLength < 15) {
+      return 'visual';
+    } else if (avgSessionLength > 25) {
+      return 'auditory';
+    } else if (conversations > 30 && studyTime > 600) {
+      return 'kinesthetic';
+    } else {
+      return 'reading/writing';
+    }
+  };
+
+  const getLearningStyleRecommendation = (style: string): string => {
+    switch (style) {
+      case 'visual':
+        return 'Try using diagrams, charts, and color-coding in your notes.';
+      case 'auditory':
+        return 'Consider recording explanations and discussing concepts aloud.';
+      case 'kinesthetic':
+        return 'Incorporate hands-on practice and movement while studying.';
+      case 'reading/writing':
+        return 'Focus on taking detailed notes and summarizing concepts in writing.';
+      default:
+        return 'Experiment with different study techniques to find what works best.';
+    }
   };
 
   const insights = generateInsights();
