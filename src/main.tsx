@@ -6,20 +6,28 @@ import './index.css';
 // Mock global SpeechRecognition for browsers that don't support it
 if (typeof window !== 'undefined') {
   if (!('SpeechRecognition' in window)) {
-    (window as any).SpeechRecognition = class MockSpeechRecognition {
+    window.SpeechRecognition = class MockSpeechRecognition {
       continuous = false;
       interimResults = false;
       lang = 'en-US';
       onresult = () => {};
       onerror = () => {};
       onend = () => {};
-      start() {}
+      start() {
+        console.warn('SpeechRecognition not supported in this browser');
+        if (this.onerror) {
+          this.onerror({ error: 'not-supported', message: 'SpeechRecognition not supported in this browser' } as any);
+        }
+        if (this.onend) {
+          this.onend();
+        }
+      }
       stop() {}
-    };
+    } as any;
   }
 
   if (!('webkitSpeechRecognition' in window)) {
-    (window as any).webkitSpeechRecognition = (window as any).SpeechRecognition;
+    window.webkitSpeechRecognition = window.SpeechRecognition;
   }
 }
 

@@ -4,6 +4,7 @@ declare global {
     webkitSpeechRecognition: typeof SpeechRecognition;
     webkitSpeechGrammarList: typeof SpeechGrammarList;
     webkitSpeechRecognitionEvent: typeof SpeechRecognitionEvent;
+    SpeechRecognition: typeof SpeechRecognition;
   }
 
   interface SpeechRecognitionEvent extends Event {
@@ -83,42 +84,6 @@ declare global {
       options?: boolean | EventListenerOptions
     ): void;
   }
-
-  interface SpeechRecognitionConstructor {
-    new (): SpeechRecognition;
-    prototype: SpeechRecognition;
-  }
-
-  interface SpeechGrammar {
-    src: string;
-    weight: number;
-  }
-
-  interface SpeechGrammarList {
-    readonly length: number;
-    addFromString(string: string, weight?: number): void;
-    addFromURI(src: string, weight?: number): void;
-    item(index: number): SpeechGrammar;
-    [index: number]: SpeechGrammar;
-  }
-
-  interface SpeechGrammarListConstructor {
-    new (): SpeechGrammarList;
-    prototype: SpeechGrammarList;
-  }
-
-  var SpeechRecognition: SpeechRecognitionConstructor;
-  var webkitSpeechRecognition: SpeechRecognitionConstructor;
-  var SpeechGrammarList: SpeechGrammarListConstructor;
-  var webkitSpeechGrammarList: SpeechGrammarListConstructor;
-  var SpeechRecognitionEvent: {
-    prototype: SpeechRecognitionEvent;
-    new (type: string, eventInitDict?: SpeechRecognitionEventInit): SpeechRecognitionEvent;
-  };
-  var webkitSpeechRecognitionEvent: {
-    prototype: SpeechRecognitionEvent;
-    new (type: string, eventInitDict?: SpeechRecognitionEventInit): SpeechRecognitionEvent;
-  };
 }
 
 export {};
