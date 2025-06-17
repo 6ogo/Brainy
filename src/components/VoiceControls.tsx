@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, MicOff, Volume2, Volume1, VolumeX, Download, AlertCircle, Pause, Play } from 'lucide-react';
+import { Mic, MicOff, Volume2, Volume1, VolumeX, Download, AlertCircle, Pause, Play, MessageSquare } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
@@ -7,6 +7,7 @@ import { VoiceMode } from '../types';
 import toast from 'react-hot-toast';
 import { cn } from '../styles/utils';
 import { Button } from './Button';
+import { useNavigate } from 'react-router-dom';
 
 export const VoiceControls: React.FC = () => {
   const { 
@@ -17,8 +18,11 @@ export const VoiceControls: React.FC = () => {
     isRecording,
     toggleRecording,
     learningMode,
-    isSpeaking
+    isSpeaking,
+    setLearningMode
   } = useStore();
+  
+  const navigate = useNavigate();
   
   const { 
     startListening, 
@@ -150,6 +154,12 @@ export const VoiceControls: React.FC = () => {
 
   const displayedTranscript = currentTranscript || transcript;
 
+  const handleSwitchToTextChat = () => {
+    setLearningMode('conversational');
+    setVoiceMode('muted');
+    navigate('/study');
+  };
+
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
       {/* Browser Support Warning */}
@@ -168,7 +178,7 @@ export const VoiceControls: React.FC = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setVoiceMode('muted')}
+                  onClick={handleSwitchToTextChat}
                 >
                   Switch to Text-Only Mode
                 </Button>
@@ -409,6 +419,16 @@ export const VoiceControls: React.FC = () => {
               </div>
             </div>
           </div>
+          
+          {/* Switch to text chat button */}
+          <Button
+            variant="outline"
+            onClick={handleSwitchToTextChat}
+            leftIcon={<MessageSquare className="h-5 w-5" />}
+            className="w-full"
+          >
+            Switch to Text Chat
+          </Button>
           
           {/* Transcript toggle */}
           <div className="flex justify-end">

@@ -93,96 +93,6 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     };
   }, []);
 
-  // Request microphone permission
-  const requestPermission = useCallback(async (): Promise<boolean> => {
-    try {
-      if (!isMounted.current) return false;
-      
-      setError(null);
-      
-      // Check if we already have permission
-      if (navigator.permissions) {
-        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-        
-        if (permission.state === 'granted') {
-          if (isMounted.current) {
-            setHasPermission(true);
-          }
-          return true;
-        } else if (permission.state === 'denied') {
-          if (isMounted.current) {
-            setHasPermission(false);
-            setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
-          }
-          return false;
-        }
-      }
-
-      // Request permission by trying to access the microphone
-      console.log('Requesting microphone permission...');
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
-      });
-      
-      streamRef.current = stream;
-      
-      if (isMounted.current) {
-        setHasPermission(true);
-        setError(null);
-      }
-      
-      // Initialize MediaRecorder for recording functionality
-      const recorder = new MediaRecorder(stream);
-      
-      recorder.ondataavailable = (e: BlobEvent) => {
-        if (e.data.size > 0 && isMounted.current) {
-          setAudioChunks((chunks) => [...chunks, e.data]);
-        }
-      };
-      
-      recorder.onstop = () => {
-        if (!isMounted.current) return;
-        
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        
-        // Create download link
-        const a = document.createElement('a');
-        a.href = audioUrl;
-        a.download = `recording-${new Date().toISOString()}.wav`;
-        a.click();
-        
-        // Clean up
-        URL.revokeObjectURL(audioUrl);
-        setAudioChunks([]);
-      };
-      
-      mediaRecorderRef.current = recorder;
-      
-      toast.success('Microphone access granted!');
-      console.log('Microphone permission granted');
-      return true;
-    } catch (err) {
-      console.error('Microphone permission error:', err);
-      
-      if (isMounted.current) {
-        setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
-        setHasPermission(false);
-        
-        // Show helpful toast with instructions
-        toast.error('Microphone access required for voice features. Please check your browser permissions.', {
-          duration: 5000,
-        });
-      }
-      
-      return false;
-    }
-  }, []);
-  
   // Declare startListening and stopListening before using them in voiceCommands
   const startListening = useCallback(async (): Promise<boolean> => {
     if (!isMounted.current) return false;
@@ -458,6 +368,96 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       });
     }
   }, [initSpeechRecognition, requestPermission, startListening, voiceMode, isSpeechRecognitionSupported]);
+
+  // Request microphone permission
+  const requestPermission = useCallback(async (): Promise<boolean> => {
+    try {
+      if (!isMounted.current) return false;
+      
+      setError(null);
+      
+      // Check if we already have permission
+      if (navigator.permissions) {
+        const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+        
+        if (permission.state === 'granted') {
+          if (isMounted.current) {
+            setHasPermission(true);
+          }
+          return true;
+        } else if (permission.state === 'denied') {
+          if (isMounted.current) {
+            setHasPermission(false);
+            setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
+          }
+          return false;
+        }
+      }
+
+      // Request permission by trying to access the microphone
+      console.log('Requesting microphone permission...');
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+      
+      streamRef.current = stream;
+      
+      if (isMounted.current) {
+        setHasPermission(true);
+        setError(null);
+      }
+      
+      // Initialize MediaRecorder for recording functionality
+      const recorder = new MediaRecorder(stream);
+      
+      recorder.ondataavailable = (e: BlobEvent) => {
+        if (e.data.size > 0 && isMounted.current) {
+          setAudioChunks((chunks) => [...chunks, e.data]);
+        }
+      };
+      
+      recorder.onstop = () => {
+        if (!isMounted.current) return;
+        
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create download link
+        const a = document.createElement('a');
+        a.href = audioUrl;
+        a.download = `recording-${new Date().toISOString()}.wav`;
+        a.click();
+        
+        // Clean up
+        URL.revokeObjectURL(audioUrl);
+        setAudioChunks([]);
+      };
+      
+      mediaRecorderRef.current = recorder;
+      
+      toast.success('Microphone access granted!');
+      console.log('Microphone permission granted');
+      return true;
+    } catch (err) {
+      console.error('Microphone permission error:', err);
+      
+      if (isMounted.current) {
+        setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
+        setHasPermission(false);
+        
+        // Show helpful toast with instructions
+        toast.error('Microphone access required for voice features. Please check your browser permissions.', {
+          duration: 5000,
+        });
+      }
+      
+      return false;
+    }
+  }, []);
 
   return {
     isListening,

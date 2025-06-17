@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, AlertCircle, Play } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, AlertCircle, Play, MessageSquare } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
@@ -20,7 +20,8 @@ export const VideoArea: React.FC = () => {
     avatarEmotion,
     voiceMode,
     difficultyLevel,
-    setVoiceMode
+    setVoiceMode,
+    learningMode
   } = useStore();
   
   const { user } = useAuth();
@@ -119,6 +120,7 @@ export const VideoArea: React.FC = () => {
     }
   };
 
+  // If not eligible for Tavus, show a message
   if (!isEligibleForTavus) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-100 rounded-lg p-8 text-center">
@@ -180,27 +182,36 @@ export const VideoArea: React.FC = () => {
                           Click the button below to start a voice conversation with your AI tutor. 
                           You'll be able to speak and hear responses in real-time.
                         </p>
-                        {isBrowserSupported ? (
+                        <div className="flex flex-col space-y-3">
                           <Button
                             variant="primary"
                             onClick={handleStartVoiceChat}
                             leftIcon={<Mic className="h-5 w-5" />}
+                            className="w-full"
                           >
                             Start Voice Chat
                           </Button>
-                        ) : (
-                          <div className="space-y-3">
-                            <p className="text-red-600 text-sm">
-                              Your browser doesn't support voice features. Please use Chrome, Edge, or Safari.
-                            </p>
-                            <Button
-                              variant="outline"
-                              onClick={() => setShowStartPrompt(false)}
-                            >
-                              Continue with Text Chat
-                            </Button>
-                          </div>
-                        )}
+                          
+                          {!isBrowserSupported && (
+                            <div className="text-red-600 text-sm mt-2">
+                              Your browser doesn't support voice features. Please try Chrome, Edge, or Safari.
+                            </div>
+                          )}
+                          
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setShowStartPrompt(false);
+                              setVoiceMode('muted');
+                              setLearningMode('conversational');
+                              navigate('/study');
+                            }}
+                            leftIcon={<MessageSquare className="h-5 w-5" />}
+                            className="w-full"
+                          >
+                            Use Text Chat Instead
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <>

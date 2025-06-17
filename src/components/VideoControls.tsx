@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/store';
-import { Video, VideoOff, Image as ImageIcon, StopCircle, Settings, Mic, MicOff, Pause, Play } from 'lucide-react';
+import { Video, VideoOff, Image as ImageIcon, StopCircle, Settings, Mic, MicOff, Pause, Play, MessageSquare } from 'lucide-react';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn } from '../styles/utils';
 import { Button } from './Button';
+import { useNavigate } from 'react-router-dom';
 
 const backgrounds = [
   { id: 'classroom', name: 'Classroom' },
@@ -21,11 +22,18 @@ export const VideoControls: React.FC = () => {
     toggleRecording,
     setCurrentBackground,
     voiceMode,
-    setVoiceMode
+    setVoiceMode,
+    setLearningMode
   } = useStore();
   
+  const navigate = useNavigate();
   const { isPaused, pauseVoiceChat, resumeVoiceChat } = useVoiceChat();
   const [showBackgrounds, setShowBackgrounds] = useState(false);
+
+  const handleSwitchToTextChat = () => {
+    setLearningMode('conversational');
+    setVoiceMode('muted');
+  };
 
   return (
     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3 bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg z-10">
@@ -120,10 +128,11 @@ export const VideoControls: React.FC = () => {
       <Button
         variant="secondary"
         size="sm"
+        onClick={handleSwitchToTextChat}
         className="rounded-full"
-        title="Video settings"
+        title="Switch to text chat"
       >
-        <Settings className="h-5 w-5" />
+        <MessageSquare className="h-5 w-5" />
       </Button>
     </div>
   );
