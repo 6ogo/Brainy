@@ -291,7 +291,6 @@ export const SubjectSelection: React.FC = () => {
                   <Flask className="h-6 w-6 text-green-600" />
                 </div>
                 <h4 className="font-semibold text-gray-900 mb-1">All Subjects</h4>
-                <p className="text-sm text-gray-600">Access to Science, History, Languages & more</p>
               </div>
               
               <div className="text-center">
@@ -299,7 +298,6 @@ export const SubjectSelection: React.FC = () => {
                   <Brain className="h-6 w-6 text-blue-600" />
                 </div>
                 <h4 className="font-semibold text-gray-900 mb-1">Extended Sessions</h4>
-                <p className="text-sm text-gray-600">4 hours daily conversation time</p>
               </div>
               
               <div className="text-center">
@@ -307,7 +305,6 @@ export const SubjectSelection: React.FC = () => {
                   <GraduationCap className="h-6 w-6 text-purple-600" />
                 </div>
                 <h4 className="font-semibold text-gray-900 mb-1">Video Calls</h4>
-                <p className="text-sm text-gray-600">30 minutes of video tutoring daily</p>
               </div>
               
               <div className="text-center">
@@ -315,7 +312,6 @@ export const SubjectSelection: React.FC = () => {
                   <History className="h-6 w-6 text-amber-600" />
                 </div>
                 <h4 className="font-semibold text-gray-900 mb-1">Advanced Analytics</h4>
-                <p className="text-sm text-gray-600">Detailed progress tracking & insights</p>
               </div>
             </div>
           </Card>
