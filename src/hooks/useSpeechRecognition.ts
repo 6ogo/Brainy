@@ -29,6 +29,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const [isMicrophoneAvailable, setIsMicrophoneAvailable] = useState<boolean>(false);
   const [clearTranscriptOnListen, setClearTranscriptOnListen] = useState<boolean>(true);
   const hasCheckedPermission = useRef<boolean>(false);
+  const isStartingListening = useRef<boolean>(false);
   
   const {
     transcript,
@@ -88,43 +89,69 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
 
   // Start listening with appropriate options
   const startListening = useCallback(async () => {
-    if (!browserSupportsSpeechRecognition) {
-      toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
+    // Prevent multiple simultaneous start attempts
+    if (isStartingListening.current || listening) {
       return;
     }
     
-    if (!isMicrophoneAvailable) {
-      try {
-        // Try to request microphone access
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        setIsMicrophoneAvailable(true);
-      } catch (error) {
-        console.error('Error requesting microphone access:', error);
-        toast.error('Microphone access is required for voice features.');
+    isStartingListening.current = true;
+    
+    try {
+      if (!browserSupportsSpeechRecognition) {
+        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
         return;
       }
+      
+      if (!isMicrophoneAvailable) {
+        try {
+          // Try to request microphone access
+          await navigator.mediaDevices.getUserMedia({ audio: true });
+          setIsMicrophoneAvailable(true);
+        } catch (error) {
+          console.error('Error requesting microphone access:', error);
+          toast.error('Microphone access is required for voice features.');
+          return;
+        }
+      }
+      
+      if (clearTranscriptOnListen) {
+        resetTranscript();
+      }
+      
+      // Use a timeout to prevent rapid start/stop cycles
+      setTimeout(() => {
+        SpeechRecognition.startListening({ 
+          continuous: voiceMode === 'continuous',
+          language: 'en-US'
+        });
+        
+        // Reset the flag after a delay to prevent rapid toggling
+        setTimeout(() => {
+          isStartingListening.current = false;
+        }, 1000);
+      }, 300);
+    } catch (error) {
+      console.error('Error starting speech recognition:', error);
+      isStartingListening.current = false;
     }
-    
-    if (clearTranscriptOnListen) {
-      resetTranscript();
-    }
-    
-    SpeechRecognition.startListening({ 
-      continuous: voiceMode === 'continuous',
-      language: 'en-US'
-    });
   }, [
     browserSupportsSpeechRecognition, 
     isMicrophoneAvailable, 
     voiceMode, 
     clearTranscriptOnListen, 
-    resetTranscript
+    resetTranscript,
+    listening
   ]);
 
   // Stop listening
   const stopListening = useCallback(() => {
+    if (!listening) return;
+    
     SpeechRecognition.stopListening();
-  }, []);
+    
+    // Ensure the starting flag is reset
+    isStartingListening.current = false;
+  }, [listening]);
 
   return {
     transcript,

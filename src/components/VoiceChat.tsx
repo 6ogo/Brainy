@@ -30,6 +30,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
   const [showTranscript, setShowTranscript] = useState(true);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const lastTranscriptRef = useRef<string>('');
+  const processingTranscriptRef = useRef<boolean>(false);
   
   const {
     transcript,
@@ -43,46 +44,72 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
 
   // Start listening when component mounts if in continuous mode
   useEffect(() => {
-    if (voiceMode === 'continuous' && !listening && !isPaused) {
-      startListening();
+    if (voiceMode === 'continuous' && !listening && !isPaused && !processingTranscriptRef.current) {
+      const timer = setTimeout(() => {
+        startListening();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
     }
   }, [voiceMode, listening, isPaused, startListening]);
-
-  // Handle voice mode changes
-  useEffect(() => {
-    if (voiceMode === 'continuous' && !listening && !isPaused) {
-      startListening();
-    } else if (voiceMode === 'muted' && listening) {
-      stopListening();
-    }
-  }, [voiceMode, listening, isPaused, startListening, stopListening]);
 
   // Process final transcript
   useEffect(() => {
     const processFinalTranscript = async () => {
       // Only process if we have a transcript and we're not already processing
-      if (transcript && !isProcessing && !isSpeaking && transcript !== lastTranscriptRef.current) {
+      if (transcript && 
+          !isProcessing && 
+          !isSpeaking && 
+          transcript !== lastTranscriptRef.current && 
+          !processingTranscriptRef.current) {
+        
+        processingTranscriptRef.current = true;
         lastTranscriptRef.current = transcript;
         
-        // Add user message to the conversation
-        addMessage(transcript, 'user');
-        
-        // Send to AI and get response
-        await sendMessage(transcript, true);
-        
-        // Reset transcript after processing
-        resetTranscript();
+        try {
+          // Add user message to the conversation
+          addMessage(transcript, 'user');
+          
+          // Send to AI and get response
+          await sendMessage(transcript, true);
+          
+          // Reset transcript after processing
+          resetTranscript();
+        } catch (error) {
+          console.error('Error processing transcript:', error);
+          toast.error('Failed to process your message. Please try again.');
+        } finally {
+          processingTranscriptRef.current = false;
+          
+          // Restart listening if in continuous mode and not paused
+          if (voiceMode === 'continuous' && !isPaused && !listening) {
+            setTimeout(() => {
+              startListening();
+            }, 1000);
+          }
+        }
       }
     };
     
-    // Only process transcript if we're not listening (indicates a final transcript)
-    if (!listening && transcript) {
+    // Only process transcript if we have a final transcript (not listening anymore)
+    if (!listening && transcript && transcript.trim().length > 0) {
       processFinalTranscript();
     }
-  }, [transcript, listening, isProcessing, isSpeaking, addMessage, sendMessage, resetTranscript]);
+  }, [
+    transcript, 
+    listening, 
+    isProcessing, 
+    isSpeaking, 
+    addMessage, 
+    sendMessage, 
+    resetTranscript, 
+    voiceMode, 
+    isPaused, 
+    startListening
+  ]);
 
   const handleVoiceModeChange = async (mode: 'muted' | 'push-to-talk' | 'continuous') => {
-    if (!browserSupportsSpeechRecognition) {
+    if (!browserSupportsSpeechRecognition && mode !== 'muted') {
       toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
       return;
     }
@@ -94,7 +121,9 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
       stopSpeaking();
       toast.success('Voice mode turned off');
     } else if (mode === 'continuous') {
-      startListening();
+      if (!listening && !processingTranscriptRef.current) {
+        startListening();
+      }
       toast.success('Continuous voice mode activated - speak freely');
     } else {
       toast.success('Push-to-talk mode activated - press and hold to speak');
@@ -108,9 +137,9 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     }
     
     if (voiceMode === 'push-to-talk') {
-      if (pressed) {
+      if (pressed && !listening) {
         startListening();
-      } else {
+      } else if (!pressed && listening) {
         stopListening();
       }
     }
@@ -125,7 +154,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
 
   const resumeConversation = () => {
     setIsPaused(false);
-    if (voiceMode === 'continuous') {
+    if (voiceMode === 'continuous' && !processingTranscriptRef.current) {
       startListening();
     }
     toast.success('Conversation resumed');

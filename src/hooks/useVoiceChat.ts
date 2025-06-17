@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useStore } from '../store/store';
 import { VoiceConversationService } from '../services/voiceConversationService';
 import { useAuth } from '../contexts/AuthContext';
+import { useSpeechRecognition } from './useSpeechRecognition';
 import toast from 'react-hot-toast';
 
 export const useVoiceChat = () => {
@@ -24,6 +25,13 @@ export const useVoiceChat = () => {
   const [currentTranscript, setCurrentTranscript] = useState('');
   const voiceServiceRef = useRef<VoiceConversationService | null>(null);
   const isMounted = useRef(true);
+  const {
+    transcript,
+    listening,
+    browserSupportsSpeechRecognition,
+    startListening,
+    stopListening
+  } = useSpeechRecognition();
 
   // Cleanup on unmount
   useEffect(() => {
@@ -84,24 +92,6 @@ export const useVoiceChat = () => {
     }
   }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening]);
 
-  // Handle voice mode changes
-  useEffect(() => {
-    if (!voiceServiceRef.current) return;
-
-    if (voiceMode === 'continuous') {
-      startVoiceChat();
-    } else if (voiceMode === 'muted') {
-      stopVoiceChat();
-    }
-  }, [voiceMode]);
-
-  // Monitor isListening state to handle user speech
-  useEffect(() => {
-    if (isListening && voiceServiceRef.current && !isActive) {
-      setIsActive(true);
-    }
-  }, [isListening, isActive]);
-
   // Update voice service when difficulty level changes
   useEffect(() => {
     if (voiceServiceRef.current && user && isMounted.current) {
@@ -149,13 +139,17 @@ export const useVoiceChat = () => {
   }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening]);
 
   const startVoiceChat = useCallback(async () => {
-    if (!voiceServiceRef.current) {
-      setError('Voice service not initialized');
+    if (!browserSupportsSpeechRecognition) {
+      setError('Speech recognition is not supported in this browser');
+      toast.error('Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.');
       return;
     }
-
+    
     try {
-      await voiceServiceRef.current.startListening();
+      if (!listening) {
+        await startListening();
+      }
+      
       if (isMounted.current) {
         setIsActive(true);
         setIsPaused(false);
@@ -170,13 +164,11 @@ export const useVoiceChat = () => {
         toast.error('Failed to start voice chat. Please check your microphone permissions.');
       }
     }
-  }, [setAvatarEmotion]);
+  }, [setAvatarEmotion, browserSupportsSpeechRecognition, listening, startListening]);
 
   const stopVoiceChat = useCallback(() => {
-    if (!voiceServiceRef.current) return;
-
-    voiceServiceRef.current.stopListening();
-    voiceServiceRef.current.stopSpeaking();
+    stopListening();
+    
     if (isMounted.current) {
       setIsActive(false);
       setIsPaused(false);
@@ -184,28 +176,25 @@ export const useVoiceChat = () => {
       setAvatarEmotion('neutral');
       setCurrentTranscript('');
     }
-  }, [setIsSpeaking, setAvatarEmotion]);
+  }, [setIsSpeaking, setAvatarEmotion, stopListening]);
 
   const pauseVoiceChat = useCallback(() => {
-    if (!voiceServiceRef.current) return;
+    stopListening();
     
-    voiceServiceRef.current.pauseConversation();
     if (isMounted.current) {
       setIsPaused(true);
       setIsSpeaking(false);
       toast.success('Conversation paused');
     }
-  }, [setIsSpeaking]);
+  }, [setIsSpeaking, stopListening]);
 
   const resumeVoiceChat = useCallback(() => {
-    if (!voiceServiceRef.current) return;
-    
-    voiceServiceRef.current.resumeConversation();
     if (isMounted.current) {
       setIsPaused(false);
+      startListening();
       toast.success('Conversation resumed');
     }
-  }, []);
+  }, [startListening]);
 
   const toggleVoiceChat = useCallback(() => {
     if (isPaused) {
