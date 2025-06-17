@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { SecurityUtils } from '../utils/security';
@@ -19,6 +19,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     error: null,
   });
   const navigate = useNavigate();
+  const authChangeHandled = useRef(false);
 
   useEffect(() => {
     // Get initial session
@@ -47,6 +48,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // Prevent multiple handlers for the same event
+      if (authChangeHandled.current) {
+        return;
+      }
+      
+      authChangeHandled.current = true;
       console.log('Auth state changed:', event);
       
       setState(prev => ({
@@ -74,6 +81,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (event === 'TOKEN_REFRESHED') {
         console.log('Token refreshed');
       }
+      
+      // Reset the flag after a short delay to allow for future auth changes
+      setTimeout(() => {
+        authChangeHandled.current = false;
+      }, 100);
     });
 
     return () => subscription.unsubscribe();

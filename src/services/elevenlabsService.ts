@@ -1,23 +1,11 @@
 import { API_CONFIG } from '../config/api';
 import { supabase } from '../lib/supabase';
 
-interface Voice {
-  voice_id: string;
-  name: string;
-  preview_url: string;
-}
-
 interface VoiceSettings {
   stability: number;
   similarity_boost: number;
   style: number;
   use_speaker_boost: boolean;
-}
-
-interface TextToSpeechRequest {
-  text: string;
-  model_id: string;
-  voice_settings: VoiceSettings;
 }
 
 export class ElevenLabsService {

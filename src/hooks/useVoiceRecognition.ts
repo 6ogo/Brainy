@@ -51,7 +51,6 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
-  const [_permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const isMounted = useRef(true);
   const [transcript, setTranscript] = useState<string>('');
   const [isFinalTranscript, setIsFinalTranscript] = useState<boolean>(false);
@@ -94,14 +93,12 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         if (permission.state === 'granted') {
           if (isMounted.current) {
             setHasPermission(true);
-            setPermissionState('granted');
           }
           return true;
         } else if (permission.state === 'denied') {
           if (isMounted.current) {
             setHasPermission(false);
             setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
-            setPermissionState('denied');
           }
           return false;
         }
@@ -121,7 +118,6 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       
       if (isMounted.current) {
         setHasPermission(true);
-        setPermissionState('granted');
         setError(null);
       }
       
@@ -162,7 +158,6 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       if (isMounted.current) {
         setError('Microphone access denied. Please enable microphone permissions in your browser settings.');
         setHasPermission(false);
-        setPermissionState('denied');
         
         // Show helpful toast with instructions
         toast.error('Microphone access required for voice features. Please check your browser permissions.', {
@@ -240,7 +235,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     ) as keyof typeof voiceCommands | undefined;
     
     if (matchedCommand) {
-      voiceCommands[matchedCommand]!();
+      voiceCommands[matchedCommand]();
       toast.success(`Command: ${matchedCommand}`);
       return true;
     }
@@ -349,12 +344,11 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     const handleError = (event: SpeechRecognitionErrorEvent) => {
       if (!isMounted.current) return;
       
-      const errorMessage = getErrorMessage(event.error as string);
+      const errorMessage = getErrorMessage(event.error);
       setError(errorMessage);
       
       if (event.error === 'not-allowed') {
         setHasPermission(false);
-        setPermissionState('denied');
       }
       
       toast.error(errorMessage);
