@@ -1,8 +1,25 @@
 import React from 'react';
+
+function isValidReactNode(node: unknown): node is React.ReactNode {
+  // Exclude MotionValue and similar objects
+  if (
+    typeof node === 'object' &&
+    node !== null &&
+    // Framer MotionValue: has a private 'current' property and a 'set' method
+    'set' in node &&
+    typeof (node as any).set === 'function'
+  ) {
+    return false;
+  }
+  return typeof node === 'string' || typeof node === 'number' || React.isValidElement(node) || node === null || Array.isArray(node);
+}
+
 import { motion } from 'framer-motion';
 import { cn, commonStyles } from '../styles/utils';
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+import { HTMLMotionProps } from 'framer-motion';
+
+export interface ButtonProps extends HTMLMotionProps<'button'> {
   variant?: 'primary' | 'secondary' | 'outline' | 'text';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
@@ -105,11 +122,11 @@ export const Button: React.FC<ButtonProps> = ({
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.2 }}
           >
-            {leftIcon}
+            {isValidReactNode(leftIcon) ? leftIcon : null}
           </motion.span>
         )}
         
-        {children}
+        {isValidReactNode(children) ? children : null}
         
         {!isLoading && rightIcon && (
           <motion.span 
@@ -118,7 +135,7 @@ export const Button: React.FC<ButtonProps> = ({
             animate={{ x: 0, opacity: 1 }}
             transition={{ duration: 0.2 }}
           >
-            {rightIcon}
+            {isValidReactNode(rightIcon) ? rightIcon : null}
           </motion.span>
         )}
       </motion.div>
