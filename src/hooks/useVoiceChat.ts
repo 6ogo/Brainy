@@ -14,7 +14,6 @@ export const useVoiceChat = () => {
     setIsSpeaking,
     addMessage,
     setAvatarEmotion,
-    isListening,
     toggleListening
   } = useStore();
   
