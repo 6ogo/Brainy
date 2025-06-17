@@ -41,8 +41,15 @@ export const VideoArea: React.FC = () => {
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [showStartPrompt, setShowStartPrompt] = useState(true);
+  const [isBrowserSupported, setIsBrowserSupported] = useState(true);
   const avatarRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Check browser support for speech recognition
+  useEffect(() => {
+    const isSupported = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
+    setIsBrowserSupported(isSupported);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -75,6 +82,11 @@ export const VideoArea: React.FC = () => {
   }, [isSpeaking, isPaused]);
 
   const handleStartVoiceChat = async () => {
+    if (!isBrowserSupported) {
+      toast.error('Voice features are not supported in your browser. Please try Chrome, Edge, or Safari.');
+      return;
+    }
+    
     if (!hasPermission) {
       const granted = await requestPermission();
       if (!granted) {
@@ -168,13 +180,27 @@ export const VideoArea: React.FC = () => {
                           Click the button below to start a voice conversation with your AI tutor. 
                           You'll be able to speak and hear responses in real-time.
                         </p>
-                        <Button
-                          variant="primary"
-                          onClick={handleStartVoiceChat}
-                          leftIcon={<Mic className="h-5 w-5" />}
-                        >
-                          Start Voice Chat
-                        </Button>
+                        {isBrowserSupported ? (
+                          <Button
+                            variant="primary"
+                            onClick={handleStartVoiceChat}
+                            leftIcon={<Mic className="h-5 w-5" />}
+                          >
+                            Start Voice Chat
+                          </Button>
+                        ) : (
+                          <div className="space-y-3">
+                            <p className="text-red-600 text-sm">
+                              Your browser doesn't support voice features. Please use Chrome, Edge, or Safari.
+                            </p>
+                            <Button
+                              variant="outline"
+                              onClick={() => setShowStartPrompt(false)}
+                            >
+                              Continue with Text Chat
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <>

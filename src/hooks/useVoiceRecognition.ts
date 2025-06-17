@@ -18,6 +18,8 @@ function getErrorMessage(error: string): string {
       return 'No microphone found. Please check your microphone connection.';
     case 'network':
       return 'Network error occurred during speech recognition.';
+    case 'not-supported':
+      return 'Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.';
     default:
       return 'An unknown error occurred with speech recognition.';
   }
@@ -54,6 +56,18 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   const isMounted = useRef(true);
   const [transcript, setTranscript] = useState<string>('');
   const [isFinalTranscript, setIsFinalTranscript] = useState<boolean>(false);
+  const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState<boolean>(true);
+  
+  // Check if speech recognition is supported
+  useEffect(() => {
+    const isSupported = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
+    setIsSpeechRecognitionSupported(isSupported);
+    
+    if (!isSupported) {
+      setError('Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.');
+      console.warn('SpeechRecognition not supported in this browser');
+    }
+  }, []);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -173,6 +187,12 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   const startListening = useCallback(async (): Promise<boolean> => {
     if (!isMounted.current) return false;
     
+    if (!isSpeechRecognitionSupported) {
+      setError('Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.');
+      toast.error('Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.');
+      return false;
+    }
+    
     if (!hasPermission) {
       const granted = await requestPermission();
       if (!granted) {
@@ -186,6 +206,9 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         toggleListening(true);
         setError(null);
         console.log('Speech recognition started');
+      } else {
+        setError('Speech recognition not initialized properly');
+        return false;
       }
       return true;
     } catch (err) {
@@ -196,7 +219,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       }
       return false;
     }
-  }, [hasPermission, requestPermission, toggleListening]);
+  }, [hasPermission, requestPermission, toggleListening, isSpeechRecognitionSupported]);
 
   const stopListening = useCallback(async (): Promise<boolean> => {
     try {
@@ -289,6 +312,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     if (!SpeechRecognition) {
       if (isMounted.current) {
         setError('Speech recognition is not supported in this browser');
+        setIsSpeechRecognitionSupported(false);
       }
       return null;
     }
@@ -303,7 +327,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
 
   // Configure recognition event handlers
   useEffect(() => {
-    if (!isMounted.current || !hasPermission) return;
+    if (!isMounted.current || !hasPermission || !isSpeechRecognitionSupported) return;
     
     const recognition = initSpeechRecognition();
     if (!recognition) return;
@@ -391,7 +415,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         // Ignore errors during cleanup
       }
     };
-  }, [initSpeechRecognition, setVoiceMode, toggleListening, isListening, voiceMode, hasPermission]);
+  }, [initSpeechRecognition, setVoiceMode, toggleListening, isListening, voiceMode, hasPermission, isSpeechRecognitionSupported]);
 
   // Check permission on mount
   useEffect(() => {
@@ -409,7 +433,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
               setHasPermission(permission.state === 'granted');
               
               // If permission was just granted, initialize recognition
-              if (permission.state === 'granted' && !recognitionRef.current) {
+              if (permission.state === 'granted' && !recognitionRef.current && isSpeechRecognitionSupported) {
                 const recognition = initSpeechRecognition();
                 if (recognition) {
                   recognitionRef.current = recognition;
@@ -426,14 +450,14 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
     checkPermission();
     
     // Try to start listening if we're in continuous mode
-    if (voiceMode === 'continuous') {
+    if (voiceMode === 'continuous' && isSpeechRecognitionSupported) {
       requestPermission().then(granted => {
         if (granted) {
           startListening();
         }
       });
     }
-  }, [initSpeechRecognition, requestPermission, startListening, voiceMode]);
+  }, [initSpeechRecognition, requestPermission, startListening, voiceMode, isSpeechRecognitionSupported]);
 
   return {
     isListening,

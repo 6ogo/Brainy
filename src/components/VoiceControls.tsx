@@ -43,6 +43,17 @@ export const VoiceControls: React.FC = () => {
   const [showTranscript, setShowTranscript] = useState(true);
   const [showPermissionBanner, setShowPermissionBanner] = useState(!hasPermission);
   const [showVoiceGuide, setShowVoiceGuide] = useState(true);
+  const [isBrowserSupported, setIsBrowserSupported] = useState(true);
+
+  // Check browser support for speech recognition
+  useEffect(() => {
+    const isSupported = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
+    setIsBrowserSupported(isSupported);
+    
+    if (!isSupported) {
+      toast.error('Your browser does not support voice recognition. Please try Chrome, Edge, or Safari.');
+    }
+  }, []);
 
   // Ensure voice mode is appropriate for learning mode
   useEffect(() => {
@@ -59,7 +70,12 @@ export const VoiceControls: React.FC = () => {
   }, [hasPermission]);
 
   const handleVoiceModeChange = async (mode: VoiceMode) => {
-    if (!hasPermission) {
+    if (!isBrowserSupported && mode !== 'muted') {
+      toast.error('Voice features are not supported in this browser. Please try Chrome, Edge, or Safari.');
+      return;
+    }
+    
+    if (!hasPermission && mode !== 'muted') {
       const granted = await requestPermission();
       if (!granted) {
         toast.error('Microphone permission required for voice features');
@@ -81,6 +97,11 @@ export const VoiceControls: React.FC = () => {
   };
 
   const handlePushToTalk = async (pressed: boolean) => {
+    if (!isBrowserSupported) {
+      toast.error('Voice features are not supported in this browser. Please try Chrome, Edge, or Safari.');
+      return;
+    }
+    
     if (!hasPermission) {
       const granted = await requestPermission();
       if (!granted) {
@@ -104,6 +125,11 @@ export const VoiceControls: React.FC = () => {
   };
 
   const handleRequestPermission = async () => {
+    if (!isBrowserSupported) {
+      toast.error('Voice features are not supported in this browser. Please try Chrome, Edge, or Safari.');
+      return;
+    }
+    
     const granted = await requestPermission();
     if (granted) {
       toast.success('Microphone access granted! You can now use voice features.');
@@ -126,8 +152,34 @@ export const VoiceControls: React.FC = () => {
 
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
+      {/* Browser Support Warning */}
+      {!isBrowserSupported && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-red-800">
+                Browser Not Supported
+              </h4>
+              <p className="text-sm text-red-700 mt-1">
+                Your browser doesn't support voice recognition. For the best experience, please use Chrome, Edge, or Safari.
+              </p>
+              <div className="mt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVoiceMode('muted')}
+                >
+                  Switch to Text-Only Mode
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Permission Request Banner */}
-      {showPermissionBanner && (
+      {showPermissionBanner && isBrowserSupported && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-start space-x-3">
             <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
@@ -185,6 +237,11 @@ export const VoiceControls: React.FC = () => {
             <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
             <div>
               <p className="text-sm text-red-700">{recognitionError}</p>
+              {recognitionError.includes('not supported') && (
+                <p className="text-sm text-red-700 mt-1">
+                  Please try using Chrome, Edge, or Safari for voice features.
+                </p>
+              )}
               {recognitionError.includes('denied') && (
                 <Button
                   variant="primary"
@@ -225,7 +282,7 @@ export const VoiceControls: React.FC = () => {
                     ? "bg-white shadow-sm text-gray-800"
                     : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
                 )}
-                disabled={!hasPermission}
+                disabled={!isBrowserSupported}
               >
                 <Mic className="h-4 w-4 mr-2" /> Push-to-Talk
               </button>
@@ -237,7 +294,7 @@ export const VoiceControls: React.FC = () => {
                     ? "bg-white shadow-sm text-gray-800"
                     : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
                 )}
-                disabled={!hasPermission}
+                disabled={!isBrowserSupported}
               >
                 <Volume2 className="h-4 w-4 mr-2" /> Continuous
               </button>
@@ -252,11 +309,11 @@ export const VoiceControls: React.FC = () => {
                 "h-20 w-20 rounded-full flex items-center justify-center focus:outline-none transition-all",
                 isListening && voiceMode === 'push-to-talk'
                   ? "bg-primary-500 text-white scale-110 shadow-lg"
-                  : hasPermission
+                  : hasPermission && isBrowserSupported
                     ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
                     : "bg-gray-50 text-gray-300 cursor-not-allowed opacity-60"
               )}
-              disabled={voiceMode !== 'push-to-talk' || !hasPermission}
+              disabled={voiceMode !== 'push-to-talk' || !hasPermission || !isBrowserSupported}
               onMouseDown={() => handlePushToTalk(true)}
               onMouseUp={() => handlePushToTalk(false)}
               onTouchStart={() => handlePushToTalk(true)}
@@ -295,7 +352,7 @@ export const VoiceControls: React.FC = () => {
                 variant={isPaused ? "primary" : "secondary"}
                 onClick={isPaused ? resumeVoiceChat : pauseVoiceChat}
                 leftIcon={isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
-                disabled={!hasPermission || !isActive}
+                disabled={!hasPermission || !isActive || !isBrowserSupported}
               >
                 {isPaused ? 'Resume' : 'Pause'}
               </Button>
@@ -304,7 +361,7 @@ export const VoiceControls: React.FC = () => {
                 variant={isRecording ? "primary" : "secondary"}
                 onClick={() => toggleRecording()}
                 leftIcon={<Download className="h-5 w-5" />}
-                disabled={!hasPermission}
+                disabled={!hasPermission || !isBrowserSupported}
               >
                 {isRecording ? 'Stop Recording' : 'Record'}
               </Button>
@@ -368,18 +425,25 @@ export const VoiceControls: React.FC = () => {
       {/* Status indicators */}
       <div className="mt-6 flex items-center justify-between text-sm text-gray-500 border-t border-gray-200 pt-4">
         <div className="flex flex-wrap items-center gap-4">
-          <span className={cn(
-            "flex items-center",
-            hasPermission ? "text-green-600" : "text-red-600"
-          )}>
-            <div className={cn(
-              "w-2 h-2 rounded-full mr-2",
-              hasPermission ? "bg-green-500" : "bg-red-500"
-            )}></div>
-            {hasPermission ? 'Microphone Ready' : 'Microphone Access Needed'}
-          </span>
+          {!isBrowserSupported ? (
+            <span className="flex items-center text-red-600">
+              <div className="w-2 h-2 rounded-full mr-2 bg-red-500"></div>
+              Browser Not Supported
+            </span>
+          ) : (
+            <span className={cn(
+              "flex items-center",
+              hasPermission ? "text-green-600" : "text-red-600"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full mr-2",
+                hasPermission ? "bg-green-500" : "bg-red-500"
+              )}></div>
+              {hasPermission ? 'Microphone Ready' : 'Microphone Access Needed'}
+            </span>
+          )}
           
-          {voiceMode !== 'muted' && hasPermission && (
+          {voiceMode !== 'muted' && hasPermission && isBrowserSupported && (
             <span className={cn(
               "flex items-center",
               isListening ? "text-blue-600" : "text-gray-500"
