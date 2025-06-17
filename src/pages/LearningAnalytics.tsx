@@ -21,23 +21,16 @@ import {
   Filler,
 } from 'chart.js';
 import { 
-  Brain, 
   Clock, 
   Target, 
-  TrendingUp, 
-  Download,
-  Calendar, 
-  Award, 
   BookOpen, 
   ChevronDown,
-  Users,
   Zap,
   Trophy,
-  Flame,
-  Video
+  Flame
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { format, subDays, startOfWeek, endOfWeek, parseISO, isValid } from 'date-fns';
+import { format, subDays, parseISO, isValid } from 'date-fns';
 import { StudyAdvisorButton } from '../components/StudyAdvisorButton';
 import { AnalyticsInsights } from '../components/AnalyticsInsights';
 
@@ -84,14 +77,8 @@ interface AchievementData {
   unlocked_at: string;
 }
 
-interface AnalyticsCache {
-  conversations: ConversationData[];
-  usage: UserUsageData[];
-  lastUpdated: number;
-}
-
 export const LearningAnalytics: React.FC = () => {
-  const { socialStats, currentSubject } = useStore();
+  const { socialStats } = useStore();
   const { user } = useAuth();
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [usageData, setUsageData] = useState<UserUsageData[]>([]);
@@ -463,7 +450,6 @@ export const LearningAnalytics: React.FC = () => {
                 onClick={() => setSelectedTimeframe(prev => prev === 'week' ? 'month' : 'week')}
                 className="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50"
               >
-                <Calendar className="h-4 w-4 text-gray-500" />
                 <span className="text-sm font-medium capitalize">{selectedTimeframe}</span>
                 <ChevronDown className="h-4 w-4 text-gray-500" />
               </button>
@@ -474,7 +460,6 @@ export const LearningAnalytics: React.FC = () => {
                 onClick={() => setShowExport(!showExport)}
                 className="flex items-center space-x-2 px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50"
               >
-                <Download className="h-4 w-4 text-gray-500" />
                 <span className="text-sm font-medium">Export</span>
               </button>
               

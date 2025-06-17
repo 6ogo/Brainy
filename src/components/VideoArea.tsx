@@ -17,13 +17,12 @@ export const VideoArea: React.FC = () => {
     currentBackground,
     avatarEmotion,
     voiceMode,
-    learningMode,
     difficultyLevel
   } = useStore();
   
   const { user } = useAuth();
   const { error: recognitionError } = useVoiceRecognition();
-  const { isActive: voiceChatActive, error: voiceChatError, isPaused, currentTranscript } = useVoiceChat();
+  const { isActive, error: voiceChatError, isPaused, currentTranscript } = useVoiceChat();
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);

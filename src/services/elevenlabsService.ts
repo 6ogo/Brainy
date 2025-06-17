@@ -1,4 +1,4 @@
-import { API_CONFIG, createFallbackResponse } from '../config/api';
+import { API_CONFIG } from '../config/api';
 import { supabase } from '../lib/supabase';
 
 interface Voice {
@@ -71,7 +71,7 @@ export class ElevenLabsService {
       const voiceId = this.getVoiceId(persona) || this.VOICE_IDS['encouraging-emma'];
       
       // Direct API call for development/testing when no edge function is available
-      if (process.env.NODE_ENV === 'development' || !supabase.supabaseUrl.includes('functions')) {
+      if (process.env.NODE_ENV === 'development' || !import.meta.env.VITE_SUPABASE_URL.includes('functions')) {
         console.log('Using direct ElevenLabs API call for development');
         try {
           const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
@@ -107,7 +107,7 @@ export class ElevenLabsService {
       }
 
       // Use our secure edge function to proxy the request to ElevenLabs
-      const response = await fetch(`${supabase.supabaseUrl}/functions/v1/elevenlabs-proxy`, {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/elevenlabs-proxy`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -295,8 +295,10 @@ export class ElevenLabsService {
         
         audio.onerror = (event) => {
           URL.revokeObjectURL(audioUrl);
-          const errorMessage = event.target && (event.target as HTMLAudioElement).error 
-            ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
+          const errorEvent = event as Event;
+          const errorTarget = errorEvent.target as HTMLAudioElement;
+          const errorMessage = errorTarget && errorTarget.error 
+            ? `Audio error: ${errorTarget.error?.message || 'Unknown audio error'}`
             : 'Failed to play audio: Unknown error';
           reject(new Error(errorMessage));
         };

@@ -20,9 +20,7 @@ export const VideoControls: React.FC = () => {
     toggleRecording,
     setCurrentBackground,
     voiceMode,
-    setVoiceMode,
-    isSpeaking,
-    difficultyLevel
+    setVoiceMode
   } = useStore();
   
   const { isPaused, pauseVoiceChat, resumeVoiceChat } = useVoiceChat();

@@ -5,7 +5,7 @@ import { useStore } from '../store/store';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { cn, commonStyles } from '../styles/utils';
-import { Subject, DifficultyLevel } from '../types';
+import { Subject } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import Confetti from 'react-confetti';

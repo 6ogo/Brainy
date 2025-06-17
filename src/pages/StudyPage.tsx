@@ -22,8 +22,7 @@ export const StudyPage: React.FC = () => {
     currentAvatar, 
     learningMode, 
     updateSessionStats, 
-    difficultyLevel,
-    setLearningMode
+    difficultyLevel
   } = useStore();
   const { user } = useAuth();
   const navigate = useNavigate();

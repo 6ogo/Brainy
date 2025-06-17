@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { AppState, DifficultyLevel, Message, Subject, VoiceMode, AvatarPersonality, AvatarBackground, AvatarEmotion, LearningMode } from '../types';
+import { AppState, DifficultyLevel, Subject, VoiceMode, AvatarPersonality, AvatarBackground, AvatarEmotion, LearningMode } from '../types';
 
 export const useStore = create<AppState>((set) => ({
   messages: [],
@@ -53,8 +53,8 @@ export const useStore = create<AppState>((set) => ({
   setVoiceMode: (mode: VoiceMode) => 
     set({ voiceMode: mode }),
   
-  toggleListening: () => 
-    set((state) => ({ isListening: !state.isListening })),
+  toggleListening: (value?: boolean) => 
+    set((state) => ({ isListening: value !== undefined ? value : !state.isListening })),
   
   addMessage: (text: string, sender: 'user' | 'ai', isBreakthrough = false) => 
     set((state) => ({

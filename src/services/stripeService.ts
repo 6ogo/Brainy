@@ -8,24 +8,22 @@ export async function createCheckoutSession(productId: ProductId, promotionCode?
   }
 
   try {
+    // Get the current session using the updated Supabase API
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw new Error('No active session');
+    if (!session?.access_token) {
+      throw new Error('No active session found');
     }
 
-    const requestBody: any = {
+    const apiUrl = new URL('/functions/v1/create-checkout', import.meta.env.VITE_SUPABASE_URL);
+    
+    const requestBody = {
       price_id: product.priceId,
       success_url: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${window.location.origin}/pricing`,
       mode: product.mode,
     };
-
-    // Only include promotion_code if it's provided and not empty
-    if (promotionCode && promotionCode.trim()) {
-      requestBody.promotion_code = promotionCode.trim();
-    }
-
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-checkout`, {
+    
+    const response = await fetch(apiUrl.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -35,36 +33,32 @@ export async function createCheckoutSession(productId: ProductId, promotionCode?
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = 'Failed to create checkout session';
-      
-      try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.error || errorMessage;
-      } catch {
-        // If response isn't JSON, use the text as error message
-        errorMessage = errorText || errorMessage;
-      }
-      
-      throw new Error(errorMessage);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to create checkout session');
     }
 
     const { url } = await response.json();
-    return url;
+    if (!url) {
+      throw new Error('No checkout URL received');
+    }
+
+    window.location.href = url;
   } catch (error) {
-    console.error('Error creating checkout session:', error);
+    console.error('Error creating Stripe checkout:', error);
     throw error;
   }
 }
 
-export async function createPortalSession() {
+export async function createPortalSession(): Promise<string> {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      throw new Error('No active session');
+    if (!session?.access_token) {
+      throw new Error('No active session found');
     }
 
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/create-portal`, {
+    const apiUrl = new URL('/functions/v1/create-portal', import.meta.env.VITE_SUPABASE_URL);
+    
+    const response = await fetch(apiUrl.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -73,17 +67,8 @@ export async function createPortalSession() {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = 'Failed to create portal session';
-      
-      try {
-        const errorData = JSON.parse(errorText);
-        errorMessage = errorData.error || errorMessage;
-      } catch {
-        errorMessage = errorText || errorMessage;
-      }
-      
-      throw new Error(errorMessage);
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to create portal session');
     }
 
     const { url } = await response.json();
@@ -137,7 +122,9 @@ export async function validateCoupon(couponCode: string): Promise<boolean> {
       throw new Error('No active session');
     }
 
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/validate-coupon`, {
+    const apiUrl = new URL('/functions/v1/validate-coupon', import.meta.env.VITE_SUPABASE_URL);
+    
+    const response = await fetch(apiUrl.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -167,7 +154,9 @@ export async function verifyCheckoutSession(sessionId: string): Promise<boolean>
       throw new Error('No active session');
     }
 
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/verify-checkout`, {
+    const apiUrl = new URL('/functions/v1/verify-checkout', import.meta.env.VITE_SUPABASE_URL);
+    
+    const response = await fetch(apiUrl.toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

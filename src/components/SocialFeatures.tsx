@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/store';
-import { Trophy, Flame, Share2, Award, Star } from 'lucide-react';
+import { Flame, Share2, Award, Star } from 'lucide-react';
 import { TwitterShareButton, LinkedinShareButton } from 'react-share';
 import toast from 'react-hot-toast';
 import Confetti from 'react-confetti';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Achievement, Challenge } from '../types';
+import { Achievement, Challenge, Subject } from '../types';
 
 export const SocialFeatures: React.FC = () => {
-  const { socialStats, messages, currentSubject, updateSocialStats } = useStore();
+  const { socialStats, currentSubject, updateSocialStats } = useStore();
   const { user } = useAuth();
   const [showConfetti, setShowConfetti] = useState(false);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
@@ -64,7 +64,7 @@ export const SocialFeatures: React.FC = () => {
     };
     
     fetchSocialData();
-  }, [user, currentSubject, updateSocialStats]);
+  }, [user, currentSubject, updateSocialStats, socialStats]);
 
   const generateAchievements = (conversations: any[]): Achievement[] => {
     const achievements: Achievement[] = [];
@@ -136,7 +136,7 @@ export const SocialFeatures: React.FC = () => {
     return achievements;
   };
 
-  const generateChallenges = (subject: string): Challenge[] => {
+  const generateChallenges = (subject: Subject): Challenge[] => {
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -199,7 +199,7 @@ export const SocialFeatures: React.FC = () => {
       id: 'daily-dedication',
       title: 'Daily Dedication',
       description: 'Complete 3 learning sessions today',
-      subject: 'All',
+      subject: 'All' as Subject,
       difficulty: 'Elementary',
       xpReward: 50,
       deadline: tomorrow,

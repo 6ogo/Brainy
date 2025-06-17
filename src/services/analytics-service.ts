@@ -102,17 +102,6 @@ export const getAnalyticsData = async (userId: string): Promise<AnalyticsData> =
  */
 export const saveStudySession = async (userId: string, sessionData: SessionStats, subject: string, avatar: string, learningMode: string) => {
   try {
-    const studySessionData: StudySessionData = {
-      user_id: userId,
-      subject: subject,
-      duration: sessionData.duration,
-      messages_count: sessionData.messagesCount,
-      topics_discussed: sessionData.topicsDiscussed,
-      xp_earned: sessionData.xpEarned,
-      avatar_used: avatar,
-      learning_mode: learningMode
-    };
-
     // For now, we'll save this as a conversation record since we don't have a study_sessions table
     const { data, error } = await supabase
       .from('conversations')
@@ -146,7 +135,7 @@ export const getUserStats = async (userId: string) => {
     return {
       totalSessions: analyticsData.totalConversations,
       totalStudyTime: analyticsData.totalStudyTime,
-      totalXP: analyticsData.conversations.reduce((sum, conv) => sum + 10, 0), // 10 XP per conversation
+      totalXP: analyticsData.conversations.reduce((sum) => sum + 10, 0), // 10 XP per conversation
       uniqueSubjects: Object.keys(analyticsData.subjectDistribution),
       averageSessionLength: analyticsData.averageSessionLength,
     };

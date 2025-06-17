@@ -1,7 +1,6 @@
-import { API_CONFIG, createFallbackResponse } from '../config/api';
+import { API_CONFIG } from '../config/api';
 import { supabase } from '../lib/supabase';
 import { Subject } from '../types';
-import { getAnalyticsData } from './analytics-service';
 
 interface UserProgress {
   completedTopics: string[];
@@ -89,7 +88,7 @@ export const TavusService = {
       }
 
       try {
-        const response = await fetch(`${supabase.supabaseUrl}/functions/v1/tavus-proxy`, {
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tavus-proxy`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -267,11 +266,15 @@ export const TavusService = {
 
     try {
       // Get analytics data
-      const analyticsData = await getAnalyticsData(userId);
+      const { data: analyticsData } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(100);
       
       // Extract conversation data to analyze learning patterns
-      const conversations = analyticsData.conversations || [];
-      const subjectConversations = conversations.filter(conv => 
+      const subjectConversations = (analyticsData || []).filter(conv => 
         conv.user_message.toLowerCase().includes(subject.toLowerCase())
       );
       
@@ -280,9 +283,9 @@ export const TavusService = {
       const learningStyle = this.determineLearningStyle(subjectConversations);
       
       // Calculate metrics
-      const totalStudyTimeHours = analyticsData.totalStudyTime / 60;
+      const totalStudyTimeHours = subjectConversations.reduce((sum, conv) => sum + (conv.duration || 0), 0) / 3600;
       const completionRate = Math.min(85, Math.floor(Math.random() * 30) + 60); // Mock data
-      const currentStreak = analyticsData.conversations.length > 0 ? 
+      const currentStreak = subjectConversations.length > 0 ? 
         Math.min(14, Math.floor(Math.random() * 7) + 1) : 0; // Mock data
       
       const userProgress = {
@@ -347,11 +350,12 @@ export const TavusService = {
     
     // Select appropriate topic list based on conversation content
     let topicList = mathTopics;
-    if (conversations.some(c => c.user_message.toLowerCase().includes('science'))) {
+    const allConversations = conversations || [];
+    if (allConversations.some(c => c.user_message.toLowerCase().includes('science'))) {
       topicList = scienceTopics;
-    } else if (conversations.some(c => c.user_message.toLowerCase().includes('english'))) {
+    } else if (allConversations.some(c => c.user_message.toLowerCase().includes('english'))) {
       topicList = englishTopics;
-    } else if (conversations.some(c => c.user_message.toLowerCase().includes('history'))) {
+    } else if (allConversations.some(c => c.user_message.toLowerCase().includes('history'))) {
       topicList = historyTopics;
     }
     

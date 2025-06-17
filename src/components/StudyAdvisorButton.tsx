@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Video, Brain, Lightbulb, ArrowRight } from 'lucide-react';
+import { Video, Lightbulb, ArrowRight } from 'lucide-react';
 import { Button } from './Button';
 import { Card } from './Card';
 import { cn, commonStyles } from '../styles/utils';

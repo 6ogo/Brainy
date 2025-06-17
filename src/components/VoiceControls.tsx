@@ -16,8 +16,7 @@ export const VoiceControls: React.FC = () => {
     isRecording,
     toggleRecording,
     learningMode,
-    isSpeaking,
-    difficultyLevel
+    isSpeaking
   } = useStore();
   
   const { 

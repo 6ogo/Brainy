@@ -51,7 +51,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasPermission, setHasPermission] = useState<boolean>(false);
-  const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied'>('prompt');
+  const [_permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied'>('prompt');
   const isMounted = useRef(true);
   const [transcript, setTranscript] = useState<string>('');
   const [isFinalTranscript, setIsFinalTranscript] = useState<boolean>(false);
@@ -290,7 +290,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   const initSpeechRecognition = useCallback((): SpeechRecognition | null => {
     if (typeof window === 'undefined') return null;
     
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       if (isMounted.current) {
         setError('Speech recognition is not supported in this browser');

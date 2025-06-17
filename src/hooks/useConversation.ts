@@ -20,7 +20,6 @@ export const useConversation = () => {
     sessionStats,
     socialStats,
     updateSocialStats,
-    learningMode,
     difficultyLevel
   } = useStore();
   
@@ -152,7 +151,6 @@ export const useConversation = () => {
       try {
         // Format the month_year field correctly (YYYY-MM)
         const now = new Date();
-        const monthYear = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
         
         await trackDailyUsage(conversationMinutes, videoMinutes);
       } catch (usageError) {

@@ -10,12 +10,10 @@ import {
   Mail, 
   Search,
   ChevronRight,
-  ExternalLink,
   Video,
-  FileText,
-  Users,
   Settings,
-  Clock
+  Clock,
+  Users
 } from 'lucide-react';
 
 export const HelpPage: React.FC = () => {

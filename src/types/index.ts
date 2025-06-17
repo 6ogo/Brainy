@@ -1,6 +1,6 @@
 // Core types for the application
 
-export type Subject = 'Math' | 'Science' | 'English' | 'History' | 'Languages' | 'Test Prep';
+export type Subject = 'Math' | 'Science' | 'English' | 'History' | 'Languages' | 'Test Prep' | 'All';
 
 export type DifficultyLevel = 'Elementary' | 'High School' | 'College' | 'Advanced';
 
@@ -105,7 +105,7 @@ export interface AppState {
   setCurrentSubject: (subject: Subject) => void;
   setDifficultyLevel: (level: DifficultyLevel) => void;
   setVoiceMode: (mode: VoiceMode) => void;
-  toggleListening: () => void;
+  toggleListening: (value?: boolean) => void;
   addMessage: (text: string, sender: 'user' | 'ai', isBreakthrough?: boolean) => void;
   clearMessages: () => void;
   updateSessionStats: (stats: Partial<SessionStats>) => void;

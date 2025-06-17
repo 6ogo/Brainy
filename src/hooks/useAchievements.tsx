@@ -113,7 +113,7 @@ export const useAchievements = () => {
           });
 
           // Show toast notification
-          toast.custom((t) => (
+          toast.custom(() => (
             <AchievementToast
               title={achievement.title}
               description={achievement.description}
@@ -131,7 +131,7 @@ export const useAchievements = () => {
     // Check streak achievements
     if (stats.streak.current >= 7 && !stats.achievements.some(a => a.id === 'week-streak')) {
       unlockAchievement('week-streak');
-      toast.custom((t) => (
+      toast.custom(() => (
         <AchievementToast
           title="Week Warrior!"
           description="Maintained a 7-day study streak"
@@ -150,7 +150,7 @@ export const useAchievements = () => {
     xpMilestones.forEach(milestone => {
       if (stats.totalXP >= milestone.xp && !stats.achievements.some(a => a.id === milestone.id)) {
         unlockAchievement(milestone.id);
-        toast.custom((t) => (
+        toast.custom(() => (
           <AchievementToast
             title={milestone.title}
             description={milestone.description}
@@ -164,7 +164,7 @@ export const useAchievements = () => {
     const newLevel = Math.floor(stats.totalXP / 1000) + 1;
     if (newLevel > stats.level) {
       updateSocialStats({ level: newLevel });
-      toast.custom((t) => (
+      toast.custom(() => (
         <AchievementToast
           title="Level Up!"
           description={`You've reached level ${newLevel}`}

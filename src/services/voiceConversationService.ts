@@ -1,7 +1,7 @@
 import { ElevenLabsService } from './elevenlabsService';
 import { GroqService } from './groqService';
 import { SecurityUtils } from '../utils/security';
-import { API_CONFIG, createFallbackResponse } from '../config/api';
+import { API_CONFIG } from '../config/api';
 
 interface VoiceConversationConfig {
   userId: string;
@@ -20,13 +20,13 @@ export class VoiceConversationService {
   private isListening = false;
   private isProcessing = false;
   private config: VoiceConversationConfig;
-  private audioContext: AudioContext | null = null;
+  private _audioContext: AudioContext | null = null;
   private currentAudio: HTMLAudioElement | null = null;
   private isPaused = false;
   private currentTranscript = '';
   private recognitionLanguage = 'en-US';
-  private audioQueue: Blob[] = [];
-  private isPlayingAudio = false;
+  private _audioQueue: Blob[] = [];
+  private _isPlayingAudio = false;
   private stream: MediaStream | null = null;
 
   constructor(config: VoiceConversationConfig) {
@@ -41,7 +41,7 @@ export class VoiceConversationService {
       return;
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     this.recognition = new SpeechRecognition();
     
     this.recognition.continuous = true;
@@ -96,7 +96,7 @@ export class VoiceConversationService {
 
   private initializeAudioContext(): void {
     try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this._audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
     }
@@ -170,8 +170,8 @@ export class VoiceConversationService {
     }
     
     // Clear audio queue
-    this.audioQueue = [];
-    this.isPlayingAudio = false;
+    this._audioQueue = [];
+    this._isPlayingAudio = false;
     
     // Also stop any browser speech synthesis
     if ('speechSynthesis' in window) {
@@ -226,7 +226,7 @@ export class VoiceConversationService {
       try {
         if (!API_CONFIG.ELEVENLABS_API_KEY) {
           // Use fallback if ElevenLabs API key is not configured
-          audioBlob = await createFallbackResponse('elevenlabs', aiResponse) as Blob;
+          audioBlob = await ElevenLabsService.createFallbackAudio(aiResponse);
         } else {
           audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
         }
@@ -283,8 +283,10 @@ export class VoiceConversationService {
         audio.onerror = (event) => {
           URL.revokeObjectURL(audioUrl);
           this.currentAudio = null;
-          const errorMessage = event.target && (event.target as HTMLAudioElement).error 
-            ? `Audio error: ${(event.target as HTMLAudioElement).error?.message || 'Unknown audio error'}`
+          const errorEvent = event as Event;
+          const errorTarget = errorEvent.target as HTMLAudioElement;
+          const errorMessage = errorTarget && errorTarget.error 
+            ? `Audio error: ${errorTarget.error?.message || 'Unknown audio error'}`
             : 'Failed to play audio: Unknown error';
           reject(new Error(errorMessage));
         };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Eye, EyeOff, Brain, ArrowLeft, Shield, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, Brain, ArrowLeft, Shield } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';

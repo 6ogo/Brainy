@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Eye, EyeOff, Brain, ArrowLeft, Shield, CheckCircle, AlertTriangle, Lock } from 'lucide-react';
+import { Eye, EyeOff, ArrowLeft, Shield, CheckCircle, AlertTriangle, Lock } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -13,7 +13,7 @@ export const ResetPassword: React.FC = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { csrfToken, sanitizeInput, validateInput } = useSecurity();
+  const { csrfToken, validateInput } = useSecurity();
   
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
