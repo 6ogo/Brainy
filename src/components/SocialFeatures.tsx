@@ -7,7 +7,6 @@ import Confetti from 'react-confetti';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Achievement, Challenge, Subject } from '../types';
-import { LevelProgressBar } from './LevelProgressBar';
 
 export const SocialFeatures: React.FC = () => {
   const { socialStats, currentSubject, updateSocialStats } = useStore();
@@ -348,7 +347,7 @@ export const SocialFeatures: React.FC = () => {
       </div>
 
       <div className="border-t border-gray-200 pt-4">
-        <LevelProgressBar />
+
       </div>
 
       <div className="border-t border-gray-200 pt-4">
