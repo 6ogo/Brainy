@@ -35,6 +35,12 @@ export const useStore = create<AppState>((set) => ({
       }
     ],
     level: 1,
+    learningVelocity: 0,
+    engagementScore: 0,
+    consistencyRating: 'Building',
+    progressTrend: 'Steady',
+    timeToNextLevel: 0,
+    levelProgress: 0,
   },
   sessionStats: {
     startTime: new Date(),
@@ -57,23 +63,49 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({ isListening: value !== undefined ? value : !state.isListening })),
   
   addMessage: (text: string, sender: 'user' | 'ai', isBreakthrough = false) => 
-    set((state) => ({
-      messages: [
-        ...state.messages,
-        {
-          id: Date.now().toString(),
-          text,
-          sender,
-          timestamp: new Date(),
-          isBreakthrough,
+    set((state) => {
+      // Calculate XP based on message type and content
+      const baseXP = sender === 'user' ? 5 : 10;
+      const breakthroughBonus = isBreakthrough ? 50 : 0;
+      const lengthBonus = Math.floor(text.length / 500) * 5; // 5 XP per 500 chars
+      const totalXP = baseXP + breakthroughBonus + lengthBonus;
+      
+      // Calculate new level based on total XP
+      const newTotalXP = state.socialStats.totalXP + totalXP;
+      const newLevel = Math.floor(newTotalXP / 1000) + 1;
+      
+      // Check if level up occurred
+      const didLevelUp = newLevel > state.socialStats.level;
+      
+      return {
+        messages: [
+          ...state.messages,
+          {
+            id: Date.now().toString(),
+            text,
+            sender,
+            timestamp: new Date(),
+            isBreakthrough,
+          },
+        ],
+        sessionStats: {
+          ...state.sessionStats,
+          messagesCount: state.sessionStats.messagesCount + 1,
+          xpEarned: state.sessionStats.xpEarned + totalXP,
         },
-      ],
-      sessionStats: {
-        ...state.sessionStats,
-        messagesCount: state.sessionStats.messagesCount + 1,
-        xpEarned: state.sessionStats.xpEarned + (isBreakthrough ? 50 : 10),
-      },
-    })),
+        socialStats: {
+          ...state.socialStats,
+          totalXP: newTotalXP,
+          level: newLevel,
+          // Update learning velocity (XP per hour)
+          learningVelocity: state.sessionStats.duration > 0 
+            ? Math.round((state.sessionStats.xpEarned / (state.sessionStats.duration / 3600)))
+            : state.socialStats.learningVelocity,
+          // Update level progress percentage
+          levelProgress: ((newTotalXP % 1000) / 1000) * 100,
+        },
+      };
+    }),
   
   clearMessages: () => 
     set({ messages: [] }),
@@ -105,23 +137,41 @@ export const useStore = create<AppState>((set) => ({
     set((state) => ({ isRecording: !state.isRecording })),
 
   updateSocialStats: (stats) =>
-    set((state) => ({
-      socialStats: {
-        ...state.socialStats,
-        ...stats,
-      },
-    })),
+    set((state) => {
+      // Calculate new level if totalXP is being updated
+      let newLevel = state.socialStats.level;
+      let levelProgress = state.socialStats.levelProgress;
+      
+      if ('totalXP' in stats) {
+        newLevel = Math.floor((stats.totalXP as number) / 1000) + 1;
+        levelProgress = (((stats.totalXP as number) % 1000) / 1000) * 100;
+      }
+      
+      return {
+        socialStats: {
+          ...state.socialStats,
+          ...stats,
+          level: newLevel,
+          levelProgress: levelProgress,
+        },
+      };
+    }),
 
   completeChallenge: (challengeId: string) =>
     set((state) => {
       const challenge = state.socialStats.activeChallenges.find(c => c.id === challengeId);
       if (!challenge || challenge.isCompleted) return state;
 
+      const newXP = state.socialStats.totalXP + challenge.xpReward;
+      const newLevel = Math.floor(newXP / 1000) + 1;
+      const levelProgress = ((newXP % 1000) / 1000) * 100;
+
       return {
         socialStats: {
           ...state.socialStats,
-          totalXP: state.socialStats.totalXP + challenge.xpReward,
-          level: Math.floor((state.socialStats.totalXP + challenge.xpReward) / 1000) + 1,
+          totalXP: newXP,
+          level: newLevel,
+          levelProgress: levelProgress,
           activeChallenges: state.socialStats.activeChallenges.map(c =>
             c.id === challengeId ? { ...c, isCompleted: true } : c
           ),
@@ -166,6 +216,7 @@ export const useStore = create<AppState>((set) => ({
               longest: Math.max(newCurrent, state.socialStats.streak.longest),
               lastStudyDate: today,
             },
+            consistencyRating: newCurrent >= 7 ? 'Excellent' : newCurrent >= 3 ? 'Good' : 'Building',
           },
         };
       } else if (daysSinceLastStudy > 1) {
@@ -177,6 +228,7 @@ export const useStore = create<AppState>((set) => ({
               longest: state.socialStats.streak.longest,
               lastStudyDate: today,
             },
+            consistencyRating: 'Building',
           },
         };
       }

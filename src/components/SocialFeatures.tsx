@@ -7,6 +7,7 @@ import Confetti from 'react-confetti';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Achievement, Challenge, Subject } from '../types';
+import { LevelProgressBar } from './LevelProgressBar';
 
 export const SocialFeatures: React.FC = () => {
   const { socialStats, currentSubject, updateSocialStats } = useStore();
@@ -133,6 +134,27 @@ export const SocialFeatures: React.FC = () => {
       });
     }
     
+    // Add level-based achievements
+    if (socialStats.level >= 5) {
+      achievements.push({
+        id: 'knowledge-seeker',
+        title: 'Knowledge Seeker',
+        description: 'Reached Level 5',
+        icon: '🏆',
+        unlockedAt: new Date()
+      });
+    }
+    
+    if (socialStats.level >= 10) {
+      achievements.push({
+        id: 'dedicated-scholar',
+        title: 'Dedicated Scholar',
+        description: 'Reached Level 10',
+        icon: '🎓',
+        unlockedAt: new Date()
+      });
+    }
+    
     return achievements;
   };
 
@@ -211,7 +233,7 @@ export const SocialFeatures: React.FC = () => {
 
   const shareProgress = () => {
     const shareUrl = window.location.href;
-    const shareTitle = `I'm mastering ${currentSubject} with AI Study Buddy! 🚀 Join me and revolutionize your learning journey.`;
+    const shareTitle = `I'm mastering ${currentSubject} with Brainbud! 🚀 I'm currently Level ${socialStats.level} with ${socialStats.totalXP} XP. Join me and revolutionize your learning journey.`;
     
     navigator.clipboard.writeText(shareTitle + '\n' + shareUrl).then(() => {
       toast.success('Share link copied to clipboard!');
@@ -224,25 +246,6 @@ export const SocialFeatures: React.FC = () => {
       <span className="font-bold">{socialStats.streak.current} Day Streak!</span>
     </div>
   );
-
-  const renderLevelProgress = () => {
-    const progress = (socialStats.totalXP % 1000) / 1000;
-    
-    return (
-      <div className="space-y-2">
-        <div className="flex justify-between text-sm">
-          <span>Level {socialStats.level}</span>
-          <span>{socialStats.totalXP} XP</span>
-        </div>
-        <div className="h-2 bg-gray-200 rounded-full">
-          <div 
-            className="h-full bg-primary-500 rounded-full transition-all duration-500"
-            style={{ width: `${progress * 100}%` }}
-          />
-        </div>
-      </div>
-    );
-  };
 
   const renderAchievements = () => (
     <div className="space-y-3">
@@ -345,7 +348,7 @@ export const SocialFeatures: React.FC = () => {
       </div>
 
       <div className="border-t border-gray-200 pt-4">
-        {renderLevelProgress()}
+        <LevelProgressBar />
       </div>
 
       <div className="border-t border-gray-200 pt-4">
@@ -359,7 +362,7 @@ export const SocialFeatures: React.FC = () => {
       <div className="flex justify-center space-x-4 pt-2">
         <TwitterShareButton
           url={window.location.href}
-          title={`I'm mastering ${currentSubject} with AI Study Buddy! 🚀`}
+          title={`I'm mastering ${currentSubject} with Brainbud! 🚀 I'm Level ${socialStats.level} with ${socialStats.totalXP} XP.`}
           className="hover:opacity-80"
         >
           <div className="flex items-center space-x-2 px-4 py-2 bg-[#1DA1F2] text-white rounded-lg">
@@ -369,7 +372,7 @@ export const SocialFeatures: React.FC = () => {
 
         <LinkedinShareButton
           url={window.location.href}
-          title={`Learning ${currentSubject} with AI Study Buddy`}
+          title={`Learning ${currentSubject} with Brainbud`}
           className="hover:opacity-80"
         >
           <div className="flex items-center space-x-2 px-4 py-2 bg-[#0A66C2] text-white rounded-lg">

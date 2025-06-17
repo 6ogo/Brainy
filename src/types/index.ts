@@ -83,6 +83,12 @@ export interface SocialStats {
   achievements: Achievement[];
   activeChallenges: Challenge[];
   level: number;
+  learningVelocity: number;
+  engagementScore: number;
+  consistencyRating: string;
+  progressTrend: string;
+  timeToNextLevel: number;
+  levelProgress: number;
 }
 
 export interface AppState {
