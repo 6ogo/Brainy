@@ -14,7 +14,8 @@ export const useVoiceChat = () => {
     setIsSpeaking,
     addMessage,
     setAvatarEmotion,
-    toggleListening
+    toggleListening,
+    isStudyMode
   } = useStore();
   
   const { user } = useAuth();
@@ -31,6 +32,10 @@ export const useVoiceChat = () => {
     startListening,
     stopListening
   } = useSpeechRecognition();
+  
+  // For study mode speech processing
+  const transcriptTimeoutRef = useRef<number | null>(null);
+  const lastProcessedTranscriptRef = useRef<string>('');
 
   // Cleanup on unmount
   useEffect(() => {
@@ -55,7 +60,14 @@ export const useVoiceChat = () => {
         difficultyLevel: difficultyLevel,
         onResponse: (text) => {
           if (isMounted.current) {
-            addMessage(text, 'ai');
+            // If in study mode, make responses more concise
+            if (isStudyMode) {
+              // Simplify and shorten the response
+              const simplifiedText = simplifyResponse(text);
+              addMessage(simplifiedText, 'ai');
+            } else {
+              addMessage(text, 'ai');
+            }
           }
         },
         onAudioStart: () => {
@@ -79,8 +91,23 @@ export const useVoiceChat = () => {
         onTranscript: (text, isFinal) => {
           if (isMounted.current) {
             setCurrentTranscript(text);
+            
             if (isFinal && text.trim()) {
-              toggleListening(true);
+              if (isStudyMode) {
+                // In study mode, wait 2 seconds after user stops speaking
+                if (transcriptTimeoutRef.current) {
+                  clearTimeout(transcriptTimeoutRef.current);
+                }
+                
+                transcriptTimeoutRef.current = window.setTimeout(() => {
+                  if (text !== lastProcessedTranscriptRef.current) {
+                    lastProcessedTranscriptRef.current = text;
+                    toggleListening(true);
+                  }
+                }, 2000);
+              } else {
+                toggleListening(true);
+              }
             }
           }
         }
@@ -89,7 +116,7 @@ export const useVoiceChat = () => {
       console.error('Failed to initialize voice service:', error);
       setError('Failed to initialize voice service');
     }
-  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening]);
+  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode]);
 
   // Update voice service when difficulty level changes
   useEffect(() => {
@@ -102,7 +129,14 @@ export const useVoiceChat = () => {
         difficultyLevel: difficultyLevel,
         onResponse: (text) => {
           if (isMounted.current) {
-            addMessage(text, 'ai');
+            // If in study mode, make responses more concise
+            if (isStudyMode) {
+              // Simplify and shorten the response
+              const simplifiedText = simplifyResponse(text);
+              addMessage(simplifiedText, 'ai');
+            } else {
+              addMessage(text, 'ai');
+            }
           }
         },
         onAudioStart: () => {
@@ -127,7 +161,21 @@ export const useVoiceChat = () => {
           if (isMounted.current) {
             setCurrentTranscript(text);
             if (isFinal && text.trim()) {
-              toggleListening(true);
+              if (isStudyMode) {
+                // In study mode, wait 2 seconds after user stops speaking
+                if (transcriptTimeoutRef.current) {
+                  clearTimeout(transcriptTimeoutRef.current);
+                }
+                
+                transcriptTimeoutRef.current = window.setTimeout(() => {
+                  if (text !== lastProcessedTranscriptRef.current) {
+                    lastProcessedTranscriptRef.current = text;
+                    toggleListening(true);
+                  }
+                }, 2000);
+              } else {
+                toggleListening(true);
+              }
             }
           }
         }
@@ -135,7 +183,7 @@ export const useVoiceChat = () => {
       
       console.log(`Voice service updated with difficulty level: ${difficultyLevel}`);
     }
-  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening]);
+  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode]);
 
   const startVoiceChat = useCallback(async () => {
     if (!browserSupportsSpeechRecognition) {
@@ -202,8 +250,46 @@ export const useVoiceChat = () => {
       pauseVoiceChat();
     }
   }, [isPaused, pauseVoiceChat, resumeVoiceChat]);
+  
+  // Helper function to simplify and shorten responses for study mode
+  const simplifyResponse = (text: string): string => {
+    // Split into sentences
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [];
+    
+    // Keep only essential sentences (first, last, and any with key educational terms)
+    const keyTerms = ['important', 'key concept', 'remember', 'essential', 'fundamental', 'critical'];
+    
+    let essentialSentences: string[] = [];
+    
+    // Always include first sentence
+    if (sentences.length > 0) {
+      essentialSentences.push(sentences[0]);
+    }
+    
+    // Include sentences with key terms (up to 3 more)
+    let keyTermSentences = sentences.filter(sentence => 
+      keyTerms.some(term => sentence.toLowerCase().includes(term))
+    ).slice(0, 3);
+    
+    essentialSentences = [...essentialSentences, ...keyTermSentences];
+    
+    // Include last sentence if we have more than 2 sentences and it's not already included
+    if (sentences.length > 2 && !essentialSentences.includes(sentences[sentences.length - 1])) {
+      essentialSentences.push(sentences[sentences.length - 1]);
+    }
+    
+    // Remove duplicates and join
+    const uniqueSentences = [...new Set(essentialSentences)];
+    
+    // If we still have a long response, just take first 2-3 sentences
+    if (uniqueSentences.join(' ').length > 300 && sentences.length > 3) {
+      return sentences.slice(0, 3).join(' ');
+    }
+    
+    return uniqueSentences.join(' ');
+  };
 
-  return {
+  return { 
     isActive,
     isPaused,
     error,

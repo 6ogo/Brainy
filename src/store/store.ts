@@ -14,6 +14,7 @@ export const useStore = create<AppState>((set) => ({
   isVideoEnabled: true,
   isRecording: false,
   learningMode: 'conversational',
+  isStudyMode: false,
   socialStats: {
     streak: {
       current: 1,
@@ -73,9 +74,6 @@ export const useStore = create<AppState>((set) => ({
       // Calculate new level based on total XP
       const newTotalXP = state.socialStats.totalXP + totalXP;
       const newLevel = Math.floor(newTotalXP / 1000) + 1;
-      
-      // Check if level up occurred
-      const didLevelUp = newLevel > state.socialStats.level;
       
       return {
         messages: [
@@ -238,4 +236,7 @@ export const useStore = create<AppState>((set) => ({
 
   setLearningMode: (mode: LearningMode) =>
     set({ learningMode: mode }),
+    
+  setStudyMode: (isEnabled: boolean) =>
+    set({ isStudyMode: isEnabled }),
 }));

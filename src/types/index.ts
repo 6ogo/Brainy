@@ -106,6 +106,7 @@ export interface AppState {
   isRecording: boolean;
   socialStats: SocialStats;
   learningMode: LearningMode;
+  isStudyMode: boolean;
   
   // Actions
   setCurrentSubject: (subject: Subject) => void;
@@ -126,4 +127,5 @@ export interface AppState {
   unlockAchievement: (achievementId: string) => void;
   updateStreak: () => void;
   setLearningMode: (mode: LearningMode) => void;
+  setStudyMode: (isEnabled: boolean) => void;
 }
