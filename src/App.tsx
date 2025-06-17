@@ -26,6 +26,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { SecurityProvider } from './components/SecurityProvider';
 import { Toaster } from 'react-hot-toast';
 import { PrivateRoute } from './components/PrivateRoute';
+import BoltOverlay from './components/BoltOverlay';
 
 function App() {
   return (
@@ -70,6 +71,8 @@ function App() {
           />
         </AuthProvider>
       </SecurityProvider>
+      {/* Bolt Overlay: persistent bottom-right link */}
+      <BoltOverlay />
     </Router>
   );
 }

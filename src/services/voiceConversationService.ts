@@ -59,11 +59,32 @@ export class VoiceConversationService {
         // Notify about interim results for UI feedback
         this.config.onTranscript?.(transcript, lastResult.isFinal);
         
-        // Only process final results
-        if (lastResult.isFinal) {
-          console.log('Final transcript:', transcript);
-          if (transcript) {
-            this.handleUserSpeech(transcript);
+        // Debounce processing of final results for 2 seconds after user stops speaking
+        if (!this.debounceTimer) {
+          this.debounceTimer = null;
+        }
+        if (this.debounceTimer) {
+          clearTimeout(this.debounceTimer);
+          this.debounceTimer = null;
+        }
+
+        if (lastResult.isFinal && transcript) {
+          // Store the last transcript
+          this.pendingFinalTranscript = transcript;
+          // Start a 2-second debounce timer
+          this.debounceTimer = setTimeout(() => {
+            if (this.pendingFinalTranscript) {
+              this.handleUserSpeech(this.pendingFinalTranscript);
+              this.pendingFinalTranscript = '';
+            }
+            this.debounceTimer = null;
+          }, 2000);
+        } else if (!lastResult.isFinal) {
+          // If interim, clear any pending final transcript
+          this.pendingFinalTranscript = '';
+          if (this.debounceTimer) {
+            clearTimeout(this.debounceTimer);
+            this.debounceTimer = null;
           }
         }
       };
@@ -95,6 +116,10 @@ export class VoiceConversationService {
       };
     }
   }
+
+  // --- Debounce timer and pending transcript for STT idle delay ---
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingFinalTranscript: string = '';
 
   private initializeAudioContext(): void {
     try {
