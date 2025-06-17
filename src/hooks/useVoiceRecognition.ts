@@ -129,7 +129,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
       }
       return false;
     }
-  }, [hasPermission, requestPermission, toggleListening, isSpeechRecognitionSupported]);
+  }, [hasPermission, toggleListening, isSpeechRecognitionSupported]);
 
   const stopListening = useCallback(async (): Promise<boolean> => {
     try {
@@ -367,7 +367,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         }
       });
     }
-  }, [initSpeechRecognition, requestPermission, startListening, voiceMode, isSpeechRecognitionSupported]);
+  }, [initSpeechRecognition, voiceMode, isSpeechRecognitionSupported]);
 
   // Request microphone permission
   const requestPermission = useCallback(async (): Promise<boolean> => {

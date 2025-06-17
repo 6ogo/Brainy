@@ -6,7 +6,7 @@ import { GroqService } from '../services/groqService';
 import toast from 'react-hot-toast';
 
 export const DifficultySlider: React.FC = () => {
-  const { difficultyLevel, setDifficultyLevel, currentSubject, currentAvatar } = useStore();
+  const { difficultyLevel, setDifficultyLevel, currentSubject } = useStore();
   const [showTooltip, setShowTooltip] = useState<string | null>(null);
   const [prevDifficulty, setPrevDifficulty] = useState<DifficultyLevel>(difficultyLevel);
 

@@ -2,20 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/store';
 import { format, subDays } from 'date-fns';
 import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
+  AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
 } from 'recharts';
 import { 
   Brain, Clock, Target, TrendingUp, Download,
-  Calendar, Award, BookOpen, ChevronDown, Zap
+  Calendar, Award, BookOpen, ChevronDown, Zap,
+  AlertCircle, CheckCircle
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from './Button';
 import { Card } from './Card';
-import { cn, commonStyles } from '../styles/utils';
+import { cn } from '../styles/utils';
 import toast from 'react-hot-toast';
 
 export const AnalyticsDashboard: React.FC = () => {
@@ -158,8 +159,8 @@ export const AnalyticsDashboard: React.FC = () => {
 
     // Set up interval to update learning velocity every 60 minutes
     const velocityInterval = setInterval(() => {
-      setAnalyticsData(prev => ({
-        ...prev,
+      setAnalyticsData((prevData: any) => ({
+        ...prevData,
         learningVelocity: calculateLearningVelocity()
       }));
     }, 60 * 60 * 1000);

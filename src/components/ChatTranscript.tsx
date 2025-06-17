@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { Search, Send, Mic, Phone, PhoneOff } from 'lucide-react';
+import { Search, Send, Phone, PhoneOff } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
 import { useVoiceChat } from '../hooks/useVoiceChat';

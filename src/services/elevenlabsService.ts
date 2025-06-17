@@ -1,4 +1,4 @@
-import { API_CONFIG, createFallbackResponse } from '../config/api';
+import { API_CONFIG } from '../config/api';
 import { supabase } from '../lib/supabase';
 
 interface VoiceSettings {

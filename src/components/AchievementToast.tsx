@@ -1,6 +1,5 @@
 import React from 'react';
 import { Trophy } from 'lucide-react';
-import { cn } from '../styles/utils';
 
 interface AchievementToastProps {
   title: string;

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { products, ProductId } from '../stripe-config';
 
-export async function createCheckoutSession(productId: ProductId, promotionCode?: string) {
+export async function createCheckoutSession(productId: ProductId) {
   const product = products[productId];
   if (!product) {
     throw new Error('Invalid product ID');

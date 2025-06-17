@@ -1,35 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
-import { Card } from '../components/Card';
-import { cn, commonStyles } from '../styles/utils';
+import { cn } from '../styles/utils';
 import { useStore } from '../store/store';
-import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Line, Doughnut, Bar, Radar } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  RadialLinearScale,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
-import { 
-  Clock, 
-  Target, 
-  BookOpen, 
-  ChevronDown,
-  Zap,
-  Trophy,
-  Flame
-} from 'lucide-react';
-import { format, subDays, parseISO, isValid } from 'date-fns';
 import { StudyAdvisorButton } from '../components/StudyAdvisorButton';
 import { AnalyticsInsights } from '../components/AnalyticsInsights';
 import { AnalyticsDashboard } from '../components/AnalyticsDashboard';
@@ -37,23 +10,8 @@ import { AchievementSystem } from '../components/AchievementSystem';
 import { StudyAdvisorInsights } from '../components/StudyAdvisorInsights';
 import { LevelProgressBar } from '../components/LevelProgressBar';
 
-// Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  RadialLinearScale,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
-
 export const LearningAnalytics: React.FC = () => {
-  const { socialStats } = useStore();
+  const { socialStats, sessionStats } = useStore();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
@@ -91,7 +49,7 @@ export const LearningAnalytics: React.FC = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
           <div>
-            <h1 className={cn(commonStyles.heading.h1, "mb-2")}>
+            <h1 className={cn("text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl", "mb-2")}>
               Learning Analytics
             </h1>
             <p className="text-gray-600">Track your progress and gain insights into your learning journey</p>
@@ -149,7 +107,7 @@ export const LearningAnalytics: React.FC = () => {
             <div className="mt-8">
               <AnalyticsInsights 
                 totalStudyTime={sessionStats.duration / 60}
-                totalConversations={messages.length / 2}
+                totalConversations={sessionStats.messagesCount / 2}
                 averageSessionLength={30}
                 currentStreak={socialStats.streak.current}
                 totalXP={socialStats.totalXP}

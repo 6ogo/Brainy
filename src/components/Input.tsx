@@ -41,7 +41,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         case 'email':
           return 'email';
         default:
-          return props.autocomplete;
+          return props.autoComplete;
       }
     };
 

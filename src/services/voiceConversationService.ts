@@ -20,13 +20,13 @@ export class VoiceConversationService {
   private isListening = false;
   private isProcessing = false;
   private config: VoiceConversationConfig;
-  private _audioContext: AudioContext | null = null;
+  private audioContext: AudioContext | null = null;
   private currentAudio: HTMLAudioElement | null = null;
   private isPaused = false;
   private currentTranscript = '';
   private recognitionLanguage = 'en-US';
-  private _audioQueue: Blob[] = [];
-  private _isPlayingAudio = false;
+  private audioQueue: Blob[] = [];
+  private isPlayingAudio = false;
   private stream: MediaStream | null = null;
 
   constructor(config: VoiceConversationConfig) {
@@ -44,59 +44,61 @@ export class VoiceConversationService {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     this.recognition = new SpeechRecognition();
     
-    this.recognition.continuous = true;
-    this.recognition.interimResults = true;
-    this.recognition.lang = this.recognitionLanguage;
+    if (this.recognition) {
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
+      this.recognition.lang = this.recognitionLanguage;
 
-    this.recognition.onresult = (event) => {
-      const lastResult = event.results[event.results.length - 1];
-      const transcript = lastResult[0].transcript.trim();
-      
-      // Update current transcript
-      this.currentTranscript = transcript;
-      
-      // Notify about interim results for UI feedback
-      this.config.onTranscript?.(transcript, lastResult.isFinal);
-      
-      // Only process final results
-      if (lastResult.isFinal) {
-        console.log('Final transcript:', transcript);
-        if (transcript) {
-          this.handleUserSpeech(transcript);
+      this.recognition.onresult = (event) => {
+        const lastResult = event.results[event.results.length - 1];
+        const transcript = lastResult[0].transcript.trim();
+        
+        // Update current transcript
+        this.currentTranscript = transcript;
+        
+        // Notify about interim results for UI feedback
+        this.config.onTranscript?.(transcript, lastResult.isFinal);
+        
+        // Only process final results
+        if (lastResult.isFinal) {
+          console.log('Final transcript:', transcript);
+          if (transcript) {
+            this.handleUserSpeech(transcript);
+          }
         }
-      }
-    };
+      };
 
-    this.recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      this.config.onError?.(`Speech recognition error: ${event.error}`);
-      this.isListening = false;
-    };
+      this.recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        this.config.onError?.(`Speech recognition error: ${event.error}`);
+        this.isListening = false;
+      };
 
-    this.recognition.onend = () => {
-      console.log('Speech recognition ended');
-      this.isListening = false;
-      
-      // Restart if we're supposed to be listening continuously
-      if (!this.isPaused && this.recognition) {
-        try {
-          setTimeout(() => {
-            if (!this.isPaused && !this.isListening && this.recognition) {
-              this.recognition.start();
-              this.isListening = true;
-              console.log('Restarted speech recognition');
-            }
-          }, 300); // Small delay to prevent rapid restarts
-        } catch (error) {
-          console.error('Failed to restart speech recognition:', error);
+      this.recognition.onend = () => {
+        console.log('Speech recognition ended');
+        this.isListening = false;
+        
+        // Restart if we're supposed to be listening continuously
+        if (!this.isPaused && this.recognition) {
+          try {
+            setTimeout(() => {
+              if (!this.isPaused && !this.isListening && this.recognition) {
+                this.recognition.start();
+                this.isListening = true;
+                console.log('Restarted speech recognition');
+              }
+            }, 300); // Small delay to prevent rapid restarts
+          } catch (error) {
+            console.error('Failed to restart speech recognition:', error);
+          }
         }
-      }
-    };
+      };
+    }
   }
 
   private initializeAudioContext(): void {
     try {
-      this._audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
     }
@@ -170,8 +172,8 @@ export class VoiceConversationService {
     }
     
     // Clear audio queue
-    this._audioQueue = [];
-    this._isPlayingAudio = false;
+    this.audioQueue = [];
+    this.isPlayingAudio = false;
     
     // Also stop any browser speech synthesis
     if ('speechSynthesis' in window) {
