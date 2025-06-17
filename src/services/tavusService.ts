@@ -106,6 +106,22 @@ export const TavusService = {
 
         const data = await response.json();
         
+        // Validate the response
+        if (!data.url || typeof data.url !== 'string') {
+          throw new Error('Invalid response from Tavus API: missing or invalid URL');
+        }
+        
+        // Test if the URL is accessible
+        try {
+          const testResponse = await fetch(data.url, { method: 'HEAD' });
+          if (!testResponse.ok) {
+            throw new Error(`Video URL returned status ${testResponse.status}`);
+          }
+        } catch (urlError) {
+          console.error('Error testing video URL:', urlError);
+          throw new Error('Video URL is not accessible');
+        }
+        
         // Cache the result
         setCached(cacheKey, data);
         
@@ -118,11 +134,26 @@ export const TavusService = {
       console.error('Error creating Tavus video:', error);
       
       // Return a reliable fallback video as fallback
-      return {
+      const fallbackResponse = {
         url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
         id: 'fallback-video-id',
         status: 'completed'
       };
+      
+      // Try to verify the fallback URL is accessible
+      try {
+        const testResponse = await fetch(fallbackResponse.url, { method: 'HEAD' });
+        if (!testResponse.ok) {
+          // If the first fallback fails, try another one
+          fallbackResponse.url = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+        }
+      } catch (fallbackError) {
+        console.error('Error testing fallback video URL:', fallbackError);
+        // Use a different fallback if the first one fails
+        fallbackResponse.url = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+      }
+      
+      return fallbackResponse;
     }
   },
 

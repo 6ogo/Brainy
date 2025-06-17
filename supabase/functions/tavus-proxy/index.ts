@@ -17,6 +17,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+// Fallback videos for when Tavus API fails
+const fallbackVideos = [
+  "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+  "https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
+  "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+];
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -77,9 +84,10 @@ serve(async (req) => {
     if (!tavusApiKey) {
       console.error("Tavus API key not configured");
       
-      // Return a mock response for development
+      // Return a fallback video that's known to work
+      const fallbackIndex = Math.floor(Math.random() * fallbackVideos.length);
       return new Response(JSON.stringify({
-        url: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+        url: fallbackVideos[fallbackIndex],
         id: "mock-video-id",
         status: "completed"
       }), {
@@ -100,44 +108,74 @@ serve(async (req) => {
     console.log(`Creating Tavus video with script length: ${script.length}`);
 
     // Call Tavus API
-    const tavusResponse = await fetch("https://api.tavus.io/v2/videos", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": tavusApiKey
-      },
-      body: JSON.stringify({
-        replica_id: replicaId,
-        script: script
-      })
-    });
+    try {
+      const tavusResponse = await fetch("https://api.tavus.io/v2/videos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": tavusApiKey
+        },
+        body: JSON.stringify({
+          replica_id: replicaId,
+          script: script
+        }),
+        // Add timeout to prevent hanging requests
+        signal: AbortSignal.timeout(15000) // 15 second timeout
+      });
 
-    if (!tavusResponse.ok) {
-      const errorText = await tavusResponse.text();
-      console.error(`Tavus API error: ${tavusResponse.status} - ${errorText}`);
+      if (!tavusResponse.ok) {
+        const errorText = await tavusResponse.text();
+        console.error(`Tavus API error: ${tavusResponse.status} - ${errorText}`);
+        throw new Error(`Tavus API error: ${tavusResponse.status}`);
+      }
+
+      // Return the Tavus API response
+      const data = await tavusResponse.json();
       
-      // For development, return a mock response if the API call fails
+      // Validate the response
+      if (!data.url || typeof data.url !== 'string') {
+        throw new Error('Invalid response from Tavus API: missing or invalid URL');
+      }
+      
+      // Test if the URL is accessible
+      try {
+        const testResponse = await fetch(data.url, { 
+          method: 'HEAD',
+          signal: AbortSignal.timeout(5000) // 5 second timeout
+        });
+        
+        if (!testResponse.ok) {
+          throw new Error(`Video URL returned status ${testResponse.status}`);
+        }
+      } catch (urlError) {
+        console.error('Error testing video URL:', urlError);
+        throw new Error('Video URL is not accessible');
+      }
+      
+      return new Response(JSON.stringify(data), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } catch (apiError) {
+      console.error("Tavus API call failed:", apiError);
+      
+      // Return a fallback video that's known to work
+      const fallbackIndex = Math.floor(Math.random() * fallbackVideos.length);
       return new Response(JSON.stringify({
-        url: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+        url: fallbackVideos[fallbackIndex],
         id: "fallback-video-id",
-        status: "completed"
+        status: "completed",
+        error: apiError.message
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // Return the Tavus API response
-    const data = await tavusResponse.json();
-    
-    return new Response(JSON.stringify(data), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   } catch (error) {
     console.error("Error processing request:", error);
     
-    // Return a mock response for development
+    // Return a fallback video that's known to work
+    const fallbackIndex = Math.floor(Math.random() * fallbackVideos.length);
     return new Response(JSON.stringify({
-      url: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+      url: fallbackVideos[fallbackIndex],
       id: "error-fallback-video-id",
       status: "completed",
       error: error.message

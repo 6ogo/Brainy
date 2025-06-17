@@ -18,7 +18,8 @@ import {
   Clock,
   BarChart,
   Calendar,
-  RefreshCw
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -34,6 +35,13 @@ export const StudyAdvisorPage: React.FC = () => {
   const [videoError, setVideoError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Fallback videos to use if the main video fails
+  const fallbackVideos = [
+    'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+  ];
 
   useEffect(() => {
     const checkEligibility = async () => {
@@ -75,7 +83,7 @@ export const StudyAdvisorPage: React.FC = () => {
       console.error('Error generating Tavus video:', error);
       setVideoError('Failed to generate video. Using fallback video instead.');
       // Set a fallback video URL
-      setVideoUrl('https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4');
+      setVideoUrl(fallbackVideos[0]);
       toast.error('Using fallback video due to generation error');
     } finally {
       setIsGenerating(false);
@@ -105,20 +113,14 @@ export const StudyAdvisorPage: React.FC = () => {
     console.error('Video playback error:', e);
     
     // Only retry a few times to avoid infinite loops
-    if (retryCount < 3) {
+    if (retryCount < fallbackVideos.length) {
       setRetryCount(prev => prev + 1);
-      setVideoError('Error playing video. Trying fallback...');
+      setVideoError(`Error playing video (attempt ${retryCount + 1}/${fallbackVideos.length}). Trying fallback...`);
       
       // Set a fallback video with a different URL to force reload
-      const fallbackUrls = [
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
-      ];
-      
-      setVideoUrl(fallbackUrls[retryCount % fallbackUrls.length]);
+      setVideoUrl(fallbackVideos[retryCount % fallbackVideos.length]);
     } else {
-      setVideoError('Unable to play video. Please try again later.');
+      setVideoError('Unable to play video. Please try again later or use the text summary below.');
     }
   };
 
@@ -232,6 +234,12 @@ export const StudyAdvisorPage: React.FC = () => {
               <Card className="overflow-hidden">
                 {videoUrl ? (
                   <div className="aspect-video bg-black relative">
+                    {videoError && (
+                      <div className="absolute top-0 left-0 right-0 p-4 bg-red-50 border-b border-red-200 text-red-700 text-sm flex items-center">
+                        <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span>{videoError}</span>
+                      </div>
+                    )}
                     <video 
                       ref={videoRef}
                       src={videoUrl} 
@@ -240,12 +248,8 @@ export const StudyAdvisorPage: React.FC = () => {
                       autoPlay
                       onError={handleVideoError}
                       key={videoUrl} // Force remount when URL changes
+                      poster="/white_circle_360x360.png" // Add a poster image to show while loading
                     />
-                    {videoError && (
-                      <div className="absolute bottom-0 left-0 right-0 p-4 bg-red-50 border-t border-red-200 text-red-700 text-sm">
-                        {videoError}
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="aspect-video bg-gradient-to-br from-primary-100 to-primary-200 flex flex-col items-center justify-center p-8 text-center">
@@ -290,6 +294,26 @@ export const StudyAdvisorPage: React.FC = () => {
                       Based on your learning patterns, your AI study advisor has created this personalized 
                       video with tips and strategies to help you learn more effectively.
                     </p>
+                    {videoError && (
+                      <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div className="flex items-start">
+                          <Lightbulb className="h-5 w-5 text-yellow-600 mr-2 mt-0.5" />
+                          <div className="text-sm text-yellow-700">
+                            <p className="font-medium mb-1">Video Playback Issues?</p>
+                            <p>Here's a text summary of the advice:</p>
+                            <p className="mt-2 italic">
+                              {learningInsights?.learningStyle === 'visual' 
+                                ? 'Try using diagrams, charts, and visual aids to improve your learning. Color-coding your notes can help organize information visually.'
+                                : learningInsights?.learningStyle === 'auditory'
+                                ? 'Consider recording explanations and listening to them later. Group discussions can also enhance your auditory learning.'
+                                : learningInsights?.learningStyle === 'kinesthetic'
+                                ? 'Hands-on practice and physical movement while studying might help you retain information better.'
+                                : 'Focus on consistent practice and review sessions to strengthen your understanding of key concepts.'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-2">
                       <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
                         Learning Style
