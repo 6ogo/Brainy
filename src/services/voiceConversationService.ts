@@ -41,7 +41,7 @@ export class VoiceConversationService {
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     this.recognition = new SpeechRecognition();
     
     this.recognition.continuous = true;
@@ -284,7 +284,7 @@ export class VoiceConversationService {
           URL.revokeObjectURL(audioUrl);
           this.currentAudio = null;
           const errorEvent = event as Event;
-          const errorTarget = errorEvent.target as HTMLAudioElement;
+          const errorTarget = errorEvent.currentTarget as HTMLAudioElement;
           const errorMessage = errorTarget && errorTarget.error 
             ? `Audio error: ${errorTarget.error?.message || 'Unknown audio error'}`
             : 'Failed to play audio: Unknown error';

@@ -331,7 +331,7 @@ export const SocialFeatures: React.FC = () => {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
-      {showConfetti && <Confetti recycle={false} onComplete={() => setShowConfetti(false)} />}
+      {showConfetti && <Confetti recycle={false} numberOfPieces={200} onConfettiComplete={() => setShowConfetti(false)} />}
       
       <div className="flex items-center justify-between">
         {renderStreakBadge()}

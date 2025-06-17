@@ -285,7 +285,7 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   const initSpeechRecognition = useCallback((): SpeechRecognition | null => {
     if (typeof window === 'undefined') return null;
     
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       if (isMounted.current) {
         setError('Speech recognition is not supported in this browser');
@@ -400,14 +400,12 @@ export const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         try {
           const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
           if (isMounted.current) {
-            setPermissionState(permission.state);
             setHasPermission(permission.state === 'granted');
           }
           
           // Listen for permission changes
           permission.onchange = () => {
             if (isMounted.current) {
-              setPermissionState(permission.state);
               setHasPermission(permission.state === 'granted');
               
               // If permission was just granted, initialize recognition

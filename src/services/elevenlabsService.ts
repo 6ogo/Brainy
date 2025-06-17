@@ -1,4 +1,4 @@
-import { API_CONFIG } from '../config/api';
+import { API_CONFIG, createFallbackResponse } from '../config/api';
 import { supabase } from '../lib/supabase';
 
 interface VoiceSettings {
@@ -284,7 +284,7 @@ export class ElevenLabsService {
         audio.onerror = (event) => {
           URL.revokeObjectURL(audioUrl);
           const errorEvent = event as Event;
-          const errorTarget = errorEvent.target as HTMLAudioElement;
+          const errorTarget = errorEvent.currentTarget as HTMLAudioElement;
           const errorMessage = errorTarget && errorTarget.error 
             ? `Audio error: ${errorTarget.error?.message || 'Unknown audio error'}`
             : 'Failed to play audio: Unknown error';
