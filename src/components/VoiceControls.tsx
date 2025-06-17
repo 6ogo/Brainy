@@ -6,6 +6,7 @@ import { useVoiceChat } from '../hooks/useVoiceChat';
 import { VoiceMode } from '../types';
 import toast from 'react-hot-toast';
 import { cn } from '../styles/utils';
+import { Button } from './Button';
 
 export const VoiceControls: React.FC = () => {
   const { 
@@ -41,6 +42,7 @@ export const VoiceControls: React.FC = () => {
   const [volume, setVolume] = useState(70);
   const [showTranscript, setShowTranscript] = useState(true);
   const [showPermissionBanner, setShowPermissionBanner] = useState(!hasPermission);
+  const [showVoiceGuide, setShowVoiceGuide] = useState(true);
 
   // Ensure voice mode is appropriate for learning mode
   useEffect(() => {
@@ -69,8 +71,12 @@ export const VoiceControls: React.FC = () => {
     if (mode === 'muted') {
       stopListening();
       stopVoiceChat();
+      toast.success('Voice mode turned off');
     } else if (mode === 'continuous') {
       startVoiceChat();
+      toast.success('Continuous voice mode activated - speak freely');
+    } else {
+      toast.success('Push-to-talk mode activated - press and hold to speak');
     }
   };
 
@@ -94,6 +100,7 @@ export const VoiceControls: React.FC = () => {
   const toggleMute = () => {
     setIsSpeaking(false);
     stopVoiceChat();
+    toast.success('AI voice muted');
   };
 
   const handleRequestPermission = async () => {
@@ -131,12 +138,41 @@ export const VoiceControls: React.FC = () => {
               <p className="text-sm text-yellow-700 mt-1">
                 Enable microphone access to use voice features like speech recognition and voice commands.
               </p>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleRequestPermission}
-                className="mt-2 px-3 py-1 bg-yellow-600 text-white text-sm rounded-md hover:bg-yellow-700 transition-colors"
+                className="mt-2"
               >
                 Enable Microphone
-              </button>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Voice Guide */}
+      {showVoiceGuide && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start space-x-3">
+            <Volume2 className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-blue-800">
+                Voice Chat Guide
+              </h4>
+              <p className="text-sm text-blue-700 mt-1">
+                Choose a voice mode below to start talking with your AI tutor. You can use push-to-talk (press and hold to speak) or continuous mode (speak freely).
+              </p>
+              <div className="mt-2 flex">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowVoiceGuide(false)}
+                  className="ml-auto"
+                >
+                  Got it
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -150,12 +186,14 @@ export const VoiceControls: React.FC = () => {
             <div>
               <p className="text-sm text-red-700">{recognitionError}</p>
               {recognitionError.includes('denied') && (
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={handleRequestPermission}
-                  className="mt-2 px-3 py-1 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 transition-colors"
+                  className="mt-2"
                 >
                   Try Again
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -253,44 +291,23 @@ export const VoiceControls: React.FC = () => {
           <div className="p-4 bg-gray-50 rounded-lg">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Call Controls</h3>
             <div className="grid grid-cols-2 gap-3">
-              <button
+              <Button
+                variant={isPaused ? "primary" : "secondary"}
                 onClick={isPaused ? resumeVoiceChat : pauseVoiceChat}
-                className={cn(
-                  "flex items-center justify-center space-x-2 px-4 py-3 rounded-md transition-colors",
-                  isPaused
-                    ? "bg-green-500 text-white hover:bg-green-600"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                )}
-                title={isPaused ? 'Resume Conversation' : 'Pause Conversation'}
+                leftIcon={isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
                 disabled={!hasPermission || !isActive}
               >
-                {isPaused ? (
-                  <>
-                    <Play className="h-5 w-5 mr-2" />
-                    <span>Resume</span>
-                  </>
-                ) : (
-                  <>
-                    <Pause className="h-5 w-5 mr-2" />
-                    <span>Pause</span>
-                  </>
-                )}
-              </button>
+                {isPaused ? 'Resume' : 'Pause'}
+              </Button>
               
-              <button
+              <Button
+                variant={isRecording ? "primary" : "secondary"}
                 onClick={() => toggleRecording()}
-                className={cn(
-                  "flex items-center justify-center space-x-2 px-4 py-3 rounded-md transition-colors",
-                  isRecording
-                    ? "bg-red-500 text-white hover:bg-red-600"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                )}
-                title={isRecording ? 'Stop Recording' : 'Start Recording'}
+                leftIcon={<Download className="h-5 w-5" />}
                 disabled={!hasPermission}
               >
-                <Download className="h-5 w-5 mr-2" />
-                <span>{isRecording ? 'Stop' : 'Record'}</span>
-              </button>
+                {isRecording ? 'Stop Recording' : 'Record'}
+              </Button>
             </div>
           </div>
           

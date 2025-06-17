@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Mic, MicOff, Volume2, VolumeX, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, AlertCircle, Play } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
@@ -8,6 +8,8 @@ import { VoiceControls } from './VoiceControls';
 import { TavusService } from '../services/tavusService';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../styles/utils';
+import { Button } from './Button';
+import toast from 'react-hot-toast';
 
 export const VideoArea: React.FC = () => {
   const { 
@@ -17,16 +19,30 @@ export const VideoArea: React.FC = () => {
     currentBackground,
     avatarEmotion,
     voiceMode,
-    difficultyLevel
+    difficultyLevel,
+    setVoiceMode
   } = useStore();
   
   const { user } = useAuth();
-  const { error: recognitionError } = useVoiceRecognition();
-  const { isActive, error: voiceChatError, isPaused, currentTranscript } = useVoiceChat();
+  const { error: recognitionError, startListening, hasPermission, requestPermission } = useVoiceRecognition();
+  const { 
+    isActive, 
+    error: voiceChatError, 
+    isPaused, 
+    currentTranscript, 
+    startVoiceChat, 
+    stopVoiceChat,
+    pauseVoiceChat,
+    resumeVoiceChat
+  } = useVoiceChat();
+  
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const [showStartPrompt, setShowStartPrompt] = useState(true);
   const avatarRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -57,6 +73,39 @@ export const VideoArea: React.FC = () => {
       }
     }
   }, [isSpeaking, isPaused]);
+
+  const handleStartVoiceChat = async () => {
+    if (!hasPermission) {
+      const granted = await requestPermission();
+      if (!granted) {
+        toast.error('Microphone permission is required for voice chat');
+        return;
+      }
+    }
+    
+    setVoiceMode('continuous');
+    setShowStartPrompt(false);
+    startVoiceChat();
+    toast.success('Voice chat started! You can now speak with your AI tutor');
+  };
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    console.error('Video playback error:', e);
+    
+    // Only retry a few times to avoid infinite loops
+    if (retryCount < 3) {
+      setRetryCount(prev => prev + 1);
+      
+      // Set a fallback video with a different URL to force reload
+      const fallbackUrls = [
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+        'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+      ];
+      
+      setTavusVideoUrl(fallbackUrls[retryCount % fallbackUrls.length]);
+    }
+  };
 
   if (!isEligibleForTavus) {
     return (
@@ -103,42 +152,85 @@ export const VideoArea: React.FC = () => {
 
                 {tavusVideoUrl ? (
                   <video
+                    ref={videoRef}
                     src={tavusVideoUrl}
                     autoPlay
                     controls
                     className="absolute inset-0 w-full h-full object-cover"
+                    onError={handleVideoError}
                   />
                 ) : (
                   <div className="relative z-10 flex flex-col items-center justify-center">
-                    <div 
-                      ref={avatarRef}
-                      className={cn(
-                        "w-48 h-48 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300",
-                        avatarEmotion === 'thinking' ? 'scale-105' :
-                        avatarEmotion === 'excited' ? 'scale-110' :
-                        'scale-100',
-                        isPaused && "opacity-60"
-                      )}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-b from-primary-300 to-primary-600 opacity-50"></div>
-                      <div className="w-32 h-32 rounded-full bg-primary-200 flex items-center justify-center z-10">
-                        <span className="text-5xl font-bold text-primary-700">AI</span>
+                    {showStartPrompt && !isActive ? (
+                      <div className="bg-white/90 p-6 rounded-lg shadow-lg text-center max-w-md">
+                        <h3 className="text-xl font-semibold mb-3">Start Voice Conversation</h3>
+                        <p className="text-gray-600 mb-4">
+                          Click the button below to start a voice conversation with your AI tutor. 
+                          You'll be able to speak and hear responses in real-time.
+                        </p>
+                        <Button
+                          variant="primary"
+                          onClick={handleStartVoiceChat}
+                          leftIcon={<Mic className="h-5 w-5" />}
+                        >
+                          Start Voice Chat
+                        </Button>
                       </div>
-                    </div>
-                    
-                    {/* Live transcript bubble */}
-                    {currentTranscript && (
-                      <div className="absolute top-full mt-4 max-w-xs bg-white rounded-lg p-3 shadow-lg border border-gray-200">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <div className="flex space-x-1">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                    ) : (
+                      <>
+                        <div 
+                          ref={avatarRef}
+                          className={cn(
+                            "w-48 h-48 rounded-full bg-primary-100 flex items-center justify-center overflow-hidden transition-transform duration-300",
+                            avatarEmotion === 'thinking' ? 'scale-105' :
+                            avatarEmotion === 'excited' ? 'scale-110' :
+                            'scale-100',
+                            isPaused && "opacity-60"
+                          )}
+                        >
+                          <div className="absolute inset-0 bg-gradient-to-b from-primary-300 to-primary-600 opacity-50"></div>
+                          <div className="w-32 h-32 rounded-full bg-primary-200 flex items-center justify-center z-10">
+                            <span className="text-5xl font-bold text-primary-700">AI</span>
                           </div>
-                          <span className="text-xs font-medium text-blue-600">Hearing you say...</span>
                         </div>
-                        <p className="text-sm text-gray-800">{currentTranscript}</p>
-                      </div>
+                        
+                        {/* Voice activity indicators */}
+                        {isSpeaking && (
+                          <div className="mt-4 bg-green-100 text-green-800 px-4 py-2 rounded-full flex items-center">
+                            <Volume2 className="h-4 w-4 mr-2" />
+                            <span>AI Speaking...</span>
+                          </div>
+                        )}
+                        
+                        {isListening && !isSpeaking && (
+                          <div className="mt-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-full flex items-center">
+                            <Mic className="h-4 w-4 mr-2" />
+                            <span>Listening...</span>
+                          </div>
+                        )}
+                        
+                        {isPaused && (
+                          <div className="mt-4 bg-amber-100 text-amber-800 px-4 py-2 rounded-full flex items-center">
+                            <Play className="h-4 w-4 mr-2" />
+                            <span>Paused - Click to Resume</span>
+                          </div>
+                        )}
+                        
+                        {/* Live transcript bubble */}
+                        {currentTranscript && (
+                          <div className="absolute top-full mt-4 max-w-xs bg-white rounded-lg p-3 shadow-lg border border-gray-200">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <div className="flex space-x-1">
+                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                              </div>
+                              <span className="text-xs font-medium text-blue-600">Hearing you say...</span>
+                            </div>
+                            <p className="text-sm text-gray-800">{currentTranscript}</p>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

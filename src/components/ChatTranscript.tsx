@@ -5,11 +5,12 @@ import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn, commonStyles } from '../styles/utils';
+import toast from 'react-hot-toast';
 
 export const ChatTranscript: React.FC = () => {
-  const { messages, learningMode, isSpeaking, setLearningMode, difficultyLevel } = useStore();
+  const { messages, learningMode, isSpeaking, setLearningMode, difficultyLevel, voiceMode, setVoiceMode } = useStore();
   const { sendMessage, isProcessing } = useConversation();
-  const { currentTranscript } = useVoiceChat();
+  const { startVoiceChat, currentTranscript } = useVoiceChat();
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
@@ -52,6 +53,12 @@ export const ChatTranscript: React.FC = () => {
     const newVoiceMode = !isVoiceMode;
     setIsVoiceMode(newVoiceMode);
     setLearningMode(newVoiceMode ? 'videocall' : 'conversational');
+    
+    if (newVoiceMode && voiceMode === 'muted') {
+      setVoiceMode('continuous');
+      startVoiceChat();
+      toast.success('Voice mode activated! You can now speak with your AI tutor');
+    }
   };
 
   return (
@@ -92,12 +99,12 @@ export const ChatTranscript: React.FC = () => {
             {isVoiceMode ? (
               <>
                 <Phone className="h-4 w-4" />
-                <span>Voice Call</span>
+                <span>Voice On</span>
               </>
             ) : (
               <>
-                <Mic className="h-4 w-4" />
-                <span>Text Chat</span>
+                <PhoneOff className="h-4 w-4" />
+                <span>Voice Off</span>
               </>
             )}
           </button>

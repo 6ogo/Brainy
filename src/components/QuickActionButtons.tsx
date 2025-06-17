@@ -2,11 +2,14 @@ import React from 'react';
 import { HelpCircle, Lightbulb, PenTool, Repeat, Phone, MessageSquare } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
+import { useVoiceChat } from '../hooks/useVoiceChat';
 import toast from 'react-hot-toast';
+import { Button } from './Button';
 
 export const QuickActionButtons: React.FC = () => {
-  const { currentSubject, setLearningMode } = useStore();
+  const { currentSubject, setLearningMode, voiceMode, setVoiceMode } = useStore();
   const { sendMessage, isProcessing } = useConversation();
+  const { startVoiceChat } = useVoiceChat();
 
   const handleAction = async (prompt: string, useVoice: boolean = false) => {
     if (isProcessing) {
@@ -18,6 +21,10 @@ export const QuickActionButtons: React.FC = () => {
       // Set the learning mode based on the voice parameter
       if (useVoice) {
         setLearningMode('videocall');
+        if (voiceMode === 'muted') {
+          setVoiceMode('continuous');
+          startVoiceChat();
+        }
       } else {
         setLearningMode('conversational');
       }
@@ -64,23 +71,34 @@ export const QuickActionButtons: React.FC = () => {
       
       {/* Text/Voice Mode Buttons */}
       <div className="grid grid-cols-2 gap-2 mb-4">
-        <button
-          onClick={() => handleAction("Let's continue our discussion about " + currentSubject, false)}
-          className="flex items-center justify-center space-x-2 p-3 bg-gray-50 border border-gray-200 rounded-md hover:bg-gray-100 transition-colors text-sm text-gray-700"
+        <Button
+          variant="secondary"
+          onClick={() => {
+            handleAction("Let's continue our discussion about " + currentSubject, false);
+            setLearningMode('conversational');
+          }}
+          leftIcon={<MessageSquare className="h-4 w-4" />}
           disabled={isProcessing}
+          className="flex items-center justify-center"
         >
-          <MessageSquare className="h-4 w-4" />
-          <span>Text Chat</span>
-        </button>
+          Text Chat
+        </Button>
         
-        <button
-          onClick={() => handleAction("Let's have a voice conversation about " + currentSubject, true)}
-          className="flex items-center justify-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors text-sm text-green-700"
+        <Button
+          variant="primary"
+          onClick={() => {
+            handleAction("Let's have a voice conversation about " + currentSubject, true);
+            setLearningMode('videocall');
+            if (voiceMode === 'muted') {
+              setVoiceMode('continuous');
+            }
+          }}
+          leftIcon={<Phone className="h-4 w-4" />}
           disabled={isProcessing}
+          className="flex items-center justify-center"
         >
-          <Phone className="h-4 w-4" />
-          <span>Voice Call</span>
-        </button>
+          Voice Chat
+        </Button>
       </div>
       
       {/* Action Buttons */}
@@ -100,13 +118,19 @@ export const QuickActionButtons: React.FC = () => {
       
       {/* Voice Action Buttons */}
       <div className="mt-3 pt-3 border-t border-gray-200">
-        <p className="text-xs text-gray-500 mb-2">Voice Actions (Premium)</p>
+        <p className="text-xs text-gray-500 mb-2">Voice Actions</p>
         <div className="grid grid-cols-2 gap-2">
           {actions.slice(0, 2).map((action) => (
             <button
               key={`voice-${action.label}`}
               className="flex items-center justify-center space-x-1 p-2 bg-green-50 border border-green-200 rounded-md hover:bg-green-100 transition-colors text-xs text-green-700"
-              onClick={() => handleAction(action.prompt, true)}
+              onClick={() => {
+                handleAction(action.prompt, true);
+                setLearningMode('videocall');
+                if (voiceMode === 'muted') {
+                  setVoiceMode('continuous');
+                }
+              }}
               disabled={isProcessing}
             >
               <Phone className="h-3 w-3" />

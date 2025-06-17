@@ -3,6 +3,7 @@ import { useStore } from '../store/store';
 import { Video, VideoOff, Image as ImageIcon, StopCircle, Settings, Mic, MicOff, Pause, Play } from 'lucide-react';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn } from '../styles/utils';
+import { Button } from './Button';
 
 const backgrounds = [
   { id: 'classroom', name: 'Classroom' },
@@ -28,14 +29,11 @@ export const VideoControls: React.FC = () => {
 
   return (
     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex items-center space-x-3 bg-black/60 backdrop-blur-sm rounded-full px-4 py-2 shadow-lg z-10">
-      <button
+      <Button
+        variant={isVideoEnabled ? "primary" : "secondary"}
+        size="sm"
         onClick={toggleVideo}
-        className={cn(
-          "p-2.5 rounded-full transition-colors",
-          isVideoEnabled 
-            ? "bg-primary-500 text-white hover:bg-primary-600" 
-            : "bg-gray-600 text-gray-200 hover:bg-gray-700"
-        )}
+        className="rounded-full"
         title={isVideoEnabled ? 'Switch to voice-only mode' : 'Enable video mode'}
       >
         {isVideoEnabled ? (
@@ -43,17 +41,19 @@ export const VideoControls: React.FC = () => {
         ) : (
           <VideoOff className="h-5 w-5" />
         )}
-      </button>
+      </Button>
 
       {isVideoEnabled && (
         <div className="relative">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setShowBackgrounds(!showBackgrounds)}
-            className="p-2.5 rounded-full text-white hover:bg-gray-700/50 transition-colors"
+            className="rounded-full"
             title="Change background"
           >
             <ImageIcon className="h-5 w-5" />
-          </button>
+          </Button>
 
           {showBackgrounds && (
             <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-white rounded-lg shadow-lg py-2 min-w-[160px] z-10">
@@ -79,14 +79,11 @@ export const VideoControls: React.FC = () => {
         </div>
       )}
 
-      <button
-        onClick={() => setVoiceMode(voiceMode === 'muted' ? 'push-to-talk' : 'muted')}
-        className={cn(
-          "p-2.5 rounded-full transition-colors",
-          voiceMode !== 'muted' 
-            ? "bg-primary-500 text-white hover:bg-primary-600" 
-            : "bg-gray-600 text-gray-200 hover:bg-gray-700"
-        )}
+      <Button
+        variant={voiceMode !== 'muted' ? "primary" : "secondary"}
+        size="sm"
+        onClick={() => setVoiceMode(voiceMode === 'muted' ? 'continuous' : 'muted')}
+        className="rounded-full"
         title={voiceMode === 'muted' ? 'Enable microphone' : 'Disable microphone'}
       >
         {voiceMode === 'muted' ? (
@@ -94,16 +91,13 @@ export const VideoControls: React.FC = () => {
         ) : (
           <Mic className="h-5 w-5" />
         )}
-      </button>
+      </Button>
 
-      <button
+      <Button
+        variant={isPaused ? "primary" : "secondary"}
+        size="sm"
         onClick={isPaused ? resumeVoiceChat : pauseVoiceChat}
-        className={cn(
-          "p-2.5 rounded-full transition-colors",
-          isPaused 
-            ? "bg-green-500 text-white hover:bg-green-600" 
-            : "bg-gray-600 text-white hover:bg-gray-700"
-        )}
+        className="rounded-full"
         title={isPaused ? 'Resume conversation' : 'Pause conversation'}
       >
         {isPaused ? (
@@ -111,27 +105,26 @@ export const VideoControls: React.FC = () => {
         ) : (
           <Pause className="h-5 w-5" />
         )}
-      </button>
+      </Button>
 
-      <button
+      <Button
+        variant={isRecording ? "primary" : "secondary"}
+        size="sm"
         onClick={toggleRecording}
-        className={cn(
-          "p-2.5 rounded-full transition-colors",
-          isRecording 
-            ? "bg-red-500 text-white hover:bg-red-600" 
-            : "bg-gray-600 text-white hover:bg-gray-700"
-        )}
+        className="rounded-full"
         title={isRecording ? 'Stop recording' : 'Start recording'}
       >
         <StopCircle className={cn("h-5 w-5", isRecording && "animate-pulse")} />
-      </button>
+      </Button>
 
-      <button
-        className="p-2.5 rounded-full text-white hover:bg-gray-700/50 transition-colors"
+      <Button
+        variant="secondary"
+        size="sm"
+        className="rounded-full"
         title="Video settings"
       >
         <Settings className="h-5 w-5" />
-      </button>
+      </Button>
     </div>
   );
 };
