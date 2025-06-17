@@ -6,21 +6,30 @@ import { useConversation } from '../hooks/useConversation';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn, commonStyles } from '../styles/utils';
 import toast from 'react-hot-toast';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 
 export const ChatTranscript: React.FC = () => {
   const { messages, learningMode, isSpeaking, setLearningMode, difficultyLevel, voiceMode, setVoiceMode } = useStore();
   const { sendMessage, isProcessing } = useConversation();
-  const { startVoiceChat, currentTranscript } = useVoiceChat();
+  const { currentTranscript } = useVoiceChat();
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  
+  const {
+    transcript,
+    listening,
+    browserSupportsSpeechRecognition,
+    startListening,
+    stopListening
+  } = useSpeechRecognition();
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, currentTranscript]);
+  }, [messages, currentTranscript, transcript]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -56,8 +65,14 @@ export const ChatTranscript: React.FC = () => {
     
     if (newVoiceMode && voiceMode === 'muted') {
       setVoiceMode('continuous');
-      startVoiceChat();
-      toast.success('Voice mode activated! You can now speak with your AI tutor');
+      if (browserSupportsSpeechRecognition) {
+        startListening();
+        toast.success('Voice mode activated! You can now speak with your AI tutor');
+      } else {
+        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
+      }
+    } else if (!newVoiceMode && listening) {
+      stopListening();
     }
   };
 
@@ -154,7 +169,7 @@ export const ChatTranscript: React.FC = () => {
         )}
         
         {/* Live transcript */}
-        {currentTranscript && (
+        {(currentTranscript || transcript) && (
           <div className="flex justify-end">
             <div className="max-w-[80%] rounded-lg px-4 py-2 bg-blue-50 text-blue-800 border border-blue-100">
               <div className="flex items-center space-x-2 mb-1">
@@ -165,7 +180,7 @@ export const ChatTranscript: React.FC = () => {
                 </div>
                 <span className="text-xs font-medium">Listening...</span>
               </div>
-              <div className="text-sm">{currentTranscript}</div>
+              <div className="text-sm">{currentTranscript || transcript}</div>
             </div>
           </div>
         )}

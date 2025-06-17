@@ -4,13 +4,14 @@ import { useStore } from '../store/store';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { VideoControls } from './VideoControls';
-import { VoiceControls } from './VoiceControls';
+import { VoiceChat } from './VoiceChat';
 import { TavusService } from '../services/tavusService';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../styles/utils';
 import { Button } from './Button';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 
 export const VideoArea: React.FC = () => {
   const { 
@@ -28,7 +29,6 @@ export const VideoArea: React.FC = () => {
   
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { error: recognitionError, startListening, hasPermission, requestPermission } = useVoiceRecognition();
   const { 
     isActive, 
     error: voiceChatError, 
@@ -40,20 +40,29 @@ export const VideoArea: React.FC = () => {
     resumeVoiceChat
   } = useVoiceChat();
   
+  const {
+    transcript,
+    listening,
+    browserSupportsSpeechRecognition,
+    isMicrophoneAvailable,
+    startListening,
+    stopListening
+  } = useSpeechRecognition();
+  
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [showStartPrompt, setShowStartPrompt] = useState(true);
-  const [isBrowserSupported, setIsBrowserSupported] = useState(true);
   const avatarRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // Check browser support for speech recognition
-  useEffect(() => {
-    const isSupported = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
-    setIsBrowserSupported(isSupported);
-  }, []);
+  // Fallback videos to use if the main video fails
+  const fallbackVideos = [
+    'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+  ];
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -86,14 +95,16 @@ export const VideoArea: React.FC = () => {
   }, [isSpeaking, isPaused]);
 
   const handleStartVoiceChat = async () => {
-    if (!isBrowserSupported) {
-      toast.error('Voice features are not supported in your browser. Please try Chrome, Edge, or Safari.');
+    if (!browserSupportsSpeechRecognition) {
+      toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
       return;
     }
     
-    if (!hasPermission) {
-      const granted = await requestPermission();
-      if (!granted) {
+    if (!isMicrophoneAvailable) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        toast.success('Microphone access granted!');
+      } catch (error) {
         toast.error('Microphone permission is required for voice chat');
         return;
       }
@@ -101,7 +112,7 @@ export const VideoArea: React.FC = () => {
     
     setVoiceMode('continuous');
     setShowStartPrompt(false);
-    startVoiceChat();
+    startListening();
     toast.success('Voice chat started! You can now speak with your AI tutor');
   };
 
@@ -109,23 +120,22 @@ export const VideoArea: React.FC = () => {
     console.error('Video playback error:', e);
     
     // Only retry a few times to avoid infinite loops
-    if (retryCount < 3) {
+    if (retryCount < fallbackVideos.length) {
       setRetryCount(prev => prev + 1);
-      
-      // Set a fallback video with a different URL to force reload
-      const fallbackUrls = [
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-        'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
-      ];
-      
-      setTavusVideoUrl(fallbackUrls[retryCount % fallbackUrls.length]);
+      setTavusVideoUrl(fallbackVideos[retryCount % fallbackVideos.length]);
+      toast.error(`Error playing video. Trying fallback... (${retryCount + 1}/${fallbackVideos.length})`);
     } else {
       setTavusVideoUrl(null);
+      toast.error('Unable to play video. Please try again later or use text chat instead.');
     }
   };
 
-  // If not eligible for Tavus, show a message
+  const handleSwitchToTextChat = () => {
+    setLearningMode('conversational');
+    setVoiceMode('muted');
+    navigate('/study');
+  };
+
   if (!isEligibleForTavus) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-100 rounded-lg p-8 text-center">
@@ -170,14 +180,25 @@ export const VideoArea: React.FC = () => {
                 </div>
 
                 {tavusVideoUrl ? (
-                  <video
-                    ref={videoRef}
-                    src={tavusVideoUrl}
-                    autoPlay
-                    controls
-                    className="absolute inset-0 w-full h-full object-cover"
-                    onError={handleVideoError}
-                  />
+                  <div className="absolute inset-0 w-full h-full">
+                    {/* Error message at the top */}
+                    {retryCount > 0 && (
+                      <div className="absolute top-0 left-0 right-0 p-4 bg-red-50 border-b border-red-200 text-red-700 text-sm flex items-center z-10">
+                        <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <span>Video playback issues detected. Using fallback video {retryCount}/{fallbackVideos.length}</span>
+                      </div>
+                    )}
+                    
+                    <video
+                      ref={videoRef}
+                      src={tavusVideoUrl}
+                      autoPlay
+                      controls
+                      className="w-full h-full object-cover"
+                      onError={handleVideoError}
+                      poster="/white_circle_360x360.png"
+                    />
+                  </div>
                 ) : (
                   <div className="relative z-10 flex flex-col items-center justify-center">
                     {showStartPrompt && !isActive ? (
@@ -193,11 +214,12 @@ export const VideoArea: React.FC = () => {
                             onClick={handleStartVoiceChat}
                             leftIcon={<Mic className="h-5 w-5" />}
                             className="w-full"
+                            disabled={!browserSupportsSpeechRecognition}
                           >
                             Start Voice Chat
                           </Button>
                           
-                          {!isBrowserSupported && (
+                          {!browserSupportsSpeechRecognition && (
                             <div className="text-red-600 text-sm mt-2">
                               Your browser doesn't support voice features. Please try Chrome, Edge, or Safari.
                             </div>
@@ -205,12 +227,7 @@ export const VideoArea: React.FC = () => {
                           
                           <Button
                             variant="outline"
-                            onClick={() => {
-                              setShowStartPrompt(false);
-                              setVoiceMode('muted');
-                              setLearningMode('conversational');
-                              navigate('/study');
-                            }}
+                            onClick={handleSwitchToTextChat}
                             leftIcon={<MessageSquare className="h-5 w-5" />}
                             className="w-full"
                           >
@@ -244,7 +261,7 @@ export const VideoArea: React.FC = () => {
                           </div>
                         )}
                         
-                        {isListening && !isSpeaking && (
+                        {listening && !isSpeaking && (
                           <div className="mt-4 bg-blue-100 text-blue-800 px-4 py-2 rounded-full flex items-center">
                             <Mic className="h-4 w-4 mr-2" />
                             <span>Listening...</span>
@@ -259,7 +276,7 @@ export const VideoArea: React.FC = () => {
                         )}
                         
                         {/* Live transcript bubble */}
-                        {currentTranscript && (
+                        {transcript && (
                           <div className="absolute top-full mt-4 max-w-xs bg-white rounded-lg p-3 shadow-lg border border-gray-200">
                             <div className="flex items-center space-x-2 mb-1">
                               <div className="flex space-x-1">
@@ -269,7 +286,7 @@ export const VideoArea: React.FC = () => {
                               </div>
                               <span className="text-xs font-medium text-blue-600">Hearing you say...</span>
                             </div>
-                            <p className="text-sm text-gray-800">{currentTranscript}</p>
+                            <p className="text-sm text-gray-800">{transcript}</p>
                           </div>
                         )}
                       </>
@@ -284,7 +301,7 @@ export const VideoArea: React.FC = () => {
         )}
         
         <div className="absolute top-4 right-4 flex space-x-2">
-          {isListening && voiceMode !== 'muted' ? (
+          {listening && voiceMode !== 'muted' ? (
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-success-500 text-white shadow-md">
               <Mic className="w-3 h-3 mr-1" /> Listening
             </span>
@@ -310,11 +327,11 @@ export const VideoArea: React.FC = () => {
           {difficultyLevel} Level
         </div>
         
-        {(recognitionError || voiceChatError) && (
+        {voiceChatError && (
           <div className="absolute top-14 left-4 bg-error-500 text-white text-xs rounded-md px-3 py-1.5 shadow-md max-w-xs">
             <div className="flex items-start space-x-2">
               <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>{recognitionError || voiceChatError}</span>
+              <span>{voiceChatError}</span>
             </div>
           </div>
         )}
@@ -322,7 +339,7 @@ export const VideoArea: React.FC = () => {
         <VideoControls />
       </div>
       
-      <VoiceControls />
+      <VoiceChat onSwitchToText={handleSwitchToTextChat} />
     </div>
   );
 };
