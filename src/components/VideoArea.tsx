@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Mic, MicOff, Volume2, VolumeX, AlertCircle, Play, MessageSquare } from 'lucide-react';
 import { useStore } from '../store/store';
-import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { VideoControls } from './VideoControls';
 import { VoiceChat } from './VoiceChat';
@@ -53,6 +52,7 @@ export const VideoArea: React.FC = () => {
   const [isEligibleForTavus, setIsEligibleForTavus] = useState(false);
   const [tavusVideoUrl, setTavusVideoUrl] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [showStartPrompt, setShowStartPrompt] = useState(true);
   const avatarRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -122,10 +122,12 @@ export const VideoArea: React.FC = () => {
     // Only retry a few times to avoid infinite loops
     if (retryCount < fallbackVideos.length) {
       setRetryCount(prev => prev + 1);
+      setVideoError('Error playing video. Trying fallback...');
       setTavusVideoUrl(fallbackVideos[retryCount % fallbackVideos.length]);
       toast.error(`Error playing video. Trying fallback... (${retryCount + 1}/${fallbackVideos.length})`);
     } else {
       setTavusVideoUrl(null);
+      setVideoError('Unable to play video. Please try again later or use text chat instead.');
       toast.error('Unable to play video. Please try again later or use text chat instead.');
     }
   };

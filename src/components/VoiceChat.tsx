@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
-import { ElevenLabsService } from '../services/elevenlabsService';
 import { Mic, MicOff, Volume2, VolumeX, Pause, Play, MessageSquare } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
