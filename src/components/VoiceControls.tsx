@@ -152,13 +152,13 @@ export const VoiceControls: React.FC = () => {
     });
   };
 
-  const displayedTranscript = currentTranscript || transcript;
-
   const handleSwitchToTextChat = () => {
     setLearningMode('conversational');
     setVoiceMode('muted');
     navigate('/study');
   };
+
+  const displayedTranscript = currentTranscript || transcript;
 
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">

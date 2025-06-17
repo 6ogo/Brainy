@@ -10,6 +10,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../styles/utils';
 import { Button } from './Button';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 export const VideoArea: React.FC = () => {
   const { 
@@ -21,10 +22,12 @@ export const VideoArea: React.FC = () => {
     voiceMode,
     difficultyLevel,
     setVoiceMode,
-    learningMode
+    learningMode,
+    setLearningMode
   } = useStore();
   
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { error: recognitionError, startListening, hasPermission, requestPermission } = useVoiceRecognition();
   const { 
     isActive, 
@@ -117,6 +120,8 @@ export const VideoArea: React.FC = () => {
       ];
       
       setTavusVideoUrl(fallbackUrls[retryCount % fallbackUrls.length]);
+    } else {
+      setTavusVideoUrl(null);
     }
   };
 
