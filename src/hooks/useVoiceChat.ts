@@ -36,6 +36,7 @@ export const useVoiceChat = () => {
   // For study mode speech processing
   const transcriptTimeoutRef = useRef<number | null>(null);
   const lastProcessedTranscriptRef = useRef<string>('');
+  const processingRef = useRef<boolean>(false);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -80,12 +81,14 @@ export const useVoiceChat = () => {
           if (isMounted.current) {
             setIsSpeaking(false);
             setAvatarEmotion('neutral');
+            processingRef.current = false;
           }
         },
         onError: (errorMessage) => {
           if (isMounted.current) {
             setError(errorMessage);
             toast.error(errorMessage);
+            processingRef.current = false;
           }
         },
         onTranscript: (text, isFinal) => {
@@ -100,13 +103,15 @@ export const useVoiceChat = () => {
                 }
                 
                 transcriptTimeoutRef.current = window.setTimeout(() => {
-                  if (text !== lastProcessedTranscriptRef.current) {
+                  if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
                     lastProcessedTranscriptRef.current = text;
-                    toggleListening(true);
+                    processingRef.current = true;
+                    addMessage(text, 'user');
                   }
                 }, 2000);
-              } else {
-                toggleListening(true);
+              } else if (!processingRef.current) {
+                processingRef.current = true;
+                addMessage(text, 'user');
               }
             }
           }
@@ -149,12 +154,14 @@ export const useVoiceChat = () => {
           if (isMounted.current) {
             setIsSpeaking(false);
             setAvatarEmotion('neutral');
+            processingRef.current = false;
           }
         },
         onError: (errorMessage) => {
           if (isMounted.current) {
             setError(errorMessage);
             toast.error(errorMessage);
+            processingRef.current = false;
           }
         },
         onTranscript: (text, isFinal) => {
@@ -168,13 +175,15 @@ export const useVoiceChat = () => {
                 }
                 
                 transcriptTimeoutRef.current = window.setTimeout(() => {
-                  if (text !== lastProcessedTranscriptRef.current) {
+                  if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
                     lastProcessedTranscriptRef.current = text;
-                    toggleListening(true);
+                    processingRef.current = true;
+                    addMessage(text, 'user');
                   }
                 }, 2000);
-              } else {
-                toggleListening(true);
+              } else if (!processingRef.current) {
+                processingRef.current = true;
+                addMessage(text, 'user');
               }
             }
           }
@@ -202,6 +211,7 @@ export const useVoiceChat = () => {
         setIsPaused(false);
         setAvatarEmotion('neutral');
         setError(null);
+        processingRef.current = false;
         toast.success('Voice chat started');
       }
     } catch (error) {
@@ -222,6 +232,7 @@ export const useVoiceChat = () => {
       setIsSpeaking(false);
       setAvatarEmotion('neutral');
       setCurrentTranscript('');
+      processingRef.current = false;
     }
   }, [setIsSpeaking, setAvatarEmotion, stopListening]);
 
@@ -231,6 +242,7 @@ export const useVoiceChat = () => {
     if (isMounted.current) {
       setIsPaused(true);
       setIsSpeaking(false);
+      processingRef.current = false;
       toast.success('Conversation paused');
     }
   }, [setIsSpeaking, stopListening]);
@@ -239,6 +251,7 @@ export const useVoiceChat = () => {
     if (isMounted.current) {
       setIsPaused(false);
       startListening();
+      processingRef.current = false;
       toast.success('Conversation resumed');
     }
   }, [startListening]);
