@@ -33,6 +33,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const lastTranscriptRef = useRef<string>('');
   const processingTranscriptRef = useRef<boolean>(false);
+  const transcriptContainerRef = useRef<HTMLDivElement>(null);
   
   const {
     transcript,
@@ -139,6 +140,16 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
       return;
     }
     
+    if (!isMicrophoneAvailable) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        toast.success('Microphone access granted!');
+      } catch (error) {
+        toast.error('Microphone permission is required for voice chat');
+        return;
+      }
+    }
+    
     if (voiceMode === 'push-to-talk') {
       if (pressed && !listening) {
         startListening();
@@ -203,8 +214,6 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
       onSwitchToText();
     }
   };
-
-  const displayedTranscript = transcript;
 
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
@@ -339,7 +348,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                     ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
                     : "bg-gray-50 text-gray-300 cursor-not-allowed opacity-60"
               )}
-              disabled={voiceMode !== 'push-to-talk' || !browserSupportsSpeechRecognition || !isMicrophoneAvailable}
+              disabled={voiceMode !== 'push-to-talk' || !isMicrophoneAvailable || !browserSupportsSpeechRecognition}
               onMouseDown={() => handlePushToTalk(true)}
               onMouseUp={() => handlePushToTalk(false)}
               onTouchStart={() => handlePushToTalk(true)}
@@ -353,8 +362,11 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
             </p>
             
             {/* Live transcript */}
-            {showTranscript && displayedTranscript && (
-              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 w-full max-w-xs">
+            {showTranscript && transcript && (
+              <div 
+                ref={transcriptContainerRef}
+                className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 w-full max-w-xs"
+              >
                 <div className="flex justify-between items-center mb-1">
                   <p className="text-xs text-gray-500">Hearing:</p>
                   <div className="flex space-x-1">
@@ -363,7 +375,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                     <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                   </div>
                 </div>
-                <p className="text-sm text-gray-700">{displayedTranscript}</p>
+                <p className="text-sm text-gray-700">{transcript}</p>
               </div>
             )}
           </div>
@@ -378,7 +390,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                 variant={isPaused ? "primary" : "secondary"}
                 onClick={isPaused ? resumeConversation : pauseConversation}
                 leftIcon={isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
-                disabled={!browserSupportsSpeechRecognition || !isMicrophoneAvailable}
+                disabled={!isMicrophoneAvailable || !browserSupportsSpeechRecognition}
               >
                 {isPaused ? 'Resume' : 'Pause'}
               </Button>
@@ -451,32 +463,32 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
       </div>
 
       {/* Status indicators */}
+      {/* Visually hidden live region for screen reader announcements */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only" id="voice-status-live-region">
+        {listening ? 'Listening' : isSpeaking ? 'AI Speaking' : isPaused ? 'Conversation Paused' : isMicrophoneAvailable ? 'Microphone Ready' : 'Microphone Access Needed'}
+      </div>
+
       <div className="mt-6 flex items-center justify-between text-sm text-gray-500 border-t border-gray-200 pt-4">
         <div className="flex flex-wrap items-center gap-4">
-          <span className={cn(
-            "flex items-center",
-            browserSupportsSpeechRecognition 
-              ? isMicrophoneAvailable 
-                ? "text-green-600" 
-                : "text-red-600"
-              : "text-red-600"
-          )}>
-            <div className={cn(
-              "w-2 h-2 rounded-full mr-2",
-              browserSupportsSpeechRecognition 
-                ? isMicrophoneAvailable 
-                  ? "bg-green-500" 
-                  : "bg-red-500"
-                : "bg-red-500"
-            )}></div>
-            {!browserSupportsSpeechRecognition 
-              ? 'Browser Not Supported' 
-              : isMicrophoneAvailable 
-                ? 'Microphone Ready' 
-                : 'Microphone Access Needed'}
-          </span>
+          {!browserSupportsSpeechRecognition ? (
+            <span className="flex items-center text-red-600">
+              <div className="w-2 h-2 rounded-full mr-2 bg-red-500"></div>
+              Browser Not Supported
+            </span>
+          ) : (
+            <span className={cn(
+              "flex items-center",
+              isMicrophoneAvailable ? "text-green-600" : "text-red-600"
+            )}>
+              <div className={cn(
+                "w-2 h-2 rounded-full mr-2",
+                isMicrophoneAvailable ? "bg-green-500" : "bg-red-500"
+              )}></div>
+              {isMicrophoneAvailable ? 'Microphone Ready' : 'Microphone Access Needed'}
+            </span>
+          )}
           
-          {voiceMode !== 'muted' && browserSupportsSpeechRecognition && isMicrophoneAvailable && (
+          {voiceMode !== 'muted' && isMicrophoneAvailable && browserSupportsSpeechRecognition && (
             <span className={cn(
               "flex items-center",
               listening ? "text-blue-600" : "text-gray-500"

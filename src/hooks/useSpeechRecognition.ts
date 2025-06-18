@@ -32,6 +32,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const isStartingListening = useRef<boolean>(false);
   const lastTranscriptRef = useRef<string>('');
   const transcriptTimeoutRef = useRef<number | null>(null);
+  const noiseThreshold = 3; // Minimum characters to consider as valid speech
   
   const {
     transcript,
@@ -91,32 +92,38 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
 
   // Auto-send transcript after a short delay when speech ends
   useEffect(() => {
-    if (!listening && transcript && transcript.trim().length > 0 && 
-        transcript !== lastTranscriptRef.current && !isStartingListening.current) {
+    // Only process if we have a transcript that's not being processed
+    if (transcript && 
+        transcript.trim().length > noiseThreshold && 
+        transcript !== lastTranscriptRef.current && 
+        !isStartingListening.current) {
       
-      // Clear any existing timeout
-      if (transcriptTimeoutRef.current) {
-        clearTimeout(transcriptTimeoutRef.current);
-      }
-      
-      // Set a timeout to send the transcript
-      transcriptTimeoutRef.current = window.setTimeout(() => {
-        console.log('Auto-sending transcript:', transcript);
-        lastTranscriptRef.current = transcript;
-        addMessage(transcript, 'user');
+      // If we're not listening anymore and have a final transcript
+      if (!listening) {
+        // Clear any existing timeout
+        if (transcriptTimeoutRef.current) {
+          clearTimeout(transcriptTimeoutRef.current);
+        }
         
-        // Reset transcript after sending
-        setTimeout(() => {
-          resetTranscript();
+        // Set a timeout to send the transcript
+        transcriptTimeoutRef.current = window.setTimeout(() => {
+          console.log('Auto-sending transcript after speech ended:', transcript);
+          lastTranscriptRef.current = transcript;
+          addMessage(transcript, 'user');
           
-          // Restart listening if in continuous mode
-          if (voiceMode === 'continuous' && !listening) {
-            startListening();
-          }
-        }, 500);
-        
-        transcriptTimeoutRef.current = null;
-      }, 1000); // Send after 1 second of silence
+          // Reset transcript after sending
+          setTimeout(() => {
+            resetTranscript();
+            
+            // Restart listening if in continuous mode
+            if (voiceMode === 'continuous' && !listening) {
+              startListening();
+            }
+          }, 500);
+          
+          transcriptTimeoutRef.current = null;
+        }, 1000); // Send after 1 second of silence
+      }
     }
   }, [transcript, listening, addMessage, resetTranscript, voiceMode, startListening]);
 
@@ -156,7 +163,8 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       setTimeout(() => {
         SpeechRecognition.startListening({ 
           continuous: voiceMode === 'continuous',
-          language: 'en-US'
+          language: 'en-US',
+          interimResults: true
         });
         
         // Reset the flag after a delay to prevent rapid toggling
@@ -188,7 +196,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     }
     
     // If we have a transcript, send it before stopping
-    if (transcript && transcript.trim().length > 0 && transcript !== lastTranscriptRef.current) {
+    if (transcript && transcript.trim().length > noiseThreshold && transcript !== lastTranscriptRef.current) {
       console.log('Sending transcript on stop:', transcript);
       lastTranscriptRef.current = transcript;
       addMessage(transcript, 'user');
@@ -203,7 +211,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     
     // Ensure the starting flag is reset
     isStartingListening.current = false;
-  }, [listening, transcript, addMessage, resetTranscript]);
+  }, [listening, transcript, addMessage, resetTranscript, noiseThreshold]);
 
   return {
     transcript,

@@ -29,6 +29,7 @@ export class VoiceConversationService {
   private maxSilenceTime = 1500; // 1.5 seconds of silence before processing
   private lastSpeechTimestamp = 0;
   private silenceTimer: number | null = null;
+  private noiseThreshold = 3; // Minimum characters to consider as valid speech
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -53,44 +54,47 @@ export class VoiceConversationService {
         const lastResult = event.results[event.results.length - 1];
         const transcript = lastResult[0].transcript.trim();
         
-        // Update current transcript
-        this.currentTranscript = transcript;
-        
-        // Update last speech timestamp
-        this.lastSpeechTimestamp = Date.now();
-        
-        // Notify about interim results for UI feedback
-        this.config.onTranscript?.(transcript, lastResult.isFinal);
-        
-        // Clear any existing timeout
-        if (this.processingTimeout) {
-          clearTimeout(this.processingTimeout);
-          this.processingTimeout = null;
-        }
-        
-        // Clear any existing silence timer
-        if (this.silenceTimer) {
-          clearTimeout(this.silenceTimer);
-          this.silenceTimer = null;
-        }
-
-        if (lastResult.isFinal && transcript) {
-          // Set a shorter delay for final results
-          this.processingTimeout = window.setTimeout(() => {
-            if (!this.isProcessing && transcript !== '') {
-              this.handleUserSpeech(transcript);
-            }
+        // Only process if transcript is longer than noise threshold
+        if (transcript.length > this.noiseThreshold) {
+          // Update current transcript
+          this.currentTranscript = transcript;
+          
+          // Update last speech timestamp
+          this.lastSpeechTimestamp = Date.now();
+          
+          // Notify about interim results for UI feedback
+          this.config.onTranscript?.(transcript, lastResult.isFinal);
+          
+          // Clear any existing timeout
+          if (this.processingTimeout) {
+            clearTimeout(this.processingTimeout);
             this.processingTimeout = null;
-          }, 500); // Reduced from 2000ms to 500ms for faster response
-        } else {
-          // Start silence detection timer
-          this.silenceTimer = window.setTimeout(() => {
-            const silenceDuration = Date.now() - this.lastSpeechTimestamp;
-            if (silenceDuration >= this.maxSilenceTime && transcript && !this.isProcessing) {
-              console.log('Processing after silence detection:', transcript);
-              this.handleUserSpeech(transcript);
-            }
-          }, this.maxSilenceTime);
+          }
+          
+          // Clear any existing silence timer
+          if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+          }
+
+          if (lastResult.isFinal && transcript) {
+            // Set a shorter delay for final results
+            this.processingTimeout = window.setTimeout(() => {
+              if (!this.isProcessing && transcript !== '') {
+                this.handleUserSpeech(transcript);
+              }
+              this.processingTimeout = null;
+            }, 500); // Reduced from 2000ms to 500ms for faster response
+          } else {
+            // Start silence detection timer
+            this.silenceTimer = window.setTimeout(() => {
+              const silenceDuration = Date.now() - this.lastSpeechTimestamp;
+              if (silenceDuration >= this.maxSilenceTime && transcript && !this.isProcessing) {
+                console.log('Processing after silence detection:', transcript);
+                this.handleUserSpeech(transcript);
+              }
+            }, this.maxSilenceTime);
+          }
         }
       };
 
@@ -110,7 +114,7 @@ export class VoiceConversationService {
         this.isListening = false;
         
         // If we have a transcript but haven't processed it yet, process it now
-        if (this.currentTranscript && !this.isProcessing && !this.isPaused) {
+        if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing && !this.isPaused) {
           console.log('Processing transcript on recognition end:', this.currentTranscript);
           this.handleUserSpeech(this.currentTranscript);
           return;
@@ -167,7 +171,7 @@ export class VoiceConversationService {
     if (this.recognition && this.isListening) {
       try {
         // If we have a transcript but haven't processed it yet, process it now
-        if (this.currentTranscript && !this.isProcessing && !this.isPaused) {
+        if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing && !this.isPaused) {
           console.log('Processing transcript before stopping:', this.currentTranscript);
           this.handleUserSpeech(this.currentTranscript);
         }
@@ -249,14 +253,12 @@ export class VoiceConversationService {
 
   /**
    * Handles the user's speech input by processing the transcript, generating an AI response,
-   * and converting it to speech. This function ensures input is sanitized and validated before
-   * generating an AI response. If the response is generated, it attempts to convert the text
-   * to speech using ElevenLabs or falls back to the browser's speech synthesis if necessary.
+   * and converting it to speech.
    * 
    * @param transcript - The user's speech input as a string.
    */  
   private async handleUserSpeech(transcript: string): Promise<void> {
-    if (this.isProcessing || this.isPaused) {
+    if (this.isProcessing || this.isPaused || transcript.length <= this.noiseThreshold) {
       return;
     }
 

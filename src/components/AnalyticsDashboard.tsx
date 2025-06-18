@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useStore } from '../store/store';
+import React, { useEffect, useState, useRef } from 'react';
 import { format, subDays } from 'date-fns';
 import { 
   AreaChart, Area, BarChart, Bar,
@@ -14,6 +13,7 @@ import {
 import { jsPDF } from 'jspdf';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useStore } from '../store/store';
 import { Button } from './Button';
 import { Card } from './Card';
 import { cn } from '../styles/utils';

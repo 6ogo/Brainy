@@ -98,7 +98,7 @@ export const useVoiceChat = () => {
             
             if (isFinal && text.trim()) {
               if (isStudyMode) {
-                // In study mode, wait 2 seconds after user stops speaking
+                // In study mode, wait 1 second after user stops speaking
                 if (transcriptTimeoutRef.current) {
                   clearTimeout(transcriptTimeoutRef.current);
                 }
