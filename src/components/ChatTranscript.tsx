@@ -7,9 +7,20 @@ import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn, commonStyles } from '../styles/utils';
 import toast from 'react-hot-toast';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { StudyModeIndicator } from './StudyModeIndicator';
 
 export const ChatTranscript: React.FC = () => {
-  const { messages, learningMode, isSpeaking, setLearningMode, difficultyLevel, voiceMode, setVoiceMode } = useStore();
+  const { 
+    messages, 
+    learningMode, 
+    isSpeaking, 
+    setLearningMode, 
+    difficultyLevel, 
+    voiceMode, 
+    setVoiceMode,
+    isStudyMode
+  } = useStore();
+  
   const { sendMessage, isProcessing } = useConversation();
   const { currentTranscript } = useVoiceChat();
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,6 +105,13 @@ export const ChatTranscript: React.FC = () => {
           />
         </div>
         
+        {/* Study Mode Indicator */}
+        {isStudyMode && (
+          <div className="mr-4">
+            <StudyModeIndicator />
+          </div>
+        )}
+        
         {/* Difficulty level indicator */}
         <div className="mr-4 px-3 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full border border-primary-100">
           {difficultyLevel} Level
@@ -110,6 +128,7 @@ export const ChatTranscript: React.FC = () => {
                 : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
             )}
             title={isVoiceMode ? "Switch to text mode" : "Switch to voice mode"}
+            disabled={!browserSupportsSpeechRecognition}
           >
             {isVoiceMode ? (
               <>
@@ -136,6 +155,14 @@ export const ChatTranscript: React.FC = () => {
             <p className="text-gray-400 text-xs mt-2">
               {isVoiceMode ? 'Voice responses enabled' : 'Text-only mode'}
             </p>
+            {isStudyMode && (
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg max-w-md mx-auto">
+                <p className="text-amber-700 text-sm font-medium">Study Mode Active</p>
+                <p className="text-amber-600 text-xs mt-1">
+                  Responses will be concise and focused on essential information
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           filteredMessages.map((message) => (
@@ -240,6 +267,13 @@ export const ChatTranscript: React.FC = () => {
           <p className="text-xs text-green-600 mt-1 flex items-center">
             <Phone className="h-3 w-3 mr-1" />
             Voice responses enabled - you'll hear the AI tutor speak
+          </p>
+        )}
+        
+        {isStudyMode && (
+          <p className="text-xs text-amber-600 mt-1 flex items-center">
+            <Info className="h-3 w-3 mr-1" />
+            Study Mode - responses will be concise and focused on key information
           </p>
         )}
       </form>

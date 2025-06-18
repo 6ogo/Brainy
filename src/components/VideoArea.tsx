@@ -11,6 +11,7 @@ import { Button } from './Button';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { StudyModeIndicator } from './StudyModeIndicator';
 
 export const VideoArea: React.FC = () => {
   const { 
@@ -23,7 +24,8 @@ export const VideoArea: React.FC = () => {
     difficultyLevel,
     setVoiceMode,
     learningMode,
-    setLearningMode
+    setLearningMode,
+    isStudyMode
   } = useStore();
   
   const { user } = useAuth();
@@ -154,6 +156,13 @@ export const VideoArea: React.FC = () => {
   return (
     <div className="relative h-full flex flex-col">
       <div className="flex-1 bg-gray-900 rounded-t-lg overflow-hidden relative">
+        {/* Study Mode Indicator */}
+        {isStudyMode && (
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
+            <StudyModeIndicator />
+          </div>
+        )}
+        
         {!videoLoaded ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>

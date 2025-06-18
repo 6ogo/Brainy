@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../store/store';
-import { BookOpen, Zap } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { cn } from '../styles/utils';
 
 interface StudyModeIndicatorProps {

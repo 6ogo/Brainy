@@ -7,6 +7,7 @@ import { Button } from './Button';
 import { cn } from '../styles/utils';
 import toast from 'react-hot-toast';
 import 'regenerator-runtime/runtime';
+import { StudyModeIndicator } from './StudyModeIndicator';
 
 interface VoiceChatProps {
   onSwitchToText?: () => void;
@@ -21,7 +22,8 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     currentAvatar,
     currentSubject,
     difficultyLevel,
-    addMessage
+    addMessage,
+    isStudyMode
   } = useStore();
   
   const { sendMessage, isProcessing } = useConversation();
@@ -67,9 +69,6 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
         lastTranscriptRef.current = transcript;
         
         try {
-          // Add user message to the conversation
-          addMessage(transcript, 'user');
-          
           // Send to AI and get response
           await sendMessage(transcript, true);
           
@@ -203,6 +202,13 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
 
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
+      {/* Study Mode Indicator */}
+      {isStudyMode && (
+        <div className="mb-4 flex justify-center">
+          <StudyModeIndicator />
+        </div>
+      )}
+
       {/* Browser Support Warning */}
       {!browserSupportsSpeechRecognition && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -255,7 +261,6 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                 onClick={async () => {
                   try {
                     await navigator.mediaDevices.getUserMedia({ audio: true });
-                    setIsMicrophoneAvailable(true);
                     toast.success('Microphone access granted!');
                   } catch (error) {
                     console.error('Error requesting microphone permission:', error);

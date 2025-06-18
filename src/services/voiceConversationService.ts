@@ -28,6 +28,7 @@ export class VoiceConversationService {
   private audioQueue: Blob[] = [];
   private isPlayingAudio = false;
   private stream: MediaStream | null = null;
+  private processingTimeout: number | null = null;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -59,39 +60,31 @@ export class VoiceConversationService {
         // Notify about interim results for UI feedback
         this.config.onTranscript?.(transcript, lastResult.isFinal);
         
-        // Debounce processing of final results for 2 seconds after user stops speaking
-        if (!this.debounceTimer) {
-          this.debounceTimer = null;
-        }
-        if (this.debounceTimer) {
-          clearTimeout(this.debounceTimer);
-          this.debounceTimer = null;
+        // Clear any existing timeout
+        if (this.processingTimeout) {
+          clearTimeout(this.processingTimeout);
+          this.processingTimeout = null;
         }
 
         if (lastResult.isFinal && transcript) {
-          // Store the last transcript
-          this.pendingFinalTranscript = transcript;
-          // Start a 2-second debounce timer
-          this.debounceTimer = setTimeout(() => {
-            if (this.pendingFinalTranscript) {
-              this.handleUserSpeech(this.pendingFinalTranscript);
-              this.pendingFinalTranscript = '';
+          // Set a 2-second delay before processing the transcript
+          this.processingTimeout = window.setTimeout(() => {
+            if (!this.isProcessing && transcript !== '') {
+              this.handleUserSpeech(transcript);
             }
-            this.debounceTimer = null;
+            this.processingTimeout = null;
           }, 2000);
-        } else if (!lastResult.isFinal) {
-          // If interim, clear any pending final transcript
-          this.pendingFinalTranscript = '';
-          if (this.debounceTimer) {
-            clearTimeout(this.debounceTimer);
-            this.debounceTimer = null;
-          }
         }
       };
 
       this.recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
-        this.config.onError?.(`Speech recognition error: ${event.error}`);
+        
+        // Don't show error for aborted recognition as it's often part of normal operation
+        if (event.error !== 'aborted') {
+          this.config.onError?.(`Speech recognition error: ${event.error}`);
+        }
+        
         this.isListening = false;
       };
 
@@ -100,10 +93,10 @@ export class VoiceConversationService {
         this.isListening = false;
         
         // Restart if we're supposed to be listening continuously
-        if (!this.isPaused && this.recognition) {
+        if (!this.isPaused && this.recognition && !this.isProcessing) {
           try {
             setTimeout(() => {
-              if (!this.isPaused && !this.isListening && this.recognition) {
+              if (!this.isPaused && !this.isListening && this.recognition && !this.isProcessing) {
                 this.recognition.start();
                 this.isListening = true;
                 console.log('Restarted speech recognition');
@@ -117,20 +110,19 @@ export class VoiceConversationService {
     }
   }
 
-  // --- Debounce timer and pending transcript for STT idle delay ---
-  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingFinalTranscript: string = '';
-
   private initializeAudioContext(): void {
     try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        latencyHint: 'interactive',
+        sampleRate: 16000
+      });
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
     }
   }
 
   async startListening(): Promise<void> {
-    if (!this.recognition || this.isListening) {
+    if (!this.recognition || this.isListening || this.isProcessing) {
       return;
     }
 
@@ -173,12 +165,25 @@ export class VoiceConversationService {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
     }
+    
+    // Clear any pending processing timeout
+    if (this.processingTimeout) {
+      clearTimeout(this.processingTimeout);
+      this.processingTimeout = null;
+    }
   }
 
   pauseConversation(): void {
     this.isPaused = true;
     this.stopListening();
     this.stopSpeaking();
+    
+    // Clear any pending processing timeout
+    if (this.processingTimeout) {
+      clearTimeout(this.processingTimeout);
+      this.processingTimeout = null;
+    }
+    
     console.log('Conversation paused');
   }
 
@@ -266,6 +271,10 @@ export class VoiceConversationService {
         // Use browser's speech synthesis as fallback
         if ('speechSynthesis' in window) {
           const utterance = new SpeechSynthesisUtterance(aiResponse);
+          utterance.rate = 1;
+          utterance.pitch = 1;
+          utterance.volume = 1;
+          
           window.speechSynthesis.speak(utterance);
           
           // Wait for speech to complete

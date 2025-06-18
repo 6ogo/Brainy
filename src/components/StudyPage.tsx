@@ -15,6 +15,9 @@ import { useStore } from '../store/store';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Info, Check, Mic, MessageSquare } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
+import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { StudyModeToggle } from './StudyModeToggle';
+import { StudyModeIndicator } from './StudyModeIndicator';
 import toast from 'react-hot-toast';
 
 export const StudyPage: React.FC = () => {
@@ -26,7 +29,8 @@ export const StudyPage: React.FC = () => {
     difficultyLevel,
     setLearningMode,
     voiceMode,
-    setVoiceMode
+    setVoiceMode,
+    isStudyMode
   } = useStore();
   
   const { user } = useAuth();
@@ -38,6 +42,11 @@ export const StudyPage: React.FC = () => {
   const [showModeSelector, setShowModeSelector] = useState(true);
   const userId = user?.id;
   const pageRef = useRef<HTMLDivElement>(null);
+  
+  const {
+    browserSupportsSpeechRecognition,
+    isMicrophoneAvailable
+  } = useSpeechRecognition();
 
   useEffect(() => {
     if (!currentSubject || !currentAvatar) {
@@ -82,8 +91,12 @@ export const StudyPage: React.FC = () => {
     
     // If selecting video call mode, also set voice mode to continuous
     if (mode === 'videocall') {
-      setVoiceMode('continuous');
-      toast.success('Voice chat mode activated! You can now speak with your AI tutor');
+      if (!browserSupportsSpeechRecognition) {
+        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
+      } else {
+        setVoiceMode('continuous');
+        toast.success('Voice chat mode activated! You can now speak with your AI tutor');
+      }
     }
     
     setShowModeSelector(false);
@@ -136,7 +149,10 @@ export const StudyPage: React.FC = () => {
                 
                 <Card 
                   variant="hover" 
-                  className="p-6 cursor-pointer border-2 hover:border-primary-300"
+                  className={cn(
+                    "p-6 cursor-pointer border-2 hover:border-primary-300",
+                    !browserSupportsSpeechRecognition && "opacity-60"
+                  )}
                   onClick={() => handleSelectLearningMode('videocall')}
                 >
                   <div className="flex flex-col items-center text-center">
@@ -147,6 +163,12 @@ export const StudyPage: React.FC = () => {
                     <p className="text-gray-600">
                       Have a natural conversation with your AI tutor using your voice. Perfect for immersive learning.
                     </p>
+                    
+                    {!browserSupportsSpeechRecognition && (
+                      <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                        Your browser doesn't support voice features. Please try Chrome, Edge, or Safari.
+                      </div>
+                    )}
                   </div>
                 </Card>
               </div>
@@ -218,6 +240,11 @@ export const StudyPage: React.FC = () => {
                 </div>
               </div>
               
+              <div className="flex items-center justify-between">
+                <StudyModeToggle />
+                {isStudyMode && <StudyModeIndicator />}
+              </div>
+              
               <div className={`bg-white rounded-lg shadow-sm ${learningMode === 'conversational' ? 'h-[600px]' : 'h-[400px]'}`}>
                 <ChatTranscript />
               </div>
@@ -239,6 +266,11 @@ export const StudyPage: React.FC = () => {
                   </button>
                   <button
                     onClick={() => {
+                      if (!browserSupportsSpeechRecognition) {
+                        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
+                        return;
+                      }
+                      
                       setLearningMode('videocall');
                       if (voiceMode === 'muted') {
                         setVoiceMode('continuous');
@@ -254,6 +286,13 @@ export const StudyPage: React.FC = () => {
                     <Mic className="h-4 w-4 mr-2" /> Voice Chat
                   </button>
                 </div>
+                
+                {!browserSupportsSpeechRecognition && (
+                  <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                    <Info className="h-3 w-3 inline mr-1" />
+                    Voice chat requires a browser that supports speech recognition like Chrome, Edge, or Safari.
+                  </div>
+                )}
               </div>
 
               {/* Conversation History Toggle */}
@@ -272,7 +311,7 @@ export const StudyPage: React.FC = () => {
             {/* Sidebar */}
             <div className="lg:col-span-4 space-y-6">
               <ProgressSidebar />
-              <SocialFeatures />
+              {!isStudyMode && <SocialFeatures />}
               
               {/* End Session Button */}
               <StudySessionControls />
