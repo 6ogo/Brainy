@@ -20,7 +20,7 @@ import { cn } from '../styles/utils';
 import toast from 'react-hot-toast';
 
 export const AnalyticsDashboard: React.FC = () => {
-  const { sessionStats, messages, socialStats, currentSubject } = useStore();
+  const { sessionStats, socialStats, currentSubject } = useStore();
   const { user } = useAuth();
   const [selectedTimeframe, setSelectedTimeframe] = useState('week');
   const [showExport, setShowExport] = useState(false);
@@ -327,56 +327,6 @@ export const AnalyticsDashboard: React.FC = () => {
       </div>
     );
   }
-
-  // Prepare chart data
-  const weeklyXPData = {
-    labels: analyticsData.weeklyXP.map((day: any) => day.day),
-    datasets: [
-      {
-        label: 'XP Earned',
-        data: analyticsData.weeklyXP.map((day: any) => day.xp),
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        fill: true,
-        tension: 0.4,
-      },
-    ],
-  };
-
-  const subjectDistributionData = {
-    labels: Object.keys(analyticsData.subjectDistribution),
-    datasets: [
-      {
-        label: 'Conversations',
-        data: Object.values(analyticsData.subjectDistribution),
-        backgroundColor: [
-          'rgba(59, 130, 246, 0.8)',
-          'rgba(16, 185, 129, 0.8)',
-          'rgba(139, 92, 246, 0.8)',
-          'rgba(245, 158, 11, 0.8)',
-          'rgba(239, 68, 68, 0.8)',
-          'rgba(17, 24, 39, 0.8)',
-        ],
-        borderWidth: 0,
-      },
-    ],
-  };
-
-  const skillsRadarData = {
-    labels: analyticsData.skillsData.map((s: any) => s.skill),
-    datasets: [
-      {
-        label: 'Skills',
-        data: analyticsData.skillsData.map((s: any) => s.value),
-        backgroundColor: 'rgba(59, 130, 246, 0.2)',
-        borderColor: 'rgba(59, 130, 246, 1)',
-        pointBackgroundColor: 'rgba(59, 130, 246, 1)',
-        pointBorderColor: '#fff',
-        pointHoverBackgroundColor: '#fff',
-        pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
-      },
-    ],
-  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm space-y-6 p-6">

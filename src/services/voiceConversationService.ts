@@ -20,20 +20,16 @@ export class VoiceConversationService {
   private isListening = false;
   private isProcessing = false;
   private config: VoiceConversationConfig;
-  private audioContext: AudioContext | null = null;
   private currentAudio: HTMLAudioElement | null = null;
   private isPaused = false;
   private currentTranscript = '';
   private recognitionLanguage = 'en-US';
-  private audioQueue: Blob[] = [];
-  private isPlayingAudio = false;
   private stream: MediaStream | null = null;
   private processingTimeout: number | null = null;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
     this.initializeSpeechRecognition();
-    this.initializeAudioContext();
   }
 
   private initializeSpeechRecognition(): void {
@@ -67,13 +63,13 @@ export class VoiceConversationService {
         }
 
         if (lastResult.isFinal && transcript) {
-          // Set a 1-second delay before processing the transcript
+          // Set a 2-second delay before processing the transcript
           this.processingTimeout = window.setTimeout(() => {
             if (!this.isProcessing && transcript !== '') {
               this.handleUserSpeech(transcript);
             }
             this.processingTimeout = null;
-          }, 1000);
+          }, 2000);
         }
       };
 
@@ -107,17 +103,6 @@ export class VoiceConversationService {
           }
         }
       };
-    }
-  }
-
-  private initializeAudioContext(): void {
-    try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-        latencyHint: 'interactive',
-        sampleRate: 16000
-      });
-    } catch (error) {
-      console.error('Failed to initialize audio context:', error);
     }
   }
 
@@ -201,10 +186,6 @@ export class VoiceConversationService {
       this.config.onAudioEnd?.();
     }
     
-    // Clear audio queue
-    this.audioQueue = [];
-    this.isPlayingAudio = false;
-    
     // Also stop any browser speech synthesis
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -229,7 +210,8 @@ export class VoiceConversationService {
    * 
    * This function updates the processing status and manages audio playback events. It also
    * handles errors by logging them and invoking the appropriate error callback.
-   */  private async handleUserSpeech(transcript: string): Promise<void> {
+   */  
+  private async handleUserSpeech(transcript: string): Promise<void> {
     if (this.isProcessing || this.isPaused) {
       return;
     }
@@ -269,8 +251,10 @@ export class VoiceConversationService {
         if (!API_CONFIG.ELEVENLABS_API_KEY) {
           // Use fallback if ElevenLabs API key is not configured
           audioBlob = await ElevenLabsService.createFallbackAudio(aiResponse);
+          console.log('Using fallback speech generation');
         } else {
           audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
+          console.log('Speech generated successfully, blob size:', audioBlob?.size);
         }
         
         if (audioBlob) {
