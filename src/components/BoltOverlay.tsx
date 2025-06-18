@@ -35,7 +35,7 @@ export const BoltOverlay: React.FC = () => (
     tabIndex={0}
   >
     <img
-      src={process.env.PUBLIC_URL ? process.env.PUBLIC_URL + '/white_circle_360x360.png' : '/white_circle_360x360.png'}
+      src={import.meta.env.BASE_URL + 'white_circle_360x360.png'}
       alt="Bolt"
       style={imageStyle}
       draggable={false}
