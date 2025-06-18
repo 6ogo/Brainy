@@ -55,7 +55,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     }
   }, [voiceMode, listening, isPaused, startListening]);
 
-  // Process final transcript
+  // Process transcript when it changes
   useEffect(() => {
     const processFinalTranscript = async () => {
       // Only process if we have a transcript and we're not already processing
@@ -90,9 +90,13 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
       }
     };
     
-    // Only process transcript if we have a final transcript (not listening anymore)
-    if (!listening && transcript && transcript.trim().length > 0) {
-      processFinalTranscript();
+    // Process transcript after a short delay to allow for corrections
+    if (transcript && transcript.trim().length > 0 && !processingTranscriptRef.current) {
+      const timer = setTimeout(() => {
+        processFinalTranscript();
+      }, 1500);
+      
+      return () => clearTimeout(timer);
     }
   }, [
     transcript, 
@@ -200,6 +204,8 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     }
   };
 
+  const displayedTranscript = transcript;
+
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
       {/* Study Mode Indicator */}
@@ -262,6 +268,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                   try {
                     await navigator.mediaDevices.getUserMedia({ audio: true });
                     toast.success('Microphone access granted!');
+                    window.location.reload(); // Reload to apply permission changes
                   } catch (error) {
                     console.error('Error requesting microphone permission:', error);
                     toast.error('Microphone permission denied. Please check your browser settings.');
@@ -328,7 +335,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                 "h-20 w-20 rounded-full flex items-center justify-center focus:outline-none transition-all",
                 listening && voiceMode === 'push-to-talk'
                   ? "bg-primary-500 text-white scale-110 shadow-lg"
-                  : browserSupportsSpeechRecognition && isMicrophoneAvailable
+                  : isMicrophoneAvailable && browserSupportsSpeechRecognition
                     ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
                     : "bg-gray-50 text-gray-300 cursor-not-allowed opacity-60"
               )}
@@ -346,7 +353,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
             </p>
             
             {/* Live transcript */}
-            {showTranscript && transcript && (
+            {showTranscript && displayedTranscript && (
               <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 w-full max-w-xs">
                 <div className="flex justify-between items-center mb-1">
                   <p className="text-xs text-gray-500">Hearing:</p>
@@ -356,7 +363,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                     <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                   </div>
                 </div>
-                <p className="text-sm text-gray-700">{transcript}</p>
+                <p className="text-sm text-gray-700">{displayedTranscript}</p>
               </div>
             )}
           </div>

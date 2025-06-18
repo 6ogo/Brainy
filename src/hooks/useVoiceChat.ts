@@ -30,7 +30,8 @@ export const useVoiceChat = () => {
     listening,
     browserSupportsSpeechRecognition,
     startListening,
-    stopListening
+    stopListening,
+    resetTranscript
   } = useSpeechRecognition();
   
   // For study mode speech processing
@@ -108,7 +109,7 @@ export const useVoiceChat = () => {
                     processingRef.current = true;
                     addMessage(text, 'user');
                   }
-                }, 2000);
+                }, 1000); // Reduced from 2000ms to 1000ms for faster response
               } else if (!processingRef.current) {
                 processingRef.current = true;
                 addMessage(text, 'user');
@@ -169,7 +170,7 @@ export const useVoiceChat = () => {
             setCurrentTranscript(text);
             if (isFinal && text.trim()) {
               if (isStudyMode) {
-                // In study mode, wait 2 seconds after user stops speaking
+                // In study mode, wait 1 second after user stops speaking
                 if (transcriptTimeoutRef.current) {
                   clearTimeout(transcriptTimeoutRef.current);
                 }
@@ -180,7 +181,7 @@ export const useVoiceChat = () => {
                     processingRef.current = true;
                     addMessage(text, 'user');
                   }
-                }, 2000);
+                }, 1000);
               } else if (!processingRef.current) {
                 processingRef.current = true;
                 addMessage(text, 'user');

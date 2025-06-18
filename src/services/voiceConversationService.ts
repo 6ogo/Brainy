@@ -26,6 +26,9 @@ export class VoiceConversationService {
   private recognitionLanguage = 'en-US';
   private stream: MediaStream | null = null;
   private processingTimeout: number | null = null;
+  private maxSilenceTime = 1500; // 1.5 seconds of silence before processing
+  private lastSpeechTimestamp = 0;
+  private silenceTimer: number | null = null;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -34,7 +37,7 @@ export class VoiceConversationService {
 
   private initializeSpeechRecognition(): void {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      this.config.onError?.('Speech recognition not supported in this browser');
+      this.config.onError?.('Speech recognition is not supported in this browser');
       return;
     }
 
@@ -53,6 +56,9 @@ export class VoiceConversationService {
         // Update current transcript
         this.currentTranscript = transcript;
         
+        // Update last speech timestamp
+        this.lastSpeechTimestamp = Date.now();
+        
         // Notify about interim results for UI feedback
         this.config.onTranscript?.(transcript, lastResult.isFinal);
         
@@ -61,15 +67,30 @@ export class VoiceConversationService {
           clearTimeout(this.processingTimeout);
           this.processingTimeout = null;
         }
+        
+        // Clear any existing silence timer
+        if (this.silenceTimer) {
+          clearTimeout(this.silenceTimer);
+          this.silenceTimer = null;
+        }
 
         if (lastResult.isFinal && transcript) {
-          // Set a 2-second delay before processing the transcript
+          // Set a shorter delay for final results
           this.processingTimeout = window.setTimeout(() => {
             if (!this.isProcessing && transcript !== '') {
               this.handleUserSpeech(transcript);
             }
             this.processingTimeout = null;
-          }, 2000);
+          }, 500); // Reduced from 2000ms to 500ms for faster response
+        } else {
+          // Start silence detection timer
+          this.silenceTimer = window.setTimeout(() => {
+            const silenceDuration = Date.now() - this.lastSpeechTimestamp;
+            if (silenceDuration >= this.maxSilenceTime && transcript && !this.isProcessing) {
+              console.log('Processing after silence detection:', transcript);
+              this.handleUserSpeech(transcript);
+            }
+          }, this.maxSilenceTime);
         }
       };
 
@@ -87,6 +108,13 @@ export class VoiceConversationService {
       this.recognition.onend = () => {
         console.log('Speech recognition ended');
         this.isListening = false;
+        
+        // If we have a transcript but haven't processed it yet, process it now
+        if (this.currentTranscript && !this.isProcessing && !this.isPaused) {
+          console.log('Processing transcript on recognition end:', this.currentTranscript);
+          this.handleUserSpeech(this.currentTranscript);
+          return;
+        }
         
         // Restart if we're supposed to be listening continuously
         if (!this.isPaused && this.recognition && !this.isProcessing) {
@@ -126,6 +154,7 @@ export class VoiceConversationService {
       
       this.isPaused = false;
       this.isListening = true;
+      this.lastSpeechTimestamp = Date.now();
       this.recognition.start();
       console.log('Speech recognition started');
     } catch (error) {
@@ -137,6 +166,12 @@ export class VoiceConversationService {
   stopListening(): void {
     if (this.recognition && this.isListening) {
       try {
+        // If we have a transcript but haven't processed it yet, process it now
+        if (this.currentTranscript && !this.isProcessing && !this.isPaused) {
+          console.log('Processing transcript before stopping:', this.currentTranscript);
+          this.handleUserSpeech(this.currentTranscript);
+        }
+        
         this.recognition.stop();
         this.isListening = false;
         console.log('Speech recognition stopped');
@@ -156,6 +191,12 @@ export class VoiceConversationService {
       clearTimeout(this.processingTimeout);
       this.processingTimeout = null;
     }
+    
+    // Clear any silence timer
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
   }
 
   pauseConversation(): void {
@@ -167,6 +208,12 @@ export class VoiceConversationService {
     if (this.processingTimeout) {
       clearTimeout(this.processingTimeout);
       this.processingTimeout = null;
+    }
+    
+    // Clear any silence timer
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
     }
     
     console.log('Conversation paused');
@@ -207,9 +254,6 @@ export class VoiceConversationService {
    * to speech using ElevenLabs or falls back to the browser's speech synthesis if necessary.
    * 
    * @param transcript - The user's speech input as a string.
-   * 
-   * This function updates the processing status and manages audio playback events. It also
-   * handles errors by logging them and invoking the appropriate error callback.
    */  
   private async handleUserSpeech(transcript: string): Promise<void> {
     if (this.isProcessing || this.isPaused) {
@@ -294,6 +338,13 @@ export class VoiceConversationService {
     } finally {
       this.isProcessing = false;
       this.currentTranscript = '';
+      
+      // Restart listening if in continuous mode and not paused
+      if (!this.isPaused && !this.isListening && this.recognition) {
+        setTimeout(() => {
+          this.startListening();
+        }, 500);
+      }
     }
   }
 

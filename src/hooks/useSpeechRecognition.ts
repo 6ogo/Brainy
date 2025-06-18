@@ -30,6 +30,8 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const [clearTranscriptOnListen, setClearTranscriptOnListen] = useState<boolean>(true);
   const hasCheckedPermission = useRef<boolean>(false);
   const isStartingListening = useRef<boolean>(false);
+  const lastTranscriptRef = useRef<string>('');
+  const transcriptTimeoutRef = useRef<number | null>(null);
   
   const {
     transcript,
@@ -87,6 +89,37 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     }
   }, [browserSupportsSpeechRecognition, setVoiceMode]);
 
+  // Auto-send transcript after a short delay when speech ends
+  useEffect(() => {
+    if (!listening && transcript && transcript.trim().length > 0 && 
+        transcript !== lastTranscriptRef.current && !isStartingListening.current) {
+      
+      // Clear any existing timeout
+      if (transcriptTimeoutRef.current) {
+        clearTimeout(transcriptTimeoutRef.current);
+      }
+      
+      // Set a timeout to send the transcript
+      transcriptTimeoutRef.current = window.setTimeout(() => {
+        console.log('Auto-sending transcript:', transcript);
+        lastTranscriptRef.current = transcript;
+        addMessage(transcript, 'user');
+        
+        // Reset transcript after sending
+        setTimeout(() => {
+          resetTranscript();
+          
+          // Restart listening if in continuous mode
+          if (voiceMode === 'continuous' && !listening) {
+            startListening();
+          }
+        }, 500);
+        
+        transcriptTimeoutRef.current = null;
+      }, 1000); // Send after 1 second of silence
+    }
+  }, [transcript, listening, addMessage, resetTranscript, voiceMode, startListening]);
+
   // Start listening with appropriate options
   const startListening = useCallback(async () => {
     // Prevent multiple simultaneous start attempts
@@ -116,6 +149,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       
       if (clearTranscriptOnListen) {
         resetTranscript();
+        lastTranscriptRef.current = '';
       }
       
       // Use a timeout to prevent rapid start/stop cycles
@@ -147,11 +181,29 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const stopListening = useCallback(() => {
     if (!listening) return;
     
+    // Clear any pending transcript timeout
+    if (transcriptTimeoutRef.current) {
+      clearTimeout(transcriptTimeoutRef.current);
+      transcriptTimeoutRef.current = null;
+    }
+    
+    // If we have a transcript, send it before stopping
+    if (transcript && transcript.trim().length > 0 && transcript !== lastTranscriptRef.current) {
+      console.log('Sending transcript on stop:', transcript);
+      lastTranscriptRef.current = transcript;
+      addMessage(transcript, 'user');
+      
+      // Reset transcript after sending
+      setTimeout(() => {
+        resetTranscript();
+      }, 500);
+    }
+    
     SpeechRecognition.stopListening();
     
     // Ensure the starting flag is reset
     isStartingListening.current = false;
-  }, [listening]);
+  }, [listening, transcript, addMessage, resetTranscript]);
 
   return {
     transcript,
