@@ -315,21 +315,32 @@ export const VoiceControls: React.FC = () => {
           <div className="flex flex-col items-center">
             <p className="text-sm text-gray-500 mb-2">Push to Talk</p>
             <button
-              className={cn(
-                "h-20 w-20 rounded-full flex items-center justify-center focus:outline-none transition-all",
-                isListening && voiceMode === 'push-to-talk'
-                  ? "bg-primary-500 text-white scale-110 shadow-lg"
-                  : hasPermission && isBrowserSupported
-                    ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                    : "bg-gray-50 text-gray-300 cursor-not-allowed opacity-60"
-              )}
-              disabled={voiceMode !== 'push-to-talk' || !hasPermission || !isBrowserSupported}
-              onMouseDown={() => handlePushToTalk(true)}
-              onMouseUp={() => handlePushToTalk(false)}
-              onTouchStart={() => handlePushToTalk(true)}
-              onTouchEnd={() => handlePushToTalk(false)}
-              aria-label="Push to talk"
-            >
+               className={cn(
+                 "h-20 w-20 rounded-full flex items-center justify-center focus:outline-none transition-all",
+                 isListening && voiceMode === 'push-to-talk'
+                   ? "bg-primary-500 text-white scale-110 shadow-lg"
+                   : hasPermission && isBrowserSupported
+                     ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                     : "bg-gray-50 text-gray-300 cursor-not-allowed opacity-60"
+               )}
+               disabled={voiceMode !== 'push-to-talk' || !hasPermission || !isBrowserSupported}
+               onMouseDown={() => handlePushToTalk(true)}
+               onMouseUp={() => handlePushToTalk(false)}
+               onTouchStart={() => handlePushToTalk(true)}
+               onTouchEnd={() => handlePushToTalk(false)}
+               aria-label="Push to talk"
+               tabIndex={0}
+               onKeyDown={e => {
+                 if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+                   handlePushToTalk(true);
+                 }
+               }}
+               onKeyUp={e => {
+                 if ((e.key === ' ' || e.key === 'Enter')) {
+                   handlePushToTalk(false);
+                 }
+               }}
+             >
               <Mic className="h-10 w-10" />
             </button>
             <p className="text-xs text-gray-500 mt-2">
@@ -443,6 +454,11 @@ export const VoiceControls: React.FC = () => {
       </div>
 
       {/* Status indicators */}
+      {/* Visually hidden live region for screen reader announcements */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only" id="voice-status-live-region">
+        {isListening ? 'Listening' : isSpeaking ? 'AI Speaking' : isPaused ? 'Conversation Paused' : hasPermission ? 'Microphone Ready' : 'Microphone Access Needed'}
+      </div>
+
       <div className="mt-6 flex items-center justify-between text-sm text-gray-500 border-t border-gray-200 pt-4">
         <div className="flex flex-wrap items-center gap-4">
           {!isBrowserSupported ? (

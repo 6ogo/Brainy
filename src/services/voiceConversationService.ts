@@ -67,13 +67,13 @@ export class VoiceConversationService {
         }
 
         if (lastResult.isFinal && transcript) {
-          // Set a 2-second delay before processing the transcript
+          // Set a 1-second delay before processing the transcript
           this.processingTimeout = window.setTimeout(() => {
             if (!this.isProcessing && transcript !== '') {
               this.handleUserSpeech(transcript);
             }
             this.processingTimeout = null;
-          }, 2000);
+          }, 1000);
         }
       };
 
@@ -219,7 +219,17 @@ export class VoiceConversationService {
     }
   }
 
-  private async handleUserSpeech(transcript: string): Promise<void> {
+  /**
+   * Handles the user's speech input by processing the transcript, generating an AI response,
+   * and converting it to speech. This function ensures input is sanitized and validated before
+   * generating an AI response. If the response is generated, it attempts to convert the text
+   * to speech using ElevenLabs or falls back to the browser's speech synthesis if necessary.
+   * 
+   * @param transcript - The user's speech input as a string.
+   * 
+   * This function updates the processing status and manages audio playback events. It also
+   * handles errors by logging them and invoking the appropriate error callback.
+   */  private async handleUserSpeech(transcript: string): Promise<void> {
     if (this.isProcessing || this.isPaused) {
       return;
     }
