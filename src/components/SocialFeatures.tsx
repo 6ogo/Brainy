@@ -233,135 +233,19 @@ const SocialFeatures: React.FC = () => {
   };
 
   const shareProgress = () => {
+    const shareUrl = window.location.href;
+    const shareTitle = `I'm mastering ${currentSubject} with Brainbud! 🚀 I'm currently Level ${socialStats.level} with ${socialStats.totalXP} XP. Join me and revolutionize your learning journey.`;
+    
+    navigator.clipboard.writeText(shareTitle + '\n' + shareUrl).then(() => {
+      toast.success('Share link copied to clipboard!');
     });
-    break;
-  case 'English':
-    challenges.push({
-      id: 'grammar-guru',
-      title: 'Grammar Guru',
-      description: 'Master 5 grammar rules',
-      subject: 'English',
-      difficulty: 'High School',
-      xpReward: 90,
-      deadline: tomorrow,
-      isCompleted: false
-    });
-    break;
-  default:
-    challenges.push({
-      id: 'knowledge-seeker',
-      title: 'Knowledge Seeker',
-      description: `Study ${subject} for 30 minutes`,
-      subject: subject,
-      difficulty: 'High School',
-      xpReward: 80,
-      deadline: tomorrow,
-      isCompleted: false
-    });
-}
-  
-// General challenges
-challenges.push({
-  id: 'daily-dedication',
-  title: 'Daily Dedication',
-  description: 'Complete 3 learning sessions today',
-  subject: 'All' as Subject,
-  difficulty: 'Elementary',
-  xpReward: 50,
-  deadline: tomorrow,
-  isCompleted: false
-});
-  
-return challenges;
-};
+  };
 
-const shareProgress = () => {
-const shareUrl = window.location.href;
-const shareTitle = `I'm mastering ${currentSubject} with Brainbud! 🚀 I'm currently Level ${socialStats.level} with ${socialStats.totalXP} XP. Join me and revolutionize your learning journey.`;
-  
-navigator.clipboard.writeText(shareTitle + '\n' + shareUrl).then(() => {
-  toast.success('Share link copied to clipboard!');
-});
-
-};
-
-return (
-  <div className="bg-white p-4 rounded-lg shadow-md mb-6">
-    <h2 className="text-xl font-bold mb-4 flex items-center">
-      <Award className="h-5 w-5 mr-2 text-yellow-500" /> Achievements
-    </h2>
-    <div className="mb-6">
-      {loading ? (
-        <div className="space-y-2 animate-pulse">
-          {[1,2,3].map(i => (
-            <div key={i} className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
-          ))}
-        </div>
-      ) : achievements.length === 0 ? (
-        <div className="text-gray-500 italic">No achievements yet. Start learning to unlock your first badge!</div>
-      ) : (
-        <ul className="space-y-3">
-          {achievements.map(ach => (
-            <li key={ach.id} className="flex items-center space-x-3 bg-yellow-50 rounded p-2 border border-yellow-100">
-              <span className="text-2xl">{ach.icon}</span>
-              <div>
-                <div className="font-semibold text-yellow-900">{ach.title}</div>
-                <div className="text-xs text-gray-600">{ach.description}</div>
-                <div className="text-xs text-gray-400">Unlocked: {ach.unlockedAt ? new Date(ach.unlockedAt).toLocaleDateString() : '—'}</div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      {/* Error fallback UI if offline or fetch failed */}
-      {!loading && error && (
-        <div className="text-xs text-red-400 mt-2">{error}</div>
-      )}
-    </div>
-    <h2 className="text-xl font-bold mb-4 flex items-center">
-      <Star className="h-5 w-5 mr-2 text-blue-500" /> Active Challenges
-    </h2>
-    <div className="mb-6">
-      {loading ? (
-        <div className="space-y-2 animate-pulse">
-          {[1,2].map(i => (
-            <div key={i} className="h-6 bg-gray-200 rounded w-1/2 mb-2"></div>
-          ))}
-        </div>
-      ) : challenges.length === 0 ? (
-        <div className="text-gray-500 italic">No active challenges. Check back soon for new ways to earn XP!</div>
-      ) : (
-        <ul className="space-y-3">
-          {challenges.map(challenge => (
-            <li key={challenge.id} className="flex items-center space-x-3 bg-blue-50 rounded p-2 border border-blue-100">
-              <span className="text-lg">🏅</span>
-              <div>
-                <div className="font-semibold text-blue-900">{challenge.title}</div>
-                <div className="text-xs text-gray-600">{challenge.description}</div>
-                <div className="text-xs text-gray-400">Reward: {challenge.xpReward} XP · Due: {challenge.deadline ? new Date(challenge.deadline).toLocaleDateString() : '—'}</div>
-                {challenge.isCompleted && (
-                  <span className="text-green-600 text-xs font-semibold ml-2">Completed!</span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-      {/* Error fallback UI if offline or fetch failed */}
-      {!loading && error && (
-        <div className="text-xs text-red-400 mt-2">{error}</div>
-      )}
-    </div>
-    <div className="flex space-x-2 mt-4">
-      <button
-        onClick={shareProgress}
-        className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 transition flex items-center"
-      >
-        <Share2 className="h-4 w-4 mr-2" /> Share Progress
-      </button>
-      <TwitterShareButton url={window.location.href} title="Check out my learning progress on Brainbud! 🚀">
-        <button className="px-4 py-2 bg-blue-400 text-white rounded hover:bg-blue-500 transition flex items-center">
-          <span className="mr-2">🐦</span> Tweet
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+      <h2 className="text-xl font-bold mb-4 flex items-center">
+        <Award className="h-5 w-5 mr-2 text-yellow-500" /> Achievements
+      </h2>
       <div className="mb-6">
         {loading ? (
           <div className="space-y-2 animate-pulse">
@@ -450,3 +334,5 @@ return (
     </div>
   );
 };
+
+export default SocialFeatures;
