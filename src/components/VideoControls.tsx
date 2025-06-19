@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/store';
-import { Video, VideoOff, Image as ImageIcon, StopCircle, Settings, Mic, MicOff, Pause, Play, MessageSquare } from 'lucide-react';
+import { Video, VideoOff, Image as ImageIcon, StopCircle, Mic, MicOff, Pause, Play, MessageSquare } from 'lucide-react';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn } from '../styles/utils';
 import { Button } from './Button';
@@ -29,7 +29,7 @@ export const VideoControls: React.FC = () => {
     isStudyMode
   } = useStore();
   
-  const navigate = useNavigate();
+  
   const { isPaused, pauseVoiceChat, resumeVoiceChat } = useVoiceChat();
   const [showBackgrounds, setShowBackgrounds] = useState(false);
 

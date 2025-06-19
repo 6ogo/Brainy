@@ -13,7 +13,6 @@ export const VoiceControls: React.FC = () => {
   const { 
     voiceMode, 
     setVoiceMode, 
-    isListening,
     setIsSpeaking,
     isRecording,
     toggleRecording,
@@ -27,7 +26,6 @@ export const VoiceControls: React.FC = () => {
   const { 
     transcript,
     listening,
-    browserSupportsSpeechRecognition,
     isMicrophoneAvailable,
     startListening,
     stopListening
@@ -39,8 +37,7 @@ export const VoiceControls: React.FC = () => {
     startVoiceChat, 
     stopVoiceChat, 
     pauseVoiceChat, 
-    resumeVoiceChat,
-    currentTranscript
+    resumeVoiceChat
   } = useVoiceChat();
   
   const [volume, setVolume] = useState(70);

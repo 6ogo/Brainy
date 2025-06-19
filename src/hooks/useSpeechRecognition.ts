@@ -20,14 +20,12 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const { 
     voiceMode, 
     setVoiceMode, 
-    toggleListening, 
-    isListening,
-    addMessage,
-    setIsSpeaking
+    toggleListening,
+    addMessage
   } = useStore();
   
   const [isMicrophoneAvailable, setIsMicrophoneAvailable] = useState<boolean>(false);
-  const [clearTranscriptOnListen, setClearTranscriptOnListen] = useState<boolean>(true);
+  const [clearTranscriptOnListen] = useState<boolean>(true);
   const hasCheckedPermission = useRef<boolean>(false);
   const isStartingListening = useRef<boolean>(false);
   const lastTranscriptRef = useRef<string>('');
@@ -40,7 +38,45 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     resetTranscript,
     browserSupportsSpeechRecognition,
     isMicrophoneAvailable: micAvailable
-  } = useReactSpeechRecognition();
+  } = useReactSpeechRecognition() as {
+    transcript: string;
+    listening: boolean;
+    resetTranscript: () => void;
+    browserSupportsSpeechRecognition: boolean;
+    isMicrophoneAvailable: boolean;
+  };
+
+  // --- CALLBACKS DEFINED FIRST ---
+
+
+
+  // Stop listening callback
+  const stopListening = useCallback((): void => {
+    if (!listening) return;
+    
+    // Clear any pending transcript timeout
+    if (transcriptTimeoutRef.current) {
+      clearTimeout(transcriptTimeoutRef.current);
+      transcriptTimeoutRef.current = null;
+    }
+    
+    // If we have a transcript, send it before stopping
+    if (transcript && transcript.trim().length > noiseThreshold && transcript !== lastTranscriptRef.current) {
+      console.log('Sending transcript on stop:', transcript);
+      lastTranscriptRef.current = transcript;
+      addMessage(transcript, 'user');
+      
+      // Reset transcript after sending
+      setTimeout(() => {
+        resetTranscript();
+      }, 500);
+    }
+    
+    SpeechRecognition.stopListening();
+    
+    // Ensure the starting flag is reset
+    isStartingListening.current = false;
+  }, [listening, transcript, addMessage, resetTranscript, noiseThreshold]);
 
   // Update store listening state when the library's listening state changes
   useEffect(() => {
@@ -125,10 +161,10 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
         }, 1000); // Send after 1 second of silence
       }
     }
-  }, [transcript, listening, addMessage, resetTranscript, voiceMode, startListening]);
+  }, [transcript, listening, addMessage, resetTranscript, voiceMode]);
 
   // Start listening with appropriate options
-  const startListening = useCallback(async () => {
+  const startListening = useCallback(async (): Promise<void> => {
     // Prevent multiple simultaneous start attempts
     if (isStartingListening.current || listening) {
       return;
@@ -182,36 +218,9 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     voiceMode, 
     clearTranscriptOnListen, 
     resetTranscript,
-    listening
+    listening,
+    setIsMicrophoneAvailable
   ]);
-
-  // Stop listening
-  const stopListening = useCallback(() => {
-    if (!listening) return;
-    
-    // Clear any pending transcript timeout
-    if (transcriptTimeoutRef.current) {
-      clearTimeout(transcriptTimeoutRef.current);
-      transcriptTimeoutRef.current = null;
-    }
-    
-    // If we have a transcript, send it before stopping
-    if (transcript && transcript.trim().length > noiseThreshold && transcript !== lastTranscriptRef.current) {
-      console.log('Sending transcript on stop:', transcript);
-      lastTranscriptRef.current = transcript;
-      addMessage(transcript, 'user');
-      
-      // Reset transcript after sending
-      setTimeout(() => {
-        resetTranscript();
-      }, 500);
-    }
-    
-    SpeechRecognition.stopListening();
-    
-    // Ensure the starting flag is reset
-    isStartingListening.current = false;
-  }, [listening, transcript, addMessage, resetTranscript, noiseThreshold]);
 
   return {
     transcript,
@@ -222,6 +231,6 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     stopListening,
     resetTranscript,
     clearTranscriptOnListen,
-    setClearTranscriptOnListen
+    setClearTranscriptOnListen: () => {}
   };
-};
+}

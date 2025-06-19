@@ -47,6 +47,13 @@ export const StudyPage: React.FC = () => {
     browserSupportsSpeechRecognition,
     isMicrophoneAvailable
   } = useSpeechRecognition();
+  
+  // Show microphone status in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Microphone available:', isMicrophoneAvailable);
+    }
+  }, [isMicrophoneAvailable]);
 
   useEffect(() => {
     if (!currentSubject || !currentAvatar) {
@@ -126,9 +133,17 @@ export const StudyPage: React.FC = () => {
         {showModeSelector && (
           <div className="lg:col-span-12">
             <Card className="p-6">
-              <h2 className={cn(commonStyles.heading.h3, "mb-4")}>
-                Choose Your Learning Mode for {currentSubject}
-              </h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className={cn(commonStyles.heading.h3, "mb-0")}>
+                  Choose Your Learning Mode for {currentSubject}
+                </h2>
+                {browserSupportsSpeechRecognition && (
+                  <div className="flex items-center text-sm text-gray-500">
+                    <div className={`w-2 h-2 rounded-full mr-2 ${isMicrophoneAvailable ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                    {isMicrophoneAvailable ? 'Microphone ready' : 'Microphone not available'}
+                  </div>
+                )}
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <Card 

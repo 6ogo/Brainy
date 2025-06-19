@@ -19,9 +19,6 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     setVoiceMode, 
     isSpeaking, 
     setIsSpeaking,
-    currentAvatar,
-    currentSubject,
-    difficultyLevel,
     addMessage,
     isStudyMode
   } = useStore();

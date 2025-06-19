@@ -1,10 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Mic, MessageSquare, Volume2, VolumeX, Play, MicOff } from 'lucide-react';
+import { 
+  Mic, 
+  MicOff, 
+  Volume2, 
+  VolumeX, 
+  Play, 
+  MessageSquare, 
+  AlertCircle 
+} from 'lucide-react';
 import { useStore } from '../store/store';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { TavusService } from '../services/tavusService';
-import { VideoControls } from './VideoControls';
-import { VoiceChat } from './VoiceChat';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../styles/utils';
 import { Button } from './Button';
@@ -12,7 +18,20 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { StudyModeIndicator } from './StudyModeIndicator';
-import { AlertCircle } from 'lucide-react';
+
+interface VideoAreaProps {
+  className?: string;
+}
+
+type BackgroundType = 'classroom' | 'library' | 'home-office' | 'default';
+type AvatarEmotion = 'neutral' | 'thinking' | 'excited';
+type DifficultyLevel = 'Beginner' | 'Intermediate' | 'Advanced' | 'High School';
+
+const fallbackVideos = [
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+  'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4'
+];
 
 export const VideoArea: React.FC = () => {
   const { 
@@ -36,6 +55,7 @@ export const VideoArea: React.FC = () => {
     error: voiceChatError, 
     isPaused, 
     currentTranscript, 
+    startVoiceChat, 
     stopVoiceChat,
     pauseVoiceChat,
     resumeVoiceChat
@@ -272,23 +292,6 @@ export const VideoArea: React.FC = () => {
                       '7135121'
                     }/pexels-photo-${
                       currentBackground === 'classroom' ? '8471970' :
-                      currentBackground === 'library' ? '590493' :
-                      currentBackground === 'home-office' ? '4050315' :
-                      '7135121'
-                    }.jpeg)`
-                  }}
-                >
-                  <div className="absolute inset-0 bg-black/30"></div>
-                </div>
-                
-                {tavusVideoUrl ? (
-                <div className="absolute inset-0 w-full h-full">
-                  {/* Error message and retry button */}
-                  {(videoError || retryCount > 0) && (
-                    <div className="absolute top-0 left-0 right-0 p-2 bg-gradient-to-r from-red-50 to-yellow-50 border-b border-red-200 text-red-700 text-sm flex items-center justify-between z-10">
-                      <div className="flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-2 flex-shrink-0" />
-                        <span>{videoError || `Video playback issues detected. Using fallback video ${retryCount}/${fallbackVideos.length}`}</span>
                         </div>
                         <button 
                           onClick={retryVideoLoad}
