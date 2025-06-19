@@ -6,7 +6,7 @@ import { ChatTranscript } from '../components/ChatTranscript';
 import { QuickActionButtons } from '../components/QuickActionButtons';
 import { ProgressSidebar } from '../components/ProgressSidebar';
 import { DifficultySlider } from '../components/DifficultySlider';
-import { SocialFeatures } from '../components/SocialFeatures';
+import SocialFeatures from '../components/SocialFeatures';
 import { ConversationHistory } from '../components/ConversationHistory';
 import { StudySessionControls } from '../components/StudySessionControls';
 import { Button } from '../components/Button';
