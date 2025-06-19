@@ -21,11 +21,38 @@ export const ProgressSidebar: React.FC = () => {
   useEffect(() => {
     const fetchTopicsProgress = async () => {
       if (!user) return;
-      
+      setLoading(true);
       try {
-        setLoading(true);
-        
-        // Fetch conversations related to the current subject
+        // Try to use TavusService for personalized topic suggestions
+        const { TavusService } = await import('../services/tavusService');
+        if (TavusService && TavusService.getUserLearningProgress) {
+          const progress = await TavusService.getUserLearningProgress(user.id, currentSubject);
+          // Use TavusService for suggested topics and progress
+          // Use completed, struggling, and nextTopics for suggestions
+          const allTopics = [
+            ...(progress.completedTopics || []),
+            ...(progress.strugglingTopics || []),
+            ...(progress.nextTopics || []),
+            ...(progress.strengths || [])
+          ];
+          // Remove duplicates
+          const uniqueTopics = Array.from(new Set(allTopics));
+          setSuggestedTopics(progress.nextTopics?.length ? progress.nextTopics : uniqueTopics.slice(0, 3));
+          setTopicsProgress(
+            uniqueTopics.slice(0, 3).map((name, idx) => ({
+              name,
+              progress: idx === 0 ? 80 : idx === 1 ? 40 : 20 // Mocked progress for demo
+            }))
+          );
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        // If TavusService fails, fallback to old logic below
+        console.warn('TavusService unavailable or failed, falling back to local progress logic.', error);
+      }
+      try {
+        // Fallback: local progress logic
         const { data: conversationsData, error: conversationsError } = await supabase
           .from('conversations')
           .select('user_message, ai_response, summary, timestamp')
@@ -33,24 +60,14 @@ export const ProgressSidebar: React.FC = () => {
           .ilike('user_message', `%${currentSubject}%`)
           .order('timestamp', { ascending: false })
           .limit(50);
-        
         if (conversationsError) throw conversationsError;
-        
-        // Get topics for the current subject
         const subjectTopics = getTopicsForSubject(currentSubject);
-        
-        // Analyze conversations to determine topic progress
         const topicProgressMap = new Map<string, { mentions: number, total: number }>();
-        
-        // Initialize all topics with 0 progress
         subjectTopics.forEach(topic => {
           topicProgressMap.set(topic, { mentions: 0, total: 0 });
         });
-        
-        // Count topic mentions in conversations
         (conversationsData || []).forEach(conv => {
           const text = `${conv.user_message} ${conv.ai_response} ${conv.summary || ''}`.toLowerCase();
-          
           subjectTopics.forEach(topic => {
             if (text.includes(topic.toLowerCase())) {
               const current = topicProgressMap.get(topic) || { mentions: 0, total: 0 };
@@ -60,53 +77,38 @@ export const ProgressSidebar: React.FC = () => {
             }
           });
         });
-        
-        // Calculate progress percentages and sort by progress
         const progressData = Array.from(topicProgressMap.entries())
           .map(([name, { mentions, total }]) => {
-            // Calculate progress percentage
-            // If no conversations mention this topic, give it a random starting value
-            // If conversations exist, calculate based on mentions relative to total conversations
             const progress = total === 0 
-              ? Math.floor(Math.random() * 30) + 10 // Random value between 10-40% for topics not yet studied
+              ? Math.floor(Math.random() * 30) + 10
               : Math.min(100, Math.round((mentions / Math.max(1, conversationsData?.length || 1) * 3) * 100));
-            
             return { name, progress };
           })
           .sort((a, b) => b.progress - a.progress);
-        
-        // Take top 3 topics with most progress
         setTopicsProgress(progressData.slice(0, 3));
-        
-        // Generate suggested topics (topics with lowest progress)
         const lowestProgressTopics = progressData
-          .filter(topic => topic.progress < 50) // Only suggest topics with less than 50% progress
-          .sort((a, b) => a.progress - b.progress) // Sort by lowest progress first
-          .slice(0, 3) // Take top 3 lowest progress
+          .filter(topic => topic.progress < 50)
+          .sort((a, b) => a.progress - b.progress)
+          .slice(0, 3)
           .map(topic => topic.name);
-        
-        // If we don't have enough low-progress topics, add some random ones
         if (lowestProgressTopics.length < 3) {
           const remainingTopics = subjectTopics
             .filter(topic => !lowestProgressTopics.includes(topic) && 
                             !progressData.slice(0, 3).some(t => t.name === topic))
-            .sort(() => Math.random() - 0.5) // Shuffle
+            .sort(() => Math.random() - 0.5)
             .slice(0, 3 - lowestProgressTopics.length);
-          
           setSuggestedTopics([...lowestProgressTopics, ...remainingTopics]);
         } else {
           setSuggestedTopics(lowestProgressTopics);
         }
       } catch (error) {
         console.error('Error fetching topics progress:', error);
-        // Fallback to mock data if fetch fails
         setTopicsProgress(getMockTopicsForSubject(currentSubject));
         setSuggestedTopics(getMockSuggestedTopics(currentSubject));
       } finally {
         setLoading(false);
       }
     };
-    
     fetchTopicsProgress();
   }, [user, currentSubject]);
   

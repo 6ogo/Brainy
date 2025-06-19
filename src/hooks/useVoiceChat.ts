@@ -96,23 +96,26 @@ export const useVoiceChat = () => {
           if (isMounted.current) {
             setCurrentTranscript(text);
             
-            if (isFinal && text.trim()) {
-              if (isStudyMode) {
-                // In study mode, wait 1 second after user stops speaking
-                if (transcriptTimeoutRef.current) {
-                  clearTimeout(transcriptTimeoutRef.current);
-                }
-                
-                transcriptTimeoutRef.current = window.setTimeout(() => {
-                  if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
-                    lastProcessedTranscriptRef.current = text;
-                    processingRef.current = true;
-                    addMessage(text, 'user');
+            if (isFinal) {
+              if (text.trim().length > 3) {
+                if (isStudyMode) {
+                  // In study mode, wait 1 second after user stops speaking
+                  if (transcriptTimeoutRef.current) {
+                    clearTimeout(transcriptTimeoutRef.current);
                   }
-                }, 1000); // Reduced from 2000ms to 1000ms for faster response
-              } else if (!processingRef.current) {
-                processingRef.current = true;
-                addMessage(text, 'user');
+                  transcriptTimeoutRef.current = window.setTimeout(() => {
+                    if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
+                      lastProcessedTranscriptRef.current = text;
+                      processingRef.current = true;
+                      addMessage(text, 'user');
+                    }
+                  }, 1000);
+                } else if (!processingRef.current) {
+                  processingRef.current = true;
+                  addMessage(text, 'user');
+                }
+              } else if (text.trim().length > 0) {
+                toast('Speech too short. Please try again.', { icon: '🗣️' });
               }
             }
           }

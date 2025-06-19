@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { Search, Send, Phone, PhoneOff } from 'lucide-react';
+import { Search, Send, Phone, Info } from 'lucide-react';
+import { VoiceControls } from './VoiceControls';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
 import { useVoiceChat } from '../hooks/useVoiceChat';
@@ -26,6 +27,7 @@ export const ChatTranscript: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  // Removed toggleVoiceMode, now using unified VoiceControls
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
@@ -69,23 +71,7 @@ export const ChatTranscript: React.FC = () => {
     await sendMessage(message, isVoiceMode);
   };
 
-  const toggleVoiceMode = () => {
-    const newVoiceMode = !isVoiceMode;
-    setIsVoiceMode(newVoiceMode);
-    setLearningMode(newVoiceMode ? 'videocall' : 'conversational');
-    
-    if (newVoiceMode && voiceMode === 'muted') {
-      setVoiceMode('continuous');
-      if (browserSupportsSpeechRecognition) {
-        startListening();
-        toast.success('Voice mode activated! You can now speak with your AI tutor');
-      } else {
-        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
-      }
-    } else if (!newVoiceMode && listening) {
-      stopListening();
-    }
-  };
+
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm">
@@ -118,30 +104,9 @@ export const ChatTranscript: React.FC = () => {
         </div>
         
         {/* Voice/Text Mode Toggle */}
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={toggleVoiceMode}
-            className={cn(
-              "flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-              isVoiceMode
-                ? "bg-green-100 text-green-700 border border-green-300"
-                : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
-            )}
-            title={isVoiceMode ? "Switch to text mode" : "Switch to voice mode"}
-            disabled={!browserSupportsSpeechRecognition}
-          >
-            {isVoiceMode ? (
-              <>
-                <Phone className="h-4 w-4" />
-                <span>Voice On</span>
-              </>
-            ) : (
-              <>
-                <PhoneOff className="h-4 w-4" />
-                <span>Voice Off</span>
-              </>
-            )}
-          </button>
+        {/* Unified Voice Controls */}
+        <div className="ml-4">
+          <VoiceControls />
         </div>
       </div>
       

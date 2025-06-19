@@ -3,7 +3,9 @@ import { Mic, MessageSquare, Volume2, VolumeX, Play, MicOff } from 'lucide-react
 import { useStore } from '../store/store';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { TavusService } from '../services/tavusService';
+import { startOliviaCounselorConversation } from '../services/tavusStudentCounselor';
 import { VideoControls } from './VideoControls';
+import { VoiceControls } from './VoiceControls';
 import { VoiceChat } from './VoiceChat';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../styles/utils';
@@ -56,6 +58,11 @@ export const VideoArea: React.FC = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [showStartPrompt, setShowStartPrompt] = useState(true);
+
+  // Tavus Olivia video call state
+  const [oliviaConversationUrl, setOliviaConversationUrl] = useState<string | null>(null);
+  const [oliviaLoading, setOliviaLoading] = useState(false);
+  const [oliviaError, setOliviaError] = useState<string | null>(null);
   const avatarRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -166,27 +173,51 @@ export const VideoArea: React.FC = () => {
     );
   }
 
-  // Toggle voice chat on/off
-  const toggleVoiceChat = () => {
-    if (isActive) {
-      stopVoiceChat();
-      stopListening();
-      toast.success('Voice chat stopped');
-    } else {
-      handleStartVoiceChat();
-    }
-  };
+  // If Olivia video call is active, render iframe
+  if (oliviaConversationUrl) {
+    return (
+      <div className="h-full w-full flex flex-col items-center justify-center bg-gray-100 rounded-lg p-4">
+        <h3 className="text-xl font-semibold mb-4">Live Video Call with Olivia</h3>
+        <iframe
+          src={oliviaConversationUrl}
+          title="Olivia Video Call"
+          allow="camera; microphone; fullscreen; speaker"
+          className="w-full max-w-2xl h-[600px] rounded-lg shadow-lg border"
+        />
+        <Button className="mt-6" variant="outline" onClick={() => setOliviaConversationUrl(null)}>
+          End Call
+        </Button>
+      </div>
+    );
+  }
 
-  // Toggle pause/resume voice chat
-  const togglePauseResume = () => {
-    if (isPaused) {
-      resumeVoiceChat();
-      startListening();
-      toast.success('Voice chat resumed');
-    } else {
-      pauseVoiceChat();
-      stopListening();
-      toast('Voice chat paused', { icon: '⏸️' });
+  // Start Tavus Olivia video call
+  const handleStartOliviaCall = async () => {
+    if (!user) {
+      toast.error('You must be logged in to start a video call.');
+      return;
+    }
+    setOliviaLoading(true);
+    setOliviaError(null);
+    try {
+      const displayName = (user as any).name || user.email || user.id || 'Student';
+      const conversationName = `${displayName}'s Session with Olivia`;
+      const callbackUrl = window.location.origin + '/api/tavus-webhook';
+      const apiKey = import.meta.env.VITE_TAVUS_API_KEY;
+      const url = await startOliviaCounselorConversation({
+        userId: user.id,
+        conversationName,
+        callbackUrl,
+        apiKey,
+        customGreeting: `Hi ${displayName}, I’m Olivia, your student counselor. How can I help you today?`
+      });
+      if (!url) throw new Error('No conversation URL returned');
+      setOliviaConversationUrl(url);
+    } catch (err: any) {
+      setOliviaError(err.message || 'Failed to start Olivia video call.');
+      toast.error(err.message || 'Failed to start Olivia video call.');
+    } finally {
+      setOliviaLoading(false);
     }
   };
 
@@ -211,29 +242,9 @@ export const VideoArea: React.FC = () => {
                 </span>
               </div>
 
-              {/* Voice Controls */}
-              <div className="flex items-center space-x-2 border-l border-gray-700 pl-4">
-                <button
-                  onClick={toggleVoiceChat}
-                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                    isActive ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
-                  }`}
-                  aria-label={isActive ? 'Stop voice chat' : 'Start voice chat'}
-                >
-                  {isActive ? 'Stop' : 'Start'}
-                </button>
-                
-                {isActive && (
-                  <button
-                    onClick={togglePauseResume}
-                    className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
-                      isPaused ? 'bg-blue-500 hover:bg-blue-600' : 'bg-yellow-500 hover:bg-yellow-600'
-                    }`}
-                    aria-label={isPaused ? 'Resume voice chat' : 'Pause voice chat'}
-                  >
-                    {isPaused ? 'Resume' : 'Pause'}
-                  </button>
-                )}
+              {/* Unified Voice Controls */}
+              <div className="pl-4">
+                <VoiceControls />
               </div>
             </div>
 
@@ -314,10 +325,9 @@ export const VideoArea: React.FC = () => {
                   <div className="relative z-10 flex flex-col items-center justify-center">
                     {showStartPrompt && !isActive ? (
                       <div className="bg-white/90 p-6 rounded-lg shadow-lg text-center max-w-md">
-                        <h3 className="text-xl font-semibold mb-3">Start Voice Conversation</h3>
+                        <h3 className="text-xl font-semibold mb-3">Start a Session</h3>
                         <p className="text-gray-600 mb-4">
-                          Click the button below to start a voice conversation with your AI tutor. 
-                          You'll be able to speak and hear responses in real-time.
+                          Choose how you want to talk to your AI study counselor.
                         </p>
                         <div className="flex flex-col space-y-3">
                           <Button
@@ -329,13 +339,29 @@ export const VideoArea: React.FC = () => {
                           >
                             Start Voice Chat
                           </Button>
-                          
+
+                          <Button
+                            variant="outline"
+                            onClick={handleStartOliviaCall}
+                            leftIcon={<Play className="h-5 w-5" />}
+                            className="w-full"
+                            isLoading={oliviaLoading}
+                            disabled={oliviaLoading}
+                          >
+                            {oliviaLoading ? 'Starting Olivia Video Call...' : 'Start Video Call with Olivia'}
+                          </Button>
+
+                          {oliviaError && (
+                            <div className="text-red-600 text-sm mt-2">
+                              {oliviaError}
+                            </div>
+                          )}
+
                           {!browserSupportsSpeechRecognition && (
                             <div className="text-red-600 text-sm mt-2">
                               Your browser doesn't support voice features. Please try Chrome, Edge, or Safari.
                             </div>
                           )}
-                          
                           <Button
                             variant="outline"
                             onClick={handleSwitchToTextChat}

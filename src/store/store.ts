@@ -75,6 +75,15 @@ export const useStore = create<AppState>((set) => ({
       const newTotalXP = state.socialStats.totalXP + totalXP;
       const newLevel = Math.floor(newTotalXP / 1000) + 1;
       
+      // Prevent duplicate user messages (same text, consecutive, from user)
+      if (
+        sender === 'user' &&
+        state.messages.length > 0 &&
+        state.messages[state.messages.length - 1].sender === 'user' &&
+        state.messages[state.messages.length - 1].text.trim() === text.trim()
+      ) {
+        return { ...state };
+      }
       return {
         messages: [
           ...state.messages,

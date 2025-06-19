@@ -1,4 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+
+// Declare custom window properties for toast debouncing
+declare global {
+  interface Window {
+    __mic_granted_toast_shown?: boolean;
+    __mic_denied_toast_shown?: boolean;
+  }
+}
 import SpeechRecognition, { useSpeechRecognition as useReactSpeechRecognition } from 'react-speech-recognition';
 import { useStore } from '../store/store';
 import toast from 'react-hot-toast';
@@ -107,11 +115,14 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
         permissionStatus.onchange = () => {
           setIsMicrophoneAvailable(permissionStatus.state === 'granted');
           
-          if (permissionStatus.state === 'granted') {
+          // Debounce: Only show granted toast once per session
+          if (permissionStatus.state === 'granted' && !window.__mic_granted_toast_shown) {
             toast.success('Microphone access granted!');
-          } else if (permissionStatus.state === 'denied') {
+            window.__mic_granted_toast_shown = true;
+          } else if (permissionStatus.state === 'denied' && !window.__mic_denied_toast_shown) {
             toast.error('Microphone access denied.');
             setVoiceMode('muted');
+            window.__mic_denied_toast_shown = true;
           }
         };
         

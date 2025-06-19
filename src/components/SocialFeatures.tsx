@@ -1,28 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/store';
-import { Flame, Share2, Award, Star } from 'lucide-react';
+import { Share2, Award, Star } from 'lucide-react';
 import { TwitterShareButton, LinkedinShareButton } from 'react-share';
 import toast from 'react-hot-toast';
-import Confetti from 'react-confetti';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Achievement, Challenge, Subject } from '../types';
 
-export const SocialFeatures: React.FC = () => {
+const SocialFeatures: React.FC = () => {
   const { socialStats, currentSubject, updateSocialStats } = useStore();
   const { user } = useAuth();
-  const [showConfetti, setShowConfetti] = useState(false);
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSocialData = async () => {
-      if (!user) return;
-      
+      if (!user) {
+        setAchievements([]);
+        setChallenges([]);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+      setLoading(true);
+      let fetchError = null;
       try {
-        setLoading(true);
-        
         // Fetch user achievements
         const { data: achievementsData, error: achievementsError } = await supabase
           .from('conversations')
@@ -30,39 +34,37 @@ export const SocialFeatures: React.FC = () => {
           .eq('user_id', user.id)
           .order('timestamp', { ascending: false })
           .limit(20);
-        
         if (achievementsError) throw achievementsError;
-        
         // Generate achievements based on conversation data
         const userAchievements = generateAchievements(achievementsData || []);
         setAchievements(userAchievements);
-        
         // Update store with achievements
         updateSocialStats({
           ...socialStats,
           achievements: userAchievements
         });
-        
         // Generate active challenges
         const activeChallenges = generateChallenges(currentSubject);
         setChallenges(activeChallenges);
-        
         // Update store with challenges
         updateSocialStats({
           ...socialStats,
           activeChallenges
         });
-        
-      } catch (error) {
-        console.error('Error fetching social data:', error);
+      } catch (err: any) {
+        fetchError = err;
+        setError('Unable to load data from the server. You may be offline or experiencing connectivity issues.');
+        console.error('Error fetching social data:', err);
         // Use fallback data if fetch fails
-        setAchievements(socialStats.achievements);
-        setChallenges(socialStats.activeChallenges);
+        setAchievements(socialStats.achievements || []);
+        setChallenges(socialStats.activeChallenges || []);
       } finally {
         setLoading(false);
+        if (fetchError) {
+          toast.error('Could not fetch achievements or challenges. Showing offline data.');
+        }
       }
     };
-    
     fetchSocialData();
   }, [user, currentSubject, updateSocialStats, socialStats]);
 
@@ -231,142 +233,208 @@ export const SocialFeatures: React.FC = () => {
   };
 
   const shareProgress = () => {
-    const shareUrl = window.location.href;
-    const shareTitle = `I'm mastering ${currentSubject} with Brainbud! 🚀 I'm currently Level ${socialStats.level} with ${socialStats.totalXP} XP. Join me and revolutionize your learning journey.`;
-    
-    navigator.clipboard.writeText(shareTitle + '\n' + shareUrl).then(() => {
-      toast.success('Share link copied to clipboard!');
     });
-  };
+    break;
+  case 'English':
+    challenges.push({
+      id: 'grammar-guru',
+      title: 'Grammar Guru',
+      description: 'Master 5 grammar rules',
+      subject: 'English',
+      difficulty: 'High School',
+      xpReward: 90,
+      deadline: tomorrow,
+      isCompleted: false
+    });
+    break;
+  default:
+    challenges.push({
+      id: 'knowledge-seeker',
+      title: 'Knowledge Seeker',
+      description: `Study ${subject} for 30 minutes`,
+      subject: subject,
+      difficulty: 'High School',
+      xpReward: 80,
+      deadline: tomorrow,
+      isCompleted: false
+    });
+}
+  
+// General challenges
+challenges.push({
+  id: 'daily-dedication',
+  title: 'Daily Dedication',
+  description: 'Complete 3 learning sessions today',
+  subject: 'All' as Subject,
+  difficulty: 'Elementary',
+  xpReward: 50,
+  deadline: tomorrow,
+  isCompleted: false
+});
+  
+return challenges;
+};
 
-  const renderStreakBadge = () => (
-    <div className="flex items-center space-x-2 bg-gradient-to-r from-orange-400 to-red-500 text-white px-4 py-2 rounded-full">
-      <Flame className="h-5 w-5" />
-      <span className="font-bold">{socialStats.streak.current} Day Streak!</span>
-    </div>
-  );
+const shareProgress = () => {
+const shareUrl = window.location.href;
+const shareTitle = `I'm mastering ${currentSubject} with Brainbud! 🚀 I'm currently Level ${socialStats.level} with ${socialStats.totalXP} XP. Join me and revolutionize your learning journey.`;
+  
+navigator.clipboard.writeText(shareTitle + '\n' + shareUrl).then(() => {
+  toast.success('Share link copied to clipboard!');
+});
 
-  const renderAchievements = () => (
-    <div className="space-y-3">
-      <h3 className="font-medium text-gray-900">Recent Achievements</h3>
+};
+
+return (
+  <div className="bg-white p-4 rounded-lg shadow-md mb-6">
+    <h2 className="text-xl font-bold mb-4 flex items-center">
+      <Award className="h-5 w-5 mr-2 text-yellow-500" /> Achievements
+    </h2>
+    <div className="mb-6">
       {loading ? (
-        <div className="grid grid-cols-2 gap-2">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="animate-pulse p-2 bg-gray-50 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 bg-gray-200 rounded-full"></div>
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-1"></div>
-                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                </div>
-              </div>
-            </div>
+        <div className="space-y-2 animate-pulse">
+          {[1,2,3].map(i => (
+            <div key={i} className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
           ))}
         </div>
       ) : achievements.length === 0 ? (
-        <p className="text-sm text-gray-500 text-center py-2">
-          Complete learning activities to earn achievements!
-        </p>
+        <div className="text-gray-500 italic">No achievements yet. Start learning to unlock your first badge!</div>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
-          {achievements.slice(0, 4).map((achievement) => (
-            <div 
-              key={achievement.id}
-              className="flex items-center space-x-2 p-2 bg-gray-50 rounded-lg"
-            >
-              <Award className="h-5 w-5 text-primary-500" />
-              <div className="flex-1">
-                <div className="text-sm font-medium">{achievement.title}</div>
-                <div className="text-xs text-gray-500">{achievement.description}</div>
+        <ul className="space-y-3">
+          {achievements.map(ach => (
+            <li key={ach.id} className="flex items-center space-x-3 bg-yellow-50 rounded p-2 border border-yellow-100">
+              <span className="text-2xl">{ach.icon}</span>
+              <div>
+                <div className="font-semibold text-yellow-900">{ach.title}</div>
+                <div className="text-xs text-gray-600">{ach.description}</div>
+                <div className="text-xs text-gray-400">Unlocked: {ach.unlockedAt ? new Date(ach.unlockedAt).toLocaleDateString() : '—'}</div>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
+      )}
+      {/* Error fallback UI if offline or fetch failed */}
+      {!loading && error && (
+        <div className="text-xs text-red-400 mt-2">{error}</div>
       )}
     </div>
-  );
-
-  const renderActiveChallenges = () => (
-    <div className="space-y-3">
-      <h3 className="font-medium text-gray-900">Active Challenges</h3>
+    <h2 className="text-xl font-bold mb-4 flex items-center">
+      <Star className="h-5 w-5 mr-2 text-blue-500" /> Active Challenges
+    </h2>
+    <div className="mb-6">
       {loading ? (
-        <div className="space-y-2">
-          {[1, 2].map((i) => (
-            <div key={i} className="animate-pulse p-3 bg-white border border-gray-200 rounded-lg">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                </div>
-                <div className="w-12 h-4 bg-gray-200 rounded"></div>
-              </div>
-            </div>
+        <div className="space-y-2 animate-pulse">
+          {[1,2].map(i => (
+            <div key={i} className="h-6 bg-gray-200 rounded w-1/2 mb-2"></div>
           ))}
         </div>
       ) : challenges.length === 0 ? (
-        <p className="text-sm text-gray-500 text-center py-2">
-          No active challenges at the moment.
-        </p>
+        <div className="text-gray-500 italic">No active challenges. Check back soon for new ways to earn XP!</div>
       ) : (
-        <div className="space-y-2">
-          {challenges.map((challenge) => (
-            <div 
-              key={challenge.id}
-              className="p-3 bg-white border border-gray-200 rounded-lg"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="font-medium">{challenge.title}</h4>
-                  <p className="text-sm text-gray-500">{challenge.description}</p>
-                </div>
-                <div className="flex items-center space-x-1 text-accent-500">
-                  <Star className="h-4 w-4" />
-                  <span className="text-sm font-medium">{challenge.xpReward} XP</span>
-                </div>
+        <ul className="space-y-3">
+          {challenges.map(challenge => (
+            <li key={challenge.id} className="flex items-center space-x-3 bg-blue-50 rounded p-2 border border-blue-100">
+              <span className="text-lg">🏅</span>
+              <div>
+                <div className="font-semibold text-blue-900">{challenge.title}</div>
+                <div className="text-xs text-gray-600">{challenge.description}</div>
+                <div className="text-xs text-gray-400">Reward: {challenge.xpReward} XP · Due: {challenge.deadline ? new Date(challenge.deadline).toLocaleDateString() : '—'}</div>
+                {challenge.isCompleted && (
+                  <span className="text-green-600 text-xs font-semibold ml-2">Completed!</span>
+                )}
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
+      )}
+      {/* Error fallback UI if offline or fetch failed */}
+      {!loading && error && (
+        <div className="text-xs text-red-400 mt-2">{error}</div>
       )}
     </div>
-  );
-
-  return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4">
-      {showConfetti && <Confetti recycle={false} numberOfPieces={200} onConfettiComplete={() => setShowConfetti(false)} />}
-      
-      <div className="flex items-center justify-between">
-        {renderStreakBadge()}
+    <div className="flex space-x-2 mt-4">
+      <button
+        onClick={shareProgress}
+        className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 transition flex items-center"
+      >
+        <Share2 className="h-4 w-4 mr-2" /> Share Progress
+      </button>
+      <TwitterShareButton url={window.location.href} title="Check out my learning progress on Brainbud! 🚀">
+        <button className="px-4 py-2 bg-blue-400 text-white rounded hover:bg-blue-500 transition flex items-center">
+          <span className="mr-2">🐦</span> Tweet
+      <div className="mb-6">
+        {loading ? (
+          <div className="space-y-2 animate-pulse">
+            {[1,2,3].map(i => (
+              <div key={i} className="h-6 bg-gray-200 rounded w-3/4 mb-2"></div>
+            ))}
+          </div>
+        ) : achievements.length === 0 ? (
+          <div className="text-gray-500 italic">No achievements yet. Start learning to unlock your first badge!</div>
+        ) : (
+          <ul className="space-y-3">
+            {achievements.map(ach => (
+              <li key={ach.id} className="flex items-center space-x-3 bg-yellow-50 rounded p-2 border border-yellow-100">
+                <span className="text-2xl">{ach.icon}</span>
+                <div>
+                  <div className="font-semibold text-yellow-900">{ach.title}</div>
+                  <div className="text-xs text-gray-600">{ach.description}</div>
+                  <div className="text-xs text-gray-400">Unlocked: {ach.unlockedAt ? new Date(ach.unlockedAt).toLocaleDateString() : '—'}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* Error fallback UI if offline or fetch failed */}
+        {!loading && error && (
+          <div className="text-xs text-red-400 mt-2">{error}</div>
+        )}
+      </div>
+      <h2 className="text-xl font-bold mb-4 flex items-center">
+        <Star className="h-5 w-5 mr-2 text-blue-500" /> Active Challenges
+      </h2>
+      <div className="mb-6">
+        {loading ? (
+          <div className="space-y-2 animate-pulse">
+            {[1,2].map(i => (
+              <div key={i} className="h-6 bg-gray-200 rounded w-1/2 mb-2"></div>
+            ))}
+          </div>
+        ) : challenges.length === 0 ? (
+          <div className="text-gray-500 italic">No active challenges. Check back soon for new ways to earn XP!</div>
+        ) : (
+          <ul className="space-y-3">
+            {challenges.map(challenge => (
+              <li key={challenge.id} className="flex items-center space-x-3 bg-blue-50 rounded p-2 border border-blue-100">
+                <span className="text-lg">🏅</span>
+                <div>
+                  <div className="font-semibold text-blue-900">{challenge.title}</div>
+                  <div className="text-xs text-gray-600">{challenge.description}</div>
+                  <div className="text-xs text-gray-400">Reward: {challenge.xpReward} XP · Due: {challenge.deadline ? new Date(challenge.deadline).toLocaleDateString() : '—'}</div>
+                  {challenge.isCompleted && (
+                    <span className="text-green-600 text-xs font-semibold ml-2">Completed!</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {/* Error fallback UI if offline or fetch failed */}
+        {!loading && error && (
+          <div className="text-xs text-red-400 mt-2">{error}</div>
+        )}
+      </div>
+      <div className="flex space-x-2 mt-4">
         <button
           onClick={shareProgress}
-          className="flex items-center space-x-2 px-4 py-2 bg-primary-50 text-primary-600 rounded-lg hover:bg-primary-100 transition-colors"
+          className="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 transition flex items-center"
         >
-          <Share2 className="h-5 w-5" />
-          <span>Share Progress</span>
+          <Share2 className="h-4 w-4 mr-2" /> Share Progress
         </button>
-      </div>
-
-      <div className="border-t border-gray-200 pt-4">
-
-      </div>
-
-      <div className="border-t border-gray-200 pt-4">
-        {renderAchievements()}
-      </div>
-
-      <div className="border-t border-gray-200 pt-4">
-        {renderActiveChallenges()}
-      </div>
-
-      <div className="flex justify-center space-x-4 pt-2">
-        <TwitterShareButton
-          url={window.location.href}
-          title={`I'm mastering ${currentSubject} with Brainbud! 🚀 I'm Level ${socialStats.level} with ${socialStats.totalXP} XP.`}
-          className="hover:opacity-80"
-        >
-          <div className="flex items-center space-x-2 px-4 py-2 bg-[#1DA1F2] text-white rounded-lg">
-            <span>Share on Twitter</span>
-          </div>
+        <TwitterShareButton url={window.location.href} title="Check out my learning progress on Brainbud! 🚀">
+          <button className="px-4 py-2 bg-blue-400 text-white rounded hover:bg-blue-500 transition flex items-center">
+            <span className="mr-2">🐦</span> Tweet
+          </button>
         </TwitterShareButton>
 
         <LinkedinShareButton
