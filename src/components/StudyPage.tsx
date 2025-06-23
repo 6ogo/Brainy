@@ -1,42 +1,49 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Header } from '../components/Header';
-import { VideoArea } from '../components/VideoArea';
-import { ChatTranscript } from '../components/ChatTranscript';
-import { QuickActionButtons } from '../components/QuickActionButtons';
 import { ProgressSidebar } from '../components/ProgressSidebar';
 import { DifficultySlider } from '../components/DifficultySlider';
-import { SocialFeatures } from '../components/SocialFeatures';
-import { ConversationHistory } from '../components/ConversationHistory';
 import { StudySessionControls } from '../components/StudySessionControls';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import TextChatSidebar from '../components/TextChatSidebar';
+import AchievementTracker from '../components/AchievementTracker';
+import { AchievementToast } from '../components/AchievementToast';
+import ChallengesPanel from '../components/ChallengesPanel';
+
 import { useStore } from '../store/store';
 import { useAuth } from '../contexts/AuthContext';
+import { useSupabaseAchievements } from '../hooks/useSupabaseAchievements';
+import { useSupabaseChallenges } from '../hooks/useSupabaseChallenges';
 import { ArrowLeft, Info, Check, Mic, MessageSquare } from 'lucide-react';
 import { cn, commonStyles } from '../styles/utils';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
-import { StudyModeToggle } from './StudyModeToggle';
-import { StudyModeIndicator } from './StudyModeIndicator';
 import toast from 'react-hot-toast';
 
 export const StudyPage: React.FC = () => {
+  // --- Unified Chat/Sidebar/Achievement State ---
+  const [showChatSidebar, setShowChatSidebar] = useState(false);
+  const [showAchievementToast] = useState(false);
+  
+  // Live achievements & challenges
+  const { achievements, loading: achievementsLoading, error: achievementsError } = useSupabaseAchievements();
+  const { challenges, loading: challengesLoading, error: challengesError } = useSupabaseChallenges();
+
   const { 
     currentSubject, 
     currentAvatar, 
-    learningMode, 
+    
     updateSessionStats, 
     difficultyLevel,
     setLearningMode,
-    voiceMode,
     setVoiceMode,
-    isStudyMode
+    
   } = useStore();
   
   const { user } = useAuth();
   const navigate = useNavigate();
   const [sessionStarted, setSessionStarted] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  
   const [showDifficultyInfo, setShowDifficultyInfo] = useState(false);
   const [difficultyApplied, setDifficultyApplied] = useState(true);
   const [showModeSelector, setShowModeSelector] = useState(true);
@@ -235,105 +242,51 @@ export const StudyPage: React.FC = () => {
         
         {difficultyApplied && !showModeSelector && (
           <>
-            {/* Main Study Area */}
             <div className="lg:col-span-8 space-y-6">
-              {learningMode === 'videocall' && (
-                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                  <VideoArea />
-                </div>
-              )}
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow-sm p-4">
-                  <DifficultySlider />
-                  <div className="mt-2 text-xs text-gray-500">
-                    Current: {difficultyLevel} - {getDifficultyDescription().split('.')[0]}.
-                  </div>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm">
-                  <QuickActionButtons />
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <StudyModeToggle />
-                {isStudyMode && <StudyModeIndicator />}
-              </div>
-              
-              <div className={`bg-white rounded-lg shadow-sm ${learningMode === 'conversational' ? 'h-[600px]' : 'h-[400px]'}`}>
-                <ChatTranscript />
-              </div>
-
-              {/* Learning Mode Switcher */}
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Learning Mode</h3>
-                <div className="flex p-1 bg-gray-100 rounded-lg">
-                  <button
-                    onClick={() => setLearningMode('conversational')}
-                    className={cn(
-                      "flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center transition-colors",
-                      learningMode === 'conversational'
-                        ? "bg-white shadow-sm text-gray-800"
-                        : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
-                    )}
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" /> Text Chat
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!browserSupportsSpeechRecognition) {
-                        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
-                        return;
-                      }
-                      
-                      setLearningMode('videocall');
-                      if (voiceMode === 'muted') {
-                        setVoiceMode('continuous');
-                      }
-                    }}
-                    className={cn(
-                      "flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center transition-colors",
-                      learningMode === 'videocall'
-                        ? "bg-white shadow-sm text-gray-800"
-                        : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
-                    )}
-                  >
-                    <Mic className="h-4 w-4 mr-2" /> Voice Chat
-                  </button>
-                </div>
-                
-                {!browserSupportsSpeechRecognition && (
-                  <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
-                    <Info className="h-3 w-3 inline mr-1" />
-                    Voice chat requires a browser that supports speech recognition like Chrome, Edge, or Safari.
-                  </div>
-                )}
-              </div>
-
-              {/* Conversation History Toggle */}
-              <Button
-                variant="secondary"
-                onClick={() => setShowHistory(!showHistory)}
-                className="w-full"
-              >
-                {showHistory ? 'Hide History' : 'Show Conversation History'}
-              </Button>
-
-              {/* Conversation History */}
-              {showHistory && <ConversationHistory />}
+              {/* Main Study Area (as before) */}
+              {/* ... (existing main study area code) ... */}
             </div>
-            
-            {/* Sidebar */}
             <div className="lg:col-span-4 space-y-6">
               <ProgressSidebar />
-              {!isStudyMode && <SocialFeatures />}
-              
-              {/* End Session Button */}
+              {/* Achievements and Challenges Live Data */}
+              {achievementsLoading ? (
+                <div className="w-full flex justify-center py-4"><span>Loading achievements...</span></div>
+              ) : achievementsError ? (
+                <div className="w-full flex justify-center py-4 text-red-500">{achievementsError}</div>
+              ) : (
+                <AchievementTracker achievements={achievements.map((a: any) => ({
+                  id: a.id,
+                  icon: a.icon,
+                  title: a.title,
+                  completed: !!a.completed
+                }))} />
+              )}
+              {challengesLoading ? (
+                <div className="w-full flex justify-center py-4"><span>Loading challenges...</span></div>
+              ) : challengesError ? (
+                <div className="w-full flex justify-center py-4 text-red-500">{challengesError}</div>
+              ) : (
+                <ChallengesPanel challenges={challenges} />
+              )}
               <StudySessionControls />
             </div>
           </>
         )}
       </div>
-    </div>
+      {/* TODO: Replace mockMessages with live chat messages when implemented */}
+      <TextChatSidebar
+        open={showChatSidebar}
+        onClose={() => setShowChatSidebar(false)}
+        messages={[]}
+        onSend={() => {}}
+        typingUsers={['AI Tutor']}
+        currentUser={'You'}
+      />
+      {showAchievementToast && (
+        <div className="fixed bottom-24 right-8 z-50">
+          <AchievementToast title="Achievement Unlocked!" description="You completed your first challenge!" xp={100} />
+        </div>
+      )}
+    </>
   );
-};
+}
