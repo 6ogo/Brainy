@@ -27,7 +27,6 @@ export const ChatTranscript: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
-  // Removed toggleVoiceMode, now using unified VoiceControls
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
@@ -71,8 +70,6 @@ export const ChatTranscript: React.FC = () => {
     await sendMessage(message, isVoiceMode);
   };
 
-
-
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-sm">
       {/* Header with mode toggle */}
@@ -104,7 +101,6 @@ export const ChatTranscript: React.FC = () => {
         </div>
         
         {/* Voice/Text Mode Toggle */}
-        {/* Unified Voice Controls */}
         <div className="ml-4">
           <VoiceControls />
         </div>
