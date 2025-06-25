@@ -181,7 +181,7 @@ export const VoiceControls: React.FC = () => {
         </div>
       )}
 
-      {/* Permission Request Banner */}
+      {/* Microphone Permission Banner */}
       {showPermissionBanner && isBrowserSupported && (
         <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-start space-x-3">
@@ -196,7 +196,16 @@ export const VoiceControls: React.FC = () => {
               <Button
                 variant="primary"
                 size="sm"
-                onClick={requestPermission}
+                onClick={async () => {
+                  try {
+                    await navigator.mediaDevices.getUserMedia({ audio: true });
+                    toast.success('Microphone access granted!');
+                    window.location.reload(); // Reload to apply permission changes
+                  } catch (error) {
+                    console.error('Error requesting microphone permission:', error);
+                    toast.error('Microphone permission denied. Please check your browser settings.');
+                  }
+                }}
                 className="mt-2"
               >
                 Enable Microphone
@@ -295,17 +304,6 @@ export const VoiceControls: React.FC = () => {
               onTouchStart={() => handlePushToTalk(true)}
               onTouchEnd={() => handlePushToTalk(false)}
               aria-label="Push to talk"
-              tabIndex={0}
-              onKeyDown={e => {
-                if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
-                  handlePushToTalk(true);
-                }
-              }}
-              onKeyUp={e => {
-                if ((e.key === ' ' || e.key === 'Enter')) {
-                  handlePushToTalk(false);
-                }
-              }}
             >
               <Mic className="h-10 w-10" />
             </button>
@@ -334,7 +332,7 @@ export const VoiceControls: React.FC = () => {
         </div>
 
         <div className="space-y-4">
-          {/* Pause/Resume and Recording controls */}
+          {/* Pause/Resume controls */}
           <div className="p-4 bg-gray-50 rounded-lg">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Call Controls</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -342,18 +340,17 @@ export const VoiceControls: React.FC = () => {
                 variant={isPaused ? "primary" : "secondary"}
                 onClick={isPaused ? resumeVoiceChat : pauseVoiceChat}
                 leftIcon={isPaused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
-                disabled={!isMicrophoneAvailable || !isActive || !isBrowserSupported}
+                disabled={!isMicrophoneAvailable || !isBrowserSupported}
               >
                 {isPaused ? 'Resume' : 'Pause'}
               </Button>
               
               <Button
-                variant={isRecording ? "primary" : "secondary"}
-                onClick={() => toggleRecording()}
-                leftIcon={<Download className="h-5 w-5" />}
-                disabled={!isMicrophoneAvailable || !isBrowserSupported}
+                variant="secondary"
+                onClick={handleSwitchToTextChat}
+                leftIcon={<MessageSquare className="h-5 w-5" />}
               >
-                {isRecording ? 'Stop Recording' : 'Record'}
+                Text Chat
               </Button>
             </div>
           </div>
@@ -423,11 +420,6 @@ export const VoiceControls: React.FC = () => {
       </div>
 
       {/* Status indicators */}
-      {/* Visually hidden live region for screen reader announcements */}
-      <div aria-live="polite" aria-atomic="true" className="sr-only" id="voice-status-live-region">
-        {listening ? 'Listening' : isSpeaking ? 'AI Speaking' : isPaused ? 'Conversation Paused' : isMicrophoneAvailable ? 'Microphone Ready' : 'Microphone Access Needed'}
-      </div>
-
       <div className="mt-6 flex items-center justify-between text-sm text-gray-500 border-t border-gray-200 pt-4">
         <div className="flex flex-wrap items-center gap-4">
           {!isBrowserSupported ? (
