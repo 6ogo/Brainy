@@ -13,142 +13,119 @@ interface UserProgress {
 }
 
 interface TavusVideoResponse {
-  url: string;
-  id: string;
+  conversation_url: string;
+  conversation_id: string;
   status: string;
 }
 
-// Optional caching layer for performance optimization
-interface TavusCache {
-  [key: string]: {
-    data: any;
-    timestamp: number;
-  }
+interface TavusConversationRequest {
+  replica_id: string;
+  persona_id?: string;
+  conversation_name: string;
+  conversational_context: string;
+  custom_greeting?: string;
+  callback_url?: string;
+  properties?: {
+    max_call_duration?: number;
+    participant_left_timeout?: number;
+    participant_absent_timeout?: number;
+    enable_recording?: boolean;
+    enable_closed_captions?: boolean;
+    apply_greenscreen?: boolean;
+    language?: string;
+  };
 }
 
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const cache: TavusCache = {};
-
-// Get data from cache if available and not expired
-const getCached = (key: string) => {
-  const cached = cache[key];
-  if (!cached) return null;
-  
-  const isExpired = Date.now() - cached.timestamp > CACHE_DURATION;
-  if (isExpired) {
-    delete cache[key];
-    return null;
-  }
-  
-  return cached.data;
-};
-
-// Store data in cache with timestamp
-const setCached = (key: string, data: any) => {
-  cache[key] = {
-    data,
-    timestamp: Date.now()
-  };
-};
-
 export const TavusService = {
-  async createStudyTipVideo(userId: string, subject: Subject): Promise<TavusVideoResponse> {
+  async createStudyAdvisorSession(userId: string, subject: Subject): Promise<TavusVideoResponse> {
     try {
-      // Fetch the user's actual learning progress from the database
+      if (!API_CONFIG.TAVUS_API_KEY) {
+        throw new Error('Tavus API key is not configured. Please add VITE_TAVUS_API_KEY to your environment variables.');
+      }
+
+      if (!API_CONFIG.TAVUS_REPLICA_ID) {
+        throw new Error('Tavus Replica ID is not configured. Please add VITE_TAVUS_REPLICA_ID to your environment variables.');
+      }
+
+      // Get user's learning progress to create personalized context
       const learningHistory = await this.getUserLearningProgress(userId, subject);
       
-      // Generate personalized script based on learning history
-      const script = this.generateStudyTipScript(subject, learningHistory);
+      // Create conversational context based on user's progress
+      const conversationalContext = this.generateConversationalContext(subject, learningHistory, userId);
       
-      // Call Tavus API to create the video
-      const response = await fetch('https://tavusapi.com/v2/videos', {
+      // Create the conversation request
+      const requestBody: TavusConversationRequest = {
+        replica_id: API_CONFIG.TAVUS_REPLICA_ID,
+        persona_id: 'pa0f81e3a6ca', // Study advisor persona
+        conversation_name: `Study Session - ${subject} - ${new Date().toISOString()}`,
+        conversational_context: conversationalContext,
+        custom_greeting: this.generateCustomGreeting(subject, learningHistory),
+        callback_url: `${window.location.origin}/api/tavus-webhook`,
+        properties: {
+          max_call_duration: 300, // 5 minutes
+          participant_left_timeout: 30,
+          participant_absent_timeout: 60,
+          enable_recording: false,
+          enable_closed_captions: true,
+          apply_greenscreen: false,
+          language: 'english'
+        }
+      };
+
+      console.log('Creating Tavus conversation with:', { 
+        replica_id: requestBody.replica_id, 
+        persona_id: requestBody.persona_id,
+        conversation_name: requestBody.conversation_name 
+      });
+
+      const response = await fetch('https://tavusapi.com/v2/conversations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': API_CONFIG.TAVUS_API_KEY
         },
-        body: JSON.stringify({
-          replica_id: API_CONFIG.TAVUS_REPLICA_ID,
-          script: script
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        
+        if (response.status === 401) {
+          throw new Error('Invalid Tavus API key. Please check your VITE_TAVUS_API_KEY environment variable.');
+        } else if (response.status === 402) {
+          throw new Error('Tavus account has insufficient credits. Please check your Tavus account billing.');
+        } else if (response.status === 403) {
+          throw new Error('Tavus API access forbidden. Please check your account permissions.');
+        } else if (response.status === 404) {
+          throw new Error('Tavus replica not found. Please check your VITE_TAVUS_REPLICA_ID.');
+        } else if (response.status === 429) {
+          throw new Error('Tavus API rate limit exceeded. Please try again in a few minutes.');
+        } else {
+          throw new Error(`Tavus API error (${response.status}): ${errorData.error || response.statusText}`);
+        }
       }
 
       const data = await response.json();
-      return data as TavusVideoResponse;
+      
+      if (!data.conversation_url) {
+        throw new Error('No conversation URL received from Tavus API');
+      }
+
+      console.log('Tavus conversation created successfully:', data.conversation_id);
+      
+      // Save the conversation details for tracking
+      await this.saveConversationDetails(userId, data.conversation_id, subject);
+
+      return {
+        conversation_url: data.conversation_url,
+        conversation_id: data.conversation_id,
+        status: data.status || 'created'
+      };
+
     } catch (error) {
-      console.error('Error creating Tavus video:', error);
+      console.error('Error creating Tavus study session:', error);
       throw error;
     }
-  },
-
-  generateStudyTipScript(subject: string, learningHistory: UserProgress): string {
-    // Extract relevant data from learning history
-    const completedTopics = learningHistory.completedTopics || [];
-    const strugglingTopics = learningHistory.strugglingTopics || [];
-    const nextTopics = learningHistory.nextTopics || [];
-    const strengths = learningHistory.strengths || [];
-    const studyTime = learningHistory.totalStudyTimeHours || 0;
-    const completionRate = learningHistory.completionRate || 0;
-    const streak = learningHistory.currentStreak || 0;
-
-    let script = `Hi! I've been analyzing your progress in ${subject}. `;
-
-    // Personalized greeting based on study time and streak
-    if (streak > 5) {
-      script += `First, great job on maintaining a ${streak}-day learning streak! That's impressive consistency. `;
-    }
-
-    if (studyTime > 10) {
-      script += `You've already invested ${studyTime} hours in your learning journey, which shows real dedication. `;
-    }
-
-    // Highlight accomplishments
-    if (completedTopics.length > 0) {
-      script += `You've shown mastery in ${completedTopics.join(', ')}. `;
-      
-      if (strengths.length > 0) {
-        script += `Your particular strengths are in ${strengths.join(', ')}. `;
-      }
-    }
-
-    // Provide targeted advice on struggling areas
-    if (strugglingTopics.length > 0) {
-      script += `I've noticed you might benefit from reviewing ${strugglingTopics.join(', ')}. `;
-      
-      // Add specific advice for the first struggling topic
-      if (strugglingTopics[0]) {
-        script += `For ${strugglingTopics[0]}, try breaking it down into smaller parts and practice with simpler examples first. `;
-      }
-    }
-
-    // Recommend next steps with rationale
-    if (nextTopics.length > 0) {
-      script += `Based on your learning pattern, I recommend focusing on ${nextTopics[0]} next, as it builds on concepts you've already mastered and will help you progress further. `;
-      
-      if (nextTopics.length > 1) {
-        script += `After that, ${nextTopics[1]} would be a natural progression. `;
-      }
-    }
-
-    // Completion rate feedback
-    if (completionRate > 0) {
-      if (completionRate > 80) {
-        script += `Your completion rate of ${completionRate}% is excellent! Keep up the great work. `;
-      } else if (completionRate > 50) {
-        script += `You're making good progress with a ${completionRate}% completion rate. Let's aim to build on that. `;
-      } else {
-        script += `I see your completion rate is at ${completionRate}%. Let's work on strategies to help you complete more of your learning goals. `;
-      }
-    }
-
-    // Encouraging closing
-    script += "Remember, consistent practice is key to mastery. I'm here to support your learning journey every step of the way!";
-
-    return script;
   },
 
   async checkEligibilityForTavus(userId: string): Promise<boolean> {
@@ -157,10 +134,12 @@ export const TavusService = {
         .from('conversations')
         .select('id')
         .eq('user_id', userId)
-        .order('timestamp', { ascending: false })
-        .limit(3);
+        .order('timestamp', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error checking Tavus eligibility:', error);
+        return false;
+      }
 
       // User needs at least 3 conversations to access Tavus videos
       return conversations && conversations.length >= 3;
@@ -170,98 +149,263 @@ export const TavusService = {
     }
   },
 
-  async getUserLearningProgress(userId: string, subject: Subject): Promise<UserProgress> {
-    // Try to get cached data first
-    const cacheKey = `progress_${userId}_${subject}`;
-    const cachedData = getCached(cacheKey);
-    if (cachedData) {
-      return cachedData as UserProgress;
-    }
+  async getCompletedSessionCount(userId: string): Promise<number> {
     try {
-      // Get completed topics
-      const { data: completedData, error: completedError } = await supabase
-        .from('completed_topics')
-        .select('topic_name, proficiency_score, completed_at')
-        .eq('user_id', userId)
-        .eq('subject', subject)
-        .order('completed_at', { ascending: false });
+      const { data: conversations, error } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('user_id', userId);
 
-      if (completedError) throw completedError;
-      
-      // Get topics in progress with low scores (struggling)
-      const { data: strugglingData, error: strugglingError } = await supabase
-        .from('topic_progress')
-        .select('topic_name, proficiency_score, last_attempt_at')
+      if (error) {
+        console.error('Error getting session count:', error);
+        return 0;
+      }
+
+      return conversations?.length || 0;
+    } catch (error) {
+      console.error('Error getting session count:', error);
+      return 0;
+    }
+  },
+
+  async getUserLearningProgress(userId: string, subject: Subject): Promise<UserProgress> {
+    try {
+      // Get user's conversations to analyze progress
+      const { data: conversations, error } = await supabase
+        .from('conversations')
+        .select('user_message, ai_response, timestamp, duration')
         .eq('user_id', userId)
-        .eq('subject', subject)
-        .lt('proficiency_score', 60) // Topics with less than 60% proficiency
-        .order('last_attempt_at', { ascending: false });
+        .order('timestamp', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+
+      if (!conversations || conversations.length === 0) {
+        return this.getDefaultProgress();
+      }
+
+      // Analyze conversations to determine progress
+      const subjectConversations = conversations.filter(conv => 
+        conv.user_message.toLowerCase().includes(subject.toLowerCase()) ||
+        conv.ai_response.toLowerCase().includes(subject.toLowerCase())
+      );
+
+      // Extract topics from conversations
+      const topics = this.extractTopicsFromConversations(subjectConversations, subject);
       
-      if (strugglingError) throw strugglingError;
-      
-      // Get recommended next topics based on curriculum
-      const { data: curriculumData, error: curriculumError } = await supabase
-        .from('subject_curriculum')
-        .select('topic_name, topic_order')
-        .eq('subject', subject)
-        .order('topic_order', { ascending: true });
-      
-      if (curriculumError) throw curriculumError;
-      
-      // Get user's strengths (topics with highest proficiency)
-      const { data: strengthsData, error: strengthsError } = await supabase
-        .from('completed_topics')
-        .select('topic_name, proficiency_score')
-        .eq('user_id', userId)
-        .eq('subject', subject)
-        .gte('proficiency_score', 90) // Topics with 90% or higher proficiency
-        .order('proficiency_score', { ascending: false })
-        .limit(3);
-      
-      if (strengthsError) throw strengthsError;
-      
-      // Get user stats
-      const { data: userStats, error: statsError } = await supabase
-        .from('user_stats')
-        .select('total_study_time_hours, completion_rate, current_streak')
-        .eq('user_id', userId)
-        .single();
-      
-      if (statsError && statsError.code !== 'PGRST116') throw statsError;
-      
-      // Determine next topics (topics in curriculum not yet completed)
-      const completedTopicNames = completedData?.map(t => t.topic_name) || [];
-      const nextTopics = curriculumData
-        ?.filter(t => !completedTopicNames.includes(t.topic_name))
-        ?.map(t => t.topic_name) || [];
-      
-      const userProgress = {
-        completedTopics: completedData?.map(t => t.topic_name) || [],
-        strugglingTopics: strugglingData?.map(t => t.topic_name) || [],
-        nextTopics: nextTopics.slice(0, 3), // Get first 3 recommended topics
-        strengths: strengthsData?.map(t => t.topic_name) || [],
-        totalStudyTimeHours: userStats?.total_study_time_hours || 0,
-        completionRate: userStats?.completion_rate || 0,
-        currentStreak: userStats?.current_streak || 0
+      // Calculate study time
+      const totalStudyTimeMinutes = conversations.reduce((sum, conv) => sum + (conv.duration || 60), 0);
+      const totalStudyTimeHours = totalStudyTimeMinutes / 60;
+
+      // Calculate streak
+      const currentStreak = this.calculateStreakFromConversations(conversations);
+
+      // Determine completion rate based on activity
+      const completionRate = Math.min(100, (conversations.length / 20) * 100);
+
+      return {
+        completedTopics: topics.completed,
+        strugglingTopics: topics.struggling,
+        nextTopics: topics.next,
+        strengths: topics.strengths,
+        totalStudyTimeHours,
+        completionRate,
+        currentStreak
       };
-      
-      // Cache the result
-      setCached(cacheKey, userProgress);
-      
-      return userProgress;
+
     } catch (error) {
       console.error('Error fetching user learning progress:', error);
-      // Return fallback data if we can't get actual progress
-      return {
-        completedTopics: [],
-        strugglingTopics: [],
-        nextTopics: [],
-        strengths: [],
-        totalStudyTimeHours: 0,
-        completionRate: 0,
-        currentStreak: 0
-      };
+      return this.getDefaultProgress();
     }
+  },
+
+  extractTopicsFromConversations(conversations: any[], subject: Subject): {
+    completed: string[];
+    struggling: string[];
+    next: string[];
+    strengths: string[];
+  } {
+    const topicsBySubject = {
+      'Math': ['Algebra', 'Calculus', 'Geometry', 'Trigonometry', 'Statistics'],
+      'Science': ['Physics', 'Chemistry', 'Biology', 'Anatomy', 'Astronomy'],
+      'English': ['Grammar', 'Literature', 'Writing', 'Reading Comprehension', 'Poetry'],
+      'History': ['Ancient History', 'World Wars', 'American History', 'European History', 'Modern History'],
+      'Languages': ['Vocabulary', 'Grammar', 'Conversation', 'Reading', 'Writing'],
+      'Test Prep': ['SAT Math', 'SAT English', 'ACT Prep', 'GRE Prep', 'Study Strategies'],
+      'All': [] // Add this if needed
+    };
+
+    const topics = topicsBySubject[subject] || ['Fundamentals', 'Intermediate', 'Advanced'];
+    const mentionedTopics = new Set<string>();
+
+    // Analyze conversations for topic mentions
+    conversations.forEach(conv => {
+      const text = (conv.user_message + ' ' + conv.ai_response).toLowerCase();
+      topics.forEach(topic => {
+        if (text.includes(topic.toLowerCase())) {
+          mentionedTopics.add(topic);
+        }
+      });
+    });
+
+    const mentioned = Array.from(mentionedTopics);
+    const unmentioned = topics.filter(topic => !mentioned.includes(topic));
+
+    return {
+      completed: mentioned.slice(0, 2),
+      struggling: mentioned.slice(2, 3),
+      next: unmentioned.slice(0, 3),
+      strengths: mentioned.slice(0, 1)
+    };
+  },
+
+  calculateStreakFromConversations(conversations: any[]): number {
+    if (!conversations.length) return 0;
+    
+    const dates = conversations.map(conv => {
+      const date = new Date(conv.timestamp);
+      date.setHours(0, 0, 0, 0);
+      return date.toISOString().split('T')[0];
+    });
+
+    const uniqueDates = Array.from(new Set(dates)).sort().reverse();
+    
+    let streak = 0;
+    
+    for (let i = 0; i < uniqueDates.length; i++) {
+      const expectedDate = new Date();
+      expectedDate.setDate(expectedDate.getDate() - i);
+      const expectedDateStr = expectedDate.toISOString().split('T')[0];
+      
+      if (uniqueDates[i] === expectedDateStr) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  },
+
+  generateConversationalContext(subject: Subject, progress: UserProgress, userId: string): string {
+    const context = `You are speaking with a student who is learning ${subject}. 
+
+Student Profile:
+- Current study time: ${progress.totalStudyTimeHours.toFixed(1)} hours
+- Learning streak: ${progress.currentStreak} days
+- Completion rate: ${progress.completionRate}%
+
+Progress Analysis:
+- Completed topics: ${progress.completedTopics.join(', ') || 'Getting started'}
+- Struggling with: ${progress.strugglingTopics.join(', ') || 'None identified yet'}
+- Recommended next: ${progress.nextTopics.join(', ') || 'Continue current pace'}
+- Key strengths: ${progress.strengths.join(', ') || 'Building foundations'}
+
+Please provide personalized study advice, encouragement, and specific recommendations to help this student improve their ${subject} learning. Keep the conversation focused on actionable study tips and motivation.`;
+
+    return context;
+  },
+
+  generateCustomGreeting(subject: Subject, progress: UserProgress): string {
+    if (progress.currentStreak > 5) {
+      return `Hi there! I can see you've been consistently studying ${subject} for ${progress.currentStreak} days straight - that's fantastic dedication! Let's talk about how to make your learning even more effective.`;
+    } else if (progress.totalStudyTimeHours > 5) {
+      return `Hello! I notice you've put in ${progress.totalStudyTimeHours.toFixed(1)} hours studying ${subject}. That shows real commitment. I'm here to help you get even more out of your study time.`;
+    } else {
+      return `Hi! I'm your AI study advisor, and I'm excited to help you excel in ${subject}. Based on your learning patterns, I have some personalized tips that can really boost your progress.`;
+    }
+  },
+
+  getDefaultProgress(): UserProgress {
+    return {
+      completedTopics: [],
+      strugglingTopics: [],
+      nextTopics: ['Getting Started', 'Fundamentals'],
+      strengths: [],
+      totalStudyTimeHours: 0,
+      completionRate: 0,
+      currentStreak: 0
+    };
+  },
+
+  async saveConversationDetails(userId: string, conversationId: string, subject: Subject): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('tavus_conversations')
+        .insert({
+          user_id: userId,
+          conversation_id: conversationId,
+          subject: subject,
+          created_at: new Date().toISOString(),
+          status: 'active'
+        });
+
+      if (error) {
+        console.error('Error saving Tavus conversation details:', error);
+      }
+    } catch (error) {
+      console.error('Error saving conversation details:', error);
+    }
+  },
+
+  async createStudyTipVideo(userId: string, subject: Subject): Promise<any> {
+    // This method creates a pre-recorded video tip rather than a live conversation
+    try {
+      if (!API_CONFIG.TAVUS_API_KEY || !API_CONFIG.TAVUS_REPLICA_ID) {
+        throw new Error('Tavus API configuration missing');
+      }
+
+      const progress = await this.getUserLearningProgress(userId, subject);
+      const script = this.generateStudyTipScript(subject, progress);
+
+      const response = await fetch('https://tavusapi.com/v2/videos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_CONFIG.TAVUS_API_KEY
+        },
+        body: JSON.stringify({
+          replica_id: API_CONFIG.TAVUS_REPLICA_ID,
+          script: script,
+          video_name: `Study Tips for ${subject} - ${new Date().toISOString()}`
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Tavus video API error: ${response.status} - ${errorData.error || response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Error creating Tavus video:', error);
+      throw error;
+    }
+  },
+
+  generateStudyTipScript(subject: Subject, progress: UserProgress): string {
+    let script = `Hi! I'm here to give you some personalized study tips for ${subject}. `;
+
+    if (progress.currentStreak > 0) {
+      script += `First, congratulations on your ${progress.currentStreak}-day study streak! `;
+    }
+
+    if (progress.completedTopics.length > 0) {
+      script += `You've made great progress with ${progress.completedTopics.join(' and ')}. `;
+    }
+
+    if (progress.strugglingTopics.length > 0) {
+      script += `I notice you might need some extra practice with ${progress.strugglingTopics[0]}. Here's my tip: break it down into smaller parts and practice one concept at a time. `;
+    }
+
+    if (progress.nextTopics.length > 0) {
+      script += `Next, I recommend focusing on ${progress.nextTopics[0]} - it builds nicely on what you already know. `;
+    }
+
+    script += `Remember, consistency is key. Even 15 minutes of focused study daily is better than cramming. Keep up the great work!`;
+
+    return script;
   }
 };
+
 export default TavusService;
