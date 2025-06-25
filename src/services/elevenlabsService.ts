@@ -15,9 +15,7 @@ export class ElevenLabsService {
   private static VOICE_IDS = {
     'encouraging-emma': 'EXAVITQu4vr4xnSDxMaL',
     'challenge-charlie': 'VR6AewLTigWG4xSOukaG',
-    'fun-freddy': 'pNInz6obpgDQGcFmaJgB',
-    'professor-patricia': 'ThT5KcBeYPX3keUQqHPh',
-    'buddy-ben': 'yoZ06aMxZJJ28mfd3POQ'
+    'fun-freddy': 'pNInz6obpgDQGcFmaJgB'
   };
 
   /**

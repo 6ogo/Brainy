@@ -10,7 +10,6 @@ interface UserProgress {
   totalStudyTimeHours: number;
   completionRate: number;
   currentStreak: number;
-  learningStyle: string;
 }
 
 interface TavusVideoResponse {
@@ -55,105 +54,34 @@ const setCached = (key: string, data: any) => {
 export const TavusService = {
   async createStudyTipVideo(userId: string, subject: Subject): Promise<TavusVideoResponse> {
     try {
-      // Check cache first
-      const cacheKey = `tavus_video_${userId}_${subject}`;
-      const cachedVideo = getCached(cacheKey);
-      if (cachedVideo) {
-        console.log('Using cached Tavus video');
-        return cachedVideo;
-      }
-
-      // Fetch the user's actual learning progress from analytics
+      // Fetch the user's actual learning progress from the database
       const learningHistory = await this.getUserLearningProgress(userId, subject);
       
       // Generate personalized script based on learning history
       const script = this.generateStudyTipScript(subject, learningHistory);
       
-      // For development/testing, return a mock video if API key is not set
-      if (!API_CONFIG.TAVUS_API_KEY || !API_CONFIG.TAVUS_REPLICA_ID) {
-        console.warn('Using mock Tavus video due to missing API keys');
-        const mockResponse = {
-          url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-          id: 'mock-video-id',
-          status: 'completed'
-        };
-        setCached(cacheKey, mockResponse);
-        return mockResponse;
-      }
-      
-      // Use Supabase Edge Function to proxy the request to Tavus API
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('No active session');
+      // Call Tavus API to create the video
+      const response = await fetch('https://tavusapi.com/v2/videos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': API_CONFIG.TAVUS_API_KEY
+        },
+        body: JSON.stringify({
+          replica_id: API_CONFIG.TAVUS_REPLICA_ID,
+          script: script
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
       }
 
-      try {
-        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/tavus-proxy`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            replica_id: API_CONFIG.TAVUS_REPLICA_ID,
-            script: script
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Tavus API error: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        
-        // Validate the response
-        if (!data.url || typeof data.url !== 'string') {
-          throw new Error('Invalid response from Tavus API: missing or invalid URL');
-        }
-        
-        // Test if the URL is accessible
-        try {
-          const testResponse = await fetch(data.url, { method: 'HEAD' });
-          if (!testResponse.ok) {
-            throw new Error(`Video URL returned status ${testResponse.status}`);
-          }
-        } catch (urlError) {
-          console.error('Error testing video URL:', urlError);
-          throw new Error('Video URL is not accessible');
-        }
-        
-        // Cache the result
-        setCached(cacheKey, data);
-        
-        return data as TavusVideoResponse;
-      } catch (apiError) {
-        console.error('Tavus API error:', apiError);
-        throw apiError;
-      }
+      const data = await response.json();
+      return data as TavusVideoResponse;
     } catch (error) {
       console.error('Error creating Tavus video:', error);
-      
-      // Return a reliable fallback video as fallback
-      const fallbackResponse = {
-        url: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
-        id: 'fallback-video-id',
-        status: 'completed'
-      };
-      
-      // Try to verify the fallback URL is accessible
-      try {
-        const testResponse = await fetch(fallbackResponse.url, { method: 'HEAD' });
-        if (!testResponse.ok) {
-          // If the first fallback fails, try another one
-          fallbackResponse.url = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-        }
-      } catch (fallbackError) {
-        console.error('Error testing fallback video URL:', fallbackError);
-        // Use a different fallback if the first one fails
-        fallbackResponse.url = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-      }
-      
-      return fallbackResponse;
+      throw error;
     }
   },
 
@@ -166,7 +94,6 @@ export const TavusService = {
     const studyTime = learningHistory.totalStudyTimeHours || 0;
     const completionRate = learningHistory.completionRate || 0;
     const streak = learningHistory.currentStreak || 0;
-    const learningStyle = learningHistory.learningStyle || 'visual';
 
     let script = `Hi! I've been analyzing your progress in ${subject}. `;
 
@@ -207,17 +134,6 @@ export const TavusService = {
       }
     }
 
-    // Learning style advice
-    script += `I've noticed you seem to be a ${learningStyle} learner. `;
-    
-    if (learningStyle === 'visual') {
-      script += `Try using diagrams, charts, and color-coding in your notes to enhance your understanding. `;
-    } else if (learningStyle === 'auditory') {
-      script += `Consider recording explanations and listening to them later, or explaining concepts out loud to yourself. `;
-    } else if (learningStyle === 'kinesthetic') {
-      script += `Hands-on practice and physical movement while studying might help you retain information better. `;
-    }
-
     // Completion rate feedback
     if (completionRate > 0) {
       if (completionRate > 80) {
@@ -237,13 +153,6 @@ export const TavusService = {
 
   async checkEligibilityForTavus(userId: string): Promise<boolean> {
     try {
-      // Check cache first
-      const cacheKey = `tavus_eligibility_${userId}`;
-      const cachedEligibility = getCached(cacheKey);
-      if (cachedEligibility !== null) {
-        return cachedEligibility;
-      }
-
       const { data: conversations, error } = await supabase
         .from('conversations')
         .select('id')
@@ -254,36 +163,10 @@ export const TavusService = {
       if (error) throw error;
 
       // User needs at least 3 conversations to access Tavus videos
-      const isEligible = conversations && conversations.length >= 3;
-      
-      // For development purposes, always return true to allow testing
-      const forceEligible = true; // Set to false in production
-      
-      // Cache the result
-      setCached(cacheKey, forceEligible || isEligible);
-      
-      return forceEligible || isEligible;
+      return conversations && conversations.length >= 3;
     } catch (error) {
       console.error('Error checking Tavus eligibility:', error);
-      return true; // Return true for development to allow testing
-    }
-  },
-
-  async getCompletedSessionCount(userId: string): Promise<number> {
-    try {
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('id')
-        .eq('user_id', userId)
-        .order('timestamp', { ascending: false });
-
-      if (error) throw error;
-      
-      // Count unique sessions (this is a simplification - in a real app, you'd count actual sessions)
-      return data ? Math.min(3, data.length) : 0;
-    } catch (error) {
-      console.error('Error getting completed session count:', error);
-      return 0;
+      return false;
     }
   },
 
@@ -294,40 +177,72 @@ export const TavusService = {
     if (cachedData) {
       return cachedData as UserProgress;
     }
-
     try {
-      // Get analytics data
-      const { data: analyticsData } = await supabase
-        .from('conversations')
-        .select('*')
+      // Get completed topics
+      const { data: completedData, error: completedError } = await supabase
+        .from('completed_topics')
+        .select('topic_name, proficiency_score, completed_at')
         .eq('user_id', userId)
-        .order('timestamp', { ascending: false })
-        .limit(100);
+        .eq('subject', subject)
+        .order('completed_at', { ascending: false });
+
+      if (completedError) throw completedError;
       
-      // Extract conversation data to analyze learning patterns
-      const subjectConversations = (analyticsData || []).filter(conv => 
-        conv.user_message.toLowerCase().includes(subject.toLowerCase())
-      );
+      // Get topics in progress with low scores (struggling)
+      const { data: strugglingData, error: strugglingError } = await supabase
+        .from('topic_progress')
+        .select('topic_name, proficiency_score, last_attempt_at')
+        .eq('user_id', userId)
+        .eq('subject', subject)
+        .lt('proficiency_score', 60) // Topics with less than 60% proficiency
+        .order('last_attempt_at', { ascending: false });
       
-      // Analyze conversation content to identify topics, strengths, and struggles
-      const topics = this.extractTopicsFromConversations(subjectConversations);
-      const learningStyle = this.determineLearningStyle(subjectConversations);
+      if (strugglingError) throw strugglingError;
       
-      // Calculate metrics
-      const totalStudyTimeHours = subjectConversations.reduce((sum, conv) => sum + (conv.duration || 0), 0) / 3600;
-      const completionRate = Math.min(85, Math.floor(Math.random() * 30) + 60); // Mock data
-      const currentStreak = subjectConversations.length > 0 ? 
-        Math.min(14, Math.floor(Math.random() * 7) + 1) : 0; // Mock data
+      // Get recommended next topics based on curriculum
+      const { data: curriculumData, error: curriculumError } = await supabase
+        .from('subject_curriculum')
+        .select('topic_name, topic_order')
+        .eq('subject', subject)
+        .order('topic_order', { ascending: true });
+      
+      if (curriculumError) throw curriculumError;
+      
+      // Get user's strengths (topics with highest proficiency)
+      const { data: strengthsData, error: strengthsError } = await supabase
+        .from('completed_topics')
+        .select('topic_name, proficiency_score')
+        .eq('user_id', userId)
+        .eq('subject', subject)
+        .gte('proficiency_score', 90) // Topics with 90% or higher proficiency
+        .order('proficiency_score', { ascending: false })
+        .limit(3);
+      
+      if (strengthsError) throw strengthsError;
+      
+      // Get user stats
+      const { data: userStats, error: statsError } = await supabase
+        .from('user_stats')
+        .select('total_study_time_hours, completion_rate, current_streak')
+        .eq('user_id', userId)
+        .single();
+      
+      if (statsError && statsError.code !== 'PGRST116') throw statsError;
+      
+      // Determine next topics (topics in curriculum not yet completed)
+      const completedTopicNames = completedData?.map(t => t.topic_name) || [];
+      const nextTopics = curriculumData
+        ?.filter(t => !completedTopicNames.includes(t.topic_name))
+        ?.map(t => t.topic_name) || [];
       
       const userProgress = {
-        completedTopics: topics.completed,
-        strugglingTopics: topics.struggling,
-        nextTopics: topics.recommended,
-        strengths: topics.strengths,
-        totalStudyTimeHours,
-        completionRate,
-        currentStreak,
-        learningStyle
+        completedTopics: completedData?.map(t => t.topic_name) || [],
+        strugglingTopics: strugglingData?.map(t => t.topic_name) || [],
+        nextTopics: nextTopics.slice(0, 3), // Get first 3 recommended topics
+        strengths: strengthsData?.map(t => t.topic_name) || [],
+        totalStudyTimeHours: userStats?.total_study_time_hours || 0,
+        completionRate: userStats?.completion_rate || 0,
+        currentStreak: userStats?.current_streak || 0
       };
       
       // Cache the result
@@ -338,74 +253,15 @@ export const TavusService = {
       console.error('Error fetching user learning progress:', error);
       // Return fallback data if we can't get actual progress
       return {
-        completedTopics: ['Basic Concepts', 'Fundamentals'],
-        strugglingTopics: ['Advanced Applications'],
-        nextTopics: ['Intermediate Techniques', 'Practical Examples'],
-        strengths: ['Theoretical Understanding'],
-        totalStudyTimeHours: 5,
-        completionRate: 65,
-        currentStreak: 3,
-        learningStyle: 'visual'
+        completedTopics: [],
+        strugglingTopics: [],
+        nextTopics: [],
+        strengths: [],
+        totalStudyTimeHours: 0,
+        completionRate: 0,
+        currentStreak: 0
       };
     }
-  },
-
-  extractTopicsFromConversations(conversations: any[]): {
-    completed: string[];
-    struggling: string[];
-    recommended: string[];
-    strengths: string[];
-  } {
-    // This would normally use NLP to analyze conversation content
-    // For now, we'll use a simplified approach with mock data
-    
-    const mathTopics = [
-      'Algebra', 'Calculus', 'Geometry', 'Trigonometry', 'Statistics', 
-      'Probability', 'Linear Algebra', 'Differential Equations'
-    ];
-    
-    const scienceTopics = [
-      'Physics', 'Chemistry', 'Biology', 'Astronomy', 'Earth Science',
-      'Mechanics', 'Thermodynamics', 'Organic Chemistry'
-    ];
-    
-    const englishTopics = [
-      'Grammar', 'Composition', 'Literature', 'Creative Writing',
-      'Poetry Analysis', 'Essay Structure', 'Critical Reading'
-    ];
-    
-    const historyTopics = [
-      'Ancient History', 'Medieval History', 'Modern History',
-      'World Wars', 'American History', 'European History', 'Asian History'
-    ];
-    
-    // Select appropriate topic list based on conversation content
-    let topicList = mathTopics;
-    const allConversations = conversations || [];
-    if (allConversations.some(c => c.user_message.toLowerCase().includes('science'))) {
-      topicList = scienceTopics;
-    } else if (allConversations.some(c => c.user_message.toLowerCase().includes('english'))) {
-      topicList = englishTopics;
-    } else if (allConversations.some(c => c.user_message.toLowerCase().includes('history'))) {
-      topicList = historyTopics;
-    }
-    
-    // Randomly select topics for each category
-    const shuffle = (array: string[]) => [...array].sort(() => Math.random() - 0.5);
-    const shuffled = shuffle(topicList);
-    
-    return {
-      completed: shuffled.slice(0, 2),
-      struggling: shuffled.slice(2, 3),
-      recommended: shuffled.slice(3, 5),
-      strengths: shuffled.slice(5, 6)
-    };
-  },
-
-  determineLearningStyle(conversations: any[]): string {
-    // This would normally analyze conversation patterns to determine learning style
-    // For now, we'll randomly select one
-    const styles = ['visual', 'auditory', 'kinesthetic', 'reading/writing'];
-    return styles[Math.floor(Math.random() * styles.length)];
   }
 };
+export default TavusService;

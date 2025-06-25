@@ -1,24 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { Search, Send, Phone, Info } from 'lucide-react';
+import { Search, Send, Phone, Info, Bot, User } from 'lucide-react';
 import { VoiceControls } from './VoiceControls';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
 import { useVoiceChat } from '../hooks/useVoiceChat';
-import { cn, commonStyles } from '../styles/utils';
-import toast from 'react-hot-toast';
+import { cn } from '../styles/utils';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { StudyModeIndicator } from './StudyModeIndicator';
 
-export const ChatTranscript: React.FC = () => {
+interface ChatTranscriptProps {
+  className?: string;
+}
+
+export const ChatTranscript: React.FC<ChatTranscriptProps> = ({ className }) => {
   const { 
     messages, 
     learningMode, 
     isSpeaking, 
-    setLearningMode, 
     difficultyLevel, 
-    voiceMode, 
-    setVoiceMode,
     isStudyMode
   } = useStore();
   
@@ -27,16 +27,11 @@ export const ChatTranscript: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
-  // Removed toggleVoiceMode, now using unified VoiceControls
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
   const {
-    transcript,
-    listening,
-    browserSupportsSpeechRecognition,
-    startListening,
-    stopListening
+    transcript
   } = useSpeechRecognition();
 
   // Auto-scroll to bottom on new messages
@@ -71,10 +66,8 @@ export const ChatTranscript: React.FC = () => {
     await sendMessage(message, isVoiceMode);
   };
 
-
-
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow-sm">
+    <div className={cn("flex flex-col h-full bg-white rounded-lg shadow-sm", className)}>
       {/* Header with mode toggle */}
       <div className="p-3 border-b border-gray-200 flex items-center justify-between">
         <div className="relative flex-1 mr-4">
@@ -83,8 +76,7 @@ export const ChatTranscript: React.FC = () => {
             type="text"
             placeholder="Search conversation..."
             className={cn(
-              commonStyles.input.base,
-              "pl-10 pr-3 py-2 text-sm"
+              "pl-10 pr-3 py-2 text-sm w-full border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
             )}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -103,8 +95,7 @@ export const ChatTranscript: React.FC = () => {
           {difficultyLevel} Level
         </div>
         
-        {/* Voice/Text Mode Toggle */}
-        {/* Unified Voice Controls */}
+        {/* Voice Controls */}
         <div className="ml-4">
           <VoiceControls />
         </div>
@@ -114,6 +105,7 @@ export const ChatTranscript: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {filteredMessages.length === 0 ? (
           <div className="text-center py-10">
+            <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
             <p className="text-gray-500 text-sm">
               {searchTerm ? 'No matching messages found' : 'Start your conversation with your AI tutor'}
             </p>
@@ -138,23 +130,44 @@ export const ChatTranscript: React.FC = () => {
                 message.sender === 'user' ? "justify-end" : "justify-start"
               )}
             >
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-lg px-4 py-2 relative",
-                  message.sender === 'user'
-                    ? "bg-primary-100 text-primary-800"
-                    : "bg-gray-100 text-gray-800"
+              <div className="flex items-start space-x-3 max-w-[80%]">
+                {message.sender === 'ai' && (
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                      <Bot className="h-4 w-4 text-gray-600" />
+                    </div>
+                  </div>
                 )}
-              >
-                <div className="text-sm whitespace-pre-wrap">{message.text}</div>
-                <div className="text-xs text-gray-500 mt-1 flex items-center justify-between">
-                  <span>{format(message.timestamp, 'h:mm a')}</span>
-                  {message.sender === 'ai' && isVoiceMode && (
-                    <span className="ml-2 text-green-600">
-                      🔊
-                    </span>
+                
+                <div
+                  className={cn(
+                    "rounded-lg px-4 py-2 relative",
+                    message.sender === 'user'
+                      ? "bg-primary-600 text-white rounded-br-sm"
+                      : "bg-gray-100 text-gray-800 rounded-bl-sm"
                   )}
+                >
+                  <div className="text-sm whitespace-pre-wrap">{message.text}</div>
+                  <div className={cn(
+                    "text-xs mt-1 flex items-center justify-between",
+                    message.sender === 'user' ? "text-primary-100" : "text-gray-500"
+                  )}>
+                    <span>{format(message.timestamp, 'h:mm a')}</span>
+                    {message.sender === 'ai' && isVoiceMode && (
+                      <span className="ml-2 text-green-600">
+                        🔊
+                      </span>
+                    )}
+                  </div>
                 </div>
+                
+                {message.sender === 'user' && (
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                      <User className="h-4 w-4 text-primary-600" />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))
@@ -191,57 +204,68 @@ export const ChatTranscript: React.FC = () => {
           </div>
         )}
         
+        {/* Processing indicator */}
+        {isProcessing && (
+          <div className="flex justify-start">
+            <div className="bg-gray-100 rounded-lg px-4 py-2">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div ref={chatEndRef} />
       </div>
 
-      {/* Input area */}
-      <form onSubmit={handleSubmit} className="p-3 border-t border-gray-200">
-        <div className="flex items-end space-x-2">
-          <textarea
-            ref={inputRef}
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            placeholder={isVoiceMode ? "Type your message (voice response enabled)..." : "Type your message..."}
-            className={cn(
-              commonStyles.input.base,
-              "resize-none min-h-[40px] max-h-[120px] py-2"
-            )}
-            rows={1}
-            disabled={isProcessing}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSubmit(e);
-              }
-            }}
-          />
-          <button
-            type="submit"
-            className={cn(
-              commonStyles.button.primary,
-              "px-3 py-2 flex items-center space-x-1"
-            )}
-            disabled={!inputMessage.trim() || isProcessing}
-          >
-            <Send className="h-5 w-5" />
-            {isVoiceMode && <span className="text-xs">🔊</span>}
-          </button>
-        </div>
-        
-        {isVoiceMode && (
-          <p className="text-xs text-green-600 mt-1 flex items-center">
-            <Phone className="h-3 w-3 mr-1" />
-            Voice responses enabled - you'll hear the AI tutor speak
-          </p>
-        )}
-        
-        {isStudyMode && (
-          <p className="text-xs text-amber-600 mt-1 flex items-center">
-            <Info className="h-3 w-3 mr-1" />
-            Study Mode - responses will be concise and focused on key information
-          </p>
-        )}
-      </form>
+      {/* Input area - Only show in text mode */}
+      {learningMode === 'conversational' && (
+        <form onSubmit={handleSubmit} className="p-3 border-t border-gray-200">
+          <div className="flex items-end space-x-2">
+            <textarea
+              ref={inputRef}
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              placeholder={isVoiceMode ? "Type your message (voice response enabled)..." : "Type your message..."}
+              className="flex-1 resize-none min-h-[40px] max-h-[120px] py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              rows={1}
+              disabled={isProcessing}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmit(e);
+                }
+              }}
+            />
+            <button
+              type="submit"
+              className={cn(
+                "px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1 transition-colors"
+              )}
+              disabled={!inputMessage.trim() || isProcessing}
+            >
+              <Send className="h-4 w-4" />
+              {isVoiceMode && <span className="text-xs">🔊</span>}
+            </button>
+          </div>
+          
+          {isVoiceMode && (
+            <p className="text-xs text-green-600 mt-1 flex items-center">
+              <Phone className="h-3 w-3 mr-1" />
+              Voice responses enabled - you'll hear the AI tutor speak
+            </p>
+          )}
+          
+          {isStudyMode && (
+            <p className="text-xs text-amber-600 mt-1 flex items-center">
+              <Info className="h-3 w-3 mr-1" />
+              Study Mode - responses will be concise and focused on key information
+            </p>
+          )}
+        </form>
+      )}
     </div>
   );
 };

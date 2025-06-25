@@ -3,20 +3,17 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Header } from '../components/Header';
 import { VideoArea } from '../components/VideoArea';
 import { ChatTranscript } from '../components/ChatTranscript';
-import { QuickActionButtons } from '../components/QuickActionButtons';
 import { ProgressSidebar } from '../components/ProgressSidebar';
-import { DifficultySlider } from '../components/DifficultySlider';
-import SocialFeatures from '../components/SocialFeatures';
-import { ConversationHistory } from '../components/ConversationHistory';
-import { StudySessionControls } from '../components/StudySessionControls';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { useStore } from '../store/store';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, Info, Check, Mic, MessageSquare } from 'lucide-react';
-import { cn, commonStyles } from '../styles/utils';
-import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import { ArrowLeft, MessageSquare, Mic, MicOff, Settings2, X } from 'lucide-react';
+import { cn } from '../styles/utils';
 import toast from 'react-hot-toast';
+import { VoiceConversationService } from '../services/voiceConversationService';
+import { GroqService } from '../services/groqService';
+import { supabase } from '../lib/supabase';
 
 export const StudyPage: React.FC = () => {
   const { 
@@ -26,29 +23,31 @@ export const StudyPage: React.FC = () => {
     updateSessionStats, 
     difficultyLevel,
     setLearningMode,
-    voiceMode,
-    setVoiceMode
+    addMessage
   } = useStore();
   
   const { user } = useAuth();
   const navigate = useNavigate();
   const [sessionStarted, setSessionStarted] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [showDifficultyInfo, setShowDifficultyInfo] = useState(false);
-  const [difficultyApplied, setDifficultyApplied] = useState(true);
-  const [showModeSelector, setShowModeSelector] = useState(true);
-  const userId = user?.id;
-  const pageRef = useRef<HTMLDivElement>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [currentTranscript, setCurrentTranscript] = useState('');
+  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [isProcessingText, setIsProcessingText] = useState(false);
   
-  const {
-    browserSupportsSpeechRecognition,
-    isMicrophoneAvailable
-  } = useSpeechRecognition();
+  const voiceServiceRef = useRef<VoiceConversationService | null>(null);
+  const userId = user?.id;
 
   useEffect(() => {
     if (!currentSubject || !currentAvatar) {
       navigate('/subjects');
-    } else if (!sessionStarted) {
+      return;
+    }
+    
+    if (!sessionStarted) {
       updateSessionStats({
         startTime: new Date(),
         duration: 0,
@@ -57,46 +56,185 @@ export const StudyPage: React.FC = () => {
         xpEarned: 0
       });
       setSessionStarted(true);
+      loadConversationHistory();
     }
     
-    // Ensure we're at the top of the page when component mounts
     window.scrollTo(0, 0);
   }, [currentSubject, currentAvatar, navigate, sessionStarted, updateSessionStats]);
 
-  const getDifficultyDescription = () => {
-    switch (difficultyLevel) {
-      case 'Elementary':
-        return `Elementary level focuses on fundamental concepts in ${currentSubject} with simple explanations and basic examples. Perfect for beginners or younger students.`;
-      case 'High School':
-        return `High School level covers standard ${currentSubject} curriculum with moderate complexity and practical applications. Suitable for teenage students or adults refreshing their knowledge.`;
-      case 'College':
-        return `College level explores advanced ${currentSubject} concepts with deeper analysis and complex problem-solving. Appropriate for undergraduate students or professionals.`;
-      case 'Advanced':
-        return `Advanced level delves into specialized ${currentSubject} topics with sophisticated theoretical frameworks and expert-level applications. Ideal for graduate students or subject matter experts.`;
-      default:
-        return `Select a difficulty level appropriate for your knowledge of ${currentSubject}.`;
+  // Initialize voice service when switching to voice mode
+  useEffect(() => {
+    if (learningMode === 'videocall' && userId && !voiceServiceRef.current) {
+      initializeVoiceService();
+    } else if (learningMode === 'conversational' && voiceServiceRef.current) {
+      cleanupVoiceService();
+    }
+    
+    return () => {
+      cleanupVoiceService();
+    };
+  }, [learningMode, userId]);
+
+  const loadConversationHistory = async () => {
+    if (!userId) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(10);
+      
+      if (error) throw error;
+      setConversationHistory(data || []);
+    } catch (error) {
+      console.error('Error loading conversation history:', error);
     }
   };
 
-  const handleApplyDifficulty = () => {
-    setDifficultyApplied(true);
-    setShowDifficultyInfo(false);
+  const initializeVoiceService = () => {
+    if (!userId) return;
+    
+    try {
+      voiceServiceRef.current = new VoiceConversationService({
+        userId,
+        subject: currentSubject,
+        avatarPersonality: currentAvatar,
+        difficultyLevel,
+        onResponse: (text) => {
+          // Add AI response to store
+          addMessage(text, 'ai');
+          
+          // Add to local history
+          setConversationHistory(prev => [{
+            id: Date.now(),
+            user_message: currentTranscript,
+            ai_response: text,
+            timestamp: new Date().toISOString()
+          }, ...prev]);
+        },
+        onAudioStart: () => {
+          setIsProcessingVoice(false);
+        },
+        onAudioEnd: () => {
+          // Ready for next input
+        },
+        onError: (error) => {
+          console.error('Voice conversation error:', error);
+          toast.error(error);
+          setIsProcessingVoice(false);
+        },
+        onTranscript: (text, isFinal) => {
+          setCurrentTranscript(text);
+          if (isFinal && text.trim()) {
+            setIsProcessingVoice(true);
+            // Add user message to store
+            addMessage(text, 'user');
+          }
+        }
+      });
+      
+      toast.success('Voice mode initialized! Click the microphone to start talking.');
+    } catch (error) {
+      console.error('Failed to initialize voice service:', error);
+      toast.error('Failed to initialize voice mode. Please check your microphone permissions.');
+    }
   };
 
-  const handleSelectLearningMode = (mode: 'conversational' | 'videocall') => {
-    setLearningMode(mode);
+  const cleanupVoiceService = () => {
+    if (voiceServiceRef.current) {
+      voiceServiceRef.current.stopListening();
+      voiceServiceRef.current = null;
+    }
+    setIsVoiceActive(false);
+    setCurrentTranscript('');
+    setIsProcessingVoice(false);
+  };
+
+  const toggleVoiceMode = async () => {
+    if (!voiceServiceRef.current) return;
     
-    // If selecting video call mode, also set voice mode to continuous
-    if (mode === 'videocall') {
-      if (!browserSupportsSpeechRecognition) {
-        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
-      } else {
-        setVoiceMode('continuous');
-        toast.success('Voice chat mode activated! You can now speak with your AI tutor');
+    if (isVoiceActive) {
+      voiceServiceRef.current.pauseConversation();
+      setIsVoiceActive(false);
+      toast.success('Voice mode paused');
+    } else {
+      try {
+        await voiceServiceRef.current.startListening();
+        setIsVoiceActive(true);
+        toast.success('Voice mode active - speak now!');
+      } catch (error) {
+        console.error('Failed to start voice mode:', error);
+        toast.error('Failed to start voice mode. Please check your microphone.');
       }
     }
+  };
+
+  const handleTextSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!textInput.trim() || isProcessingText || !userId) return;
     
-    setShowModeSelector(false);
+    setIsProcessingText(true);
+    const userMessage = textInput.trim();
+    setTextInput('');
+    
+    try {
+      // Add user message to store immediately
+      addMessage(userMessage, 'user');
+      
+      // Get AI response
+      const aiResponse = await GroqService.generateResponse(
+        userMessage,
+        currentSubject,
+        currentAvatar,
+        difficultyLevel,
+        userId
+      );
+      
+      // Add AI response to store
+      addMessage(aiResponse, 'ai');
+      
+      // Save to database
+      await saveConversation(userMessage, aiResponse);
+      
+    } catch (error) {
+      console.error('Error processing text message:', error);
+      toast.error('Failed to get response. Please try again.');
+    } finally {
+      setIsProcessingText(false);
+    }
+  };
+
+  const saveConversation = async (userMessage: string, aiResponse: string) => {
+    if (!userId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: userId,
+          user_message: userMessage,
+          ai_response: aiResponse,
+          duration: 0,
+          timestamp: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+    }
+  };
+
+  const switchLearningMode = (mode: 'conversational' | 'videocall') => {
+    setLearningMode(mode);
+    toast.success(`Switched to ${mode === 'conversational' ? 'text chat' : 'voice chat'} mode`);
+  };
+
+  const endSession = () => {
+    cleanupVoiceService();
+    toast.success('Study session ended successfully!');
+    navigate('/analytics');
   };
 
   if (!currentSubject || !currentAvatar || !userId) {
@@ -104,213 +242,211 @@ export const StudyPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col" ref={pageRef}>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <Header />
       
-      <div className="flex-1 container mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Back to Subjects Button */}
-        <div className="lg:col-span-12">
-          <Link 
-            to="/subjects" 
-            className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Subjects
-          </Link>
+      <div className="flex-1 container mx-auto px-4 py-6">
+        {/* Simple Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            <Link 
+              to="/subjects" 
+              className="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{currentSubject}</h1>
+              <p className="text-gray-600">{difficultyLevel} Level</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-3">
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<Settings2 className="h-4 w-4" />}
+              onClick={() => setShowSettings(!showSettings)}
+            >
+              Settings
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={endSession}
+            >
+              End Session
+            </Button>
+          </div>
         </div>
-        
-        {/* Learning Mode Selection */}
-        {showModeSelector && (
-          <div className="lg:col-span-12">
-            <Card className="p-6">
-              <h2 className={cn(commonStyles.heading.h3, "mb-4")}>
-                Choose Your Learning Mode for {currentSubject}
-              </h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <Card 
-                  variant="hover" 
-                  className="p-6 cursor-pointer border-2 hover:border-primary-300"
-                  onClick={() => handleSelectLearningMode('conversational')}
-                >
-                  <div className="flex flex-col items-center text-center">
-                    <div className="p-4 bg-blue-100 rounded-full mb-4">
-                      <MessageSquare className="h-8 w-8 text-blue-600" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-2">Text Chat</h3>
-                    <p className="text-gray-600">
-                      Interact with your AI tutor through text messages. Great for detailed explanations and step-by-step learning.
-                    </p>
-                  </div>
-                </Card>
-                
-                <Card 
-                  variant="hover" 
-                  className={cn(
-                    "p-6 cursor-pointer border-2 hover:border-primary-300",
-                    !browserSupportsSpeechRecognition && "opacity-60"
-                  )}
-                  onClick={() => handleSelectLearningMode('videocall')}
-                >
-                  <div className="flex flex-col items-center text-center">
-                    <div className="p-4 bg-green-100 rounded-full mb-4">
-                      <Mic className="h-8 w-8 text-green-600" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-2">Voice Chat</h3>
-                    <p className="text-gray-600">
-                      Have a natural conversation with your AI tutor using your voice. Perfect for immersive learning.
-                    </p>
-                    
-                    {!browserSupportsSpeechRecognition && (
-                      <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                        Your browser doesn't support voice features. Please try Chrome, Edge, or Safari.
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              </div>
-              
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                <Info className="h-4 w-4 inline mr-2" />
-                You can switch between modes at any time during your study session.
-              </div>
-            </Card>
-          </div>
-        )}
-        
-        {/* Difficulty Level Selection */}
-        {!difficultyApplied && (
-          <div className="lg:col-span-12">
-            <Card className="p-6">
-              <h2 className={cn(commonStyles.heading.h3, "mb-4")}>
-                Set Difficulty Level for {currentSubject}
-              </h2>
-              
-              <div className="mb-6">
-                <DifficultySlider />
-                
+
+        {/* Mode Selection - Simplified */}
+        <div className="mb-6">
+          <Card className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex bg-gray-100 rounded-lg p-1">
                 <button
-                  onClick={() => setShowDifficultyInfo(!showDifficultyInfo)}
-                  className="mt-2 text-sm text-primary-600 flex items-center"
+                  onClick={() => switchLearningMode('conversational')}
+                  className={cn(
+                    "flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                    learningMode === 'conversational'
+                      ? "bg-white text-primary-600 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  )}
                 >
-                  <Info className="h-4 w-4 mr-1" />
-                  What does this mean?
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Text Chat
                 </button>
-                
-                {showDifficultyInfo && (
-                  <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-                    {getDifficultyDescription()}
-                  </div>
-                )}
+                <button
+                  onClick={() => switchLearningMode('videocall')}
+                  className={cn(
+                    "flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors",
+                    learningMode === 'videocall'
+                      ? "bg-white text-primary-600 shadow-sm"
+                      : "text-gray-600 hover:text-gray-900"
+                  )}
+                >
+                  <Mic className="h-4 w-4 mr-2" />
+                  Voice Chat
+                </button>
               </div>
               
-              <Button
-                variant="primary"
-                onClick={handleApplyDifficulty}
-                rightIcon={<Check className="h-4 w-4" />}
-              >
-                Apply Difficulty & Start Learning
-              </Button>
-            </Card>
-          </div>
-        )}
-        
-        {difficultyApplied && !showModeSelector && (
-          <>
-            {/* Main Study Area */}
-            <div className="lg:col-span-8 space-y-6">
+              {/* Voice Control - Only show in voice mode */}
               {learningMode === 'videocall' && (
-                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                  <VideoArea />
+                <div className="flex items-center space-x-3">
+                  {currentTranscript && (
+                    <div className="text-sm text-gray-600 max-w-xs truncate">
+                      "{currentTranscript}"
+                    </div>
+                  )}
+                  {isProcessingVoice && (
+                    <div className="text-sm text-amber-600">Processing...</div>
+                  )}
+                  <Button
+                    variant={isVoiceActive ? "secondary" : "primary"}
+                    size="sm"
+                    leftIcon={isVoiceActive ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    onClick={toggleVoiceMode}
+                    disabled={!voiceServiceRef.current}
+                  >
+                    {isVoiceActive ? 'Stop Listening' : 'Start Listening'}
+                  </Button>
                 </div>
               )}
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white rounded-lg shadow-sm p-4">
-                  <DifficultySlider />
-                  <div className="mt-2 text-xs text-gray-500">
-                    Current: {difficultyLevel} - {getDifficultyDescription().split('.')[0]}.
-                  </div>
-                </div>
-                <div className="bg-white rounded-lg shadow-sm">
-                  <QuickActionButtons />
+            </div>
+          </Card>
+        </div>
+
+        {/* Settings Panel - Simplified */}
+        {showSettings && (
+          <div className="mb-6">
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">
+                  Difficulty: {difficultyLevel}
+                </span>
+                <div className="flex items-center space-x-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowHistory(!showHistory)}
+                  >
+                    {showHistory ? 'Hide' : 'Show'} History
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    leftIcon={<X className="h-4 w-4" />}
+                    onClick={() => setShowSettings(false)}
+                  >
+                    Close
+                  </Button>
                 </div>
               </div>
-              
-              <div className={`bg-white rounded-lg shadow-sm ${learningMode === 'conversational' ? 'h-[600px]' : 'h-[400px]'}`}>
+            </Card>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Main Content Area */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Video Area (only for voice mode) */}
+            {learningMode === 'videocall' && (
+              <Card className="overflow-hidden">
+                <VideoArea />
+              </Card>
+            )}
+            
+            {/* Chat Area */}
+            <Card className={`${learningMode === 'conversational' ? 'h-[500px]' : 'h-[300px]'} flex flex-col`}>
+              <div className="flex-1 overflow-hidden">
                 <ChatTranscript />
               </div>
-
-              {/* Learning Mode Switcher */}
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Learning Mode</h3>
-                <div className="flex p-1 bg-gray-100 rounded-lg">
-                  <button
-                    onClick={() => setLearningMode('conversational')}
-                    className={cn(
-                      "flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center transition-colors",
-                      learningMode === 'conversational'
-                        ? "bg-white shadow-sm text-gray-800"
-                        : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
-                    )}
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" /> Text Chat
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!browserSupportsSpeechRecognition) {
-                        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
-                        return;
-                      }
-                      
-                      setLearningMode('videocall');
-                      if (voiceMode === 'muted') {
-                        setVoiceMode('continuous');
-                      }
-                    }}
-                    className={cn(
-                      "flex-1 px-3 py-2 rounded-md text-sm flex items-center justify-center transition-colors",
-                      learningMode === 'videocall'
-                        ? "bg-white shadow-sm text-gray-800"
-                        : "text-gray-600 hover:text-gray-800 hover:bg-gray-50"
-                    )}
-                  >
-                    <Mic className="h-4 w-4 mr-2" /> Voice Chat
-                  </button>
-                </div>
-                
-                {!browserSupportsSpeechRecognition && (
-                  <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
-                    <Info className="h-3 w-3 inline mr-1" />
-                    Voice chat requires a browser that supports speech recognition like Chrome, Edge, or Safari.
-                  </div>
-                )}
-              </div>
-
-              {/* Conversation History Toggle */}
-              <Button
-                variant="secondary"
-                onClick={() => setShowHistory(!showHistory)}
-                className="w-full"
-              >
-                {showHistory ? 'Hide History' : 'Show Conversation History'}
-              </Button>
-
-              {/* Conversation History */}
-              {showHistory && <ConversationHistory />}
-            </div>
-            
-            {/* Sidebar */}
-            <div className="lg:col-span-4 space-y-6">
-              <ProgressSidebar />
-              <SocialFeatures />
               
-              {/* End Session Button */}
-              <StudySessionControls />
-            </div>
-          </>
-        )}
+              {/* Text Input - Only show in text mode */}
+              {learningMode === 'conversational' && (
+                <div className="border-t p-4">
+                  <form onSubmit={handleTextSubmit} className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={textInput}
+                      onChange={(e) => setTextInput(e.target.value)}
+                      placeholder="Type your question here..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      disabled={isProcessingText}
+                    />
+                    <Button
+                      type="submit"
+                      disabled={!textInput.trim() || isProcessingText}
+                      isLoading={isProcessingText}
+                    >
+                      Send
+                    </Button>
+                  </form>
+                </div>
+              )}
+            </Card>
+
+            {/* Conversation History */}
+            {showHistory && (
+              <Card className="p-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Previous Conversations</h3>
+                  {conversationHistory.length > 0 ? (
+                    <div className="space-y-3">
+                      {conversationHistory.map((conv, index) => (
+                        <div key={conv.id || index} className="p-3 bg-gray-50 rounded-lg">
+                          <div className="text-sm text-gray-600 mb-1">
+                            {new Date(conv.timestamp).toLocaleDateString()}
+                          </div>
+                          <div className="text-sm">
+                            <strong>You:</strong> {conv.user_message?.substring(0, 100)}
+                            {conv.user_message?.length > 100 && '...'}
+                          </div>
+                          <div className="text-sm mt-1">
+                            <strong>AI:</strong> {conv.ai_response?.substring(0, 100)}
+                            {conv.ai_response?.length > 100 && '...'}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No previous conversations found.</p>
+                  )}
+                </div>
+              </Card>
+            )}
+          </div>
+          
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <ProgressSidebar />
+          </div>
+        </div>
       </div>
     </div>
   );
 };
+
+export default StudyPage;
