@@ -85,12 +85,19 @@ serve(async (req) => {
         });
     }
 
-    // Check subscription limits
-    const { data: subscription } = await supabase
-      .from("user_subscription_status")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
+    // Check subscription limits from stripe_subscriptions
+    const { data: subscription, error: subError } = await supabase
+      .from("stripe_subscriptions")
+      .select("subscription_level")
+      .eq("customer_id", user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (subError) {
+      console.error('Error fetching subscription from stripe_subscriptions:', subError);
+    }
 
     // Handle different request types
     let response;

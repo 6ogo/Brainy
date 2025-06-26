@@ -53,12 +53,19 @@ serve(async (req) => {
       });
     }
 
-    // Check if user has premium access
-    const { data: subscription } = await supabase
-      .from("user_subscription_status")
+    // Check if user has premium access from stripe_subscriptions
+    const { data: subscription, error: subError } = await supabase
+      .from("stripe_subscriptions")
       .select("subscription_level")
-      .eq("user_id", user.id)
-      .single();
+      .eq("customer_id", user.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (subError) {
+      console.error('Error fetching subscription from stripe_subscriptions:', subError);
+    }
 
     const hasPremiumAccess = subscription?.subscription_level === "premium" || 
                             subscription?.subscription_level === "ultimate";
