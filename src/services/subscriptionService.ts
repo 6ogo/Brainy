@@ -27,10 +27,10 @@ export const getCurrentSubscription = async (): Promise<UserSubscription | null>
 
     console.log('Fetching subscription for user:', user.id);
 
-    // Read from stripe_subscriptions table (source of truth)
+    // Read ONLY from stripe_subscriptions table using subscription_level column
     const { data, error } = await supabase
       .from('stripe_subscriptions')
-      .select('*')
+      .select('subscription_level, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at')
       .eq('customer_id', user.id)
       .eq('status', 'active') // Only get active subscriptions
       .order('created_at', { ascending: false })
@@ -38,7 +38,6 @@ export const getCurrentSubscription = async (): Promise<UserSubscription | null>
 
     if (error) {
       console.error('Error fetching subscription from stripe_subscriptions:', error);
-      // Fallback to free subscription
       return getFreeSubscription();
     }
 
@@ -47,26 +46,29 @@ export const getCurrentSubscription = async (): Promise<UserSubscription | null>
       return getFreeSubscription();
     }
 
-    const subscription = data[0];
-    console.log('Found subscription in stripe_subscriptions:', subscription);
+    const stripeSubscription = data[0];
+    console.log('Found subscription in stripe_subscriptions:', stripeSubscription);
+    console.log('subscription_level from stripe_subscriptions:', stripeSubscription.subscription_level);
 
-    // Map stripe subscription to UserSubscription format
+    // Map stripe_subscriptions.subscription_level to UserSubscription format
+    const subscriptionLevel = stripeSubscription.subscription_level || 'free';
+    
     const mappedSubscription: UserSubscription = {
-      subscription_level: subscription.subscription_level || 'free',
-      subscription_status: subscription.status,
-      current_period_start: subscription.current_period_start,
-      current_period_end: subscription.current_period_end,
-      cancel_at_period_end: subscription.cancel_at_period_end || false,
-      // Set limits based on subscription level
-      daily_conversation_minutes: getConversationLimits(subscription.subscription_level),
-      video_call_minutes: getVideoCallLimits(subscription.subscription_level),
-      subjects_access: getSubjectsAccess(subscription.subscription_level),
-      advanced_analytics: hasAdvancedAnalytics(subscription.subscription_level),
-      downloadable_transcripts: hasDownloadableTranscripts(subscription.subscription_level),
-      early_access: hasEarlyAccess(subscription.subscription_level),
+      subscription_level: subscriptionLevel as 'free' | 'premium' | 'ultimate',
+      subscription_status: stripeSubscription.status,
+      current_period_start: stripeSubscription.current_period_start,
+      current_period_end: stripeSubscription.current_period_end,
+      cancel_at_period_end: stripeSubscription.cancel_at_period_end || false,
+      // Set limits based on stripe_subscriptions.subscription_level
+      daily_conversation_minutes: getConversationLimits(subscriptionLevel),
+      video_call_minutes: getVideoCallLimits(subscriptionLevel),
+      subjects_access: getSubjectsAccess(subscriptionLevel),
+      advanced_analytics: hasAdvancedAnalytics(subscriptionLevel),
+      downloadable_transcripts: hasDownloadableTranscripts(subscriptionLevel),
+      early_access: hasEarlyAccess(subscriptionLevel),
     };
 
-    console.log('Mapped subscription:', mappedSubscription);
+    console.log('Mapped subscription using stripe_subscriptions.subscription_level:', mappedSubscription);
     return mappedSubscription;
 
   } catch (error) {
@@ -131,13 +133,13 @@ const hasEarlyAccess = (level: string): boolean => {
   return level === 'ultimate';
 };
 
-// Add a simplified version that just returns the subscription level
+// Add a simplified version that reads subscription_level directly from stripe_subscriptions
 export const getSubscriptionLevel = async (): Promise<'free' | 'premium' | 'ultimate'> => {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return 'free';
 
-    // Read directly from stripe_subscriptions for better performance
+    // Read subscription_level directly from stripe_subscriptions table
     const { data, error } = await supabase
       .from('stripe_subscriptions')
       .select('subscription_level')
@@ -148,60 +150,66 @@ export const getSubscriptionLevel = async (): Promise<'free' | 'premium' | 'ulti
       .single();
 
     if (error || !data) {
-      console.log('No active subscription found, returning free');
+      console.log('No active subscription found in stripe_subscriptions, returning free');
       return 'free';
     }
 
     const level = data.subscription_level || 'free';
-    console.log('Current subscription level from stripe_subscriptions:', level);
+    console.log('subscription_level from stripe_subscriptions:', level);
     return level as 'free' | 'premium' | 'ultimate';
   } catch (error) {
-    console.error('Error getting subscription level:', error);
+    console.error('Error getting subscription_level from stripe_subscriptions:', error);
     return 'free';
   }
 };
 
-// Add a function to refresh/force update subscription
+// Refresh subscription data from stripe_subscriptions.subscription_level
 export const refreshSubscription = async (): Promise<UserSubscription | null> => {
   try {
     // Clear any cached data and fetch fresh from stripe_subscriptions
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
+    console.log('Refreshing subscription from stripe_subscriptions for user:', user.id);
+
     const { data, error } = await supabase
       .from('stripe_subscriptions')
-      .select('*')
+      .select('subscription_level, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at')
       .eq('customer_id', user.id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(1);
 
     if (error || !data || data.length === 0) {
-      console.log('No active subscription found during refresh');
+      console.log('No active subscription found during refresh from stripe_subscriptions');
       return getFreeSubscription();
     }
 
-    const subscription = data[0];
-    console.log('Refreshed subscription from stripe_subscriptions:', subscription);
+    const stripeSubscription = data[0];
+    console.log('Refreshed subscription from stripe_subscriptions:', stripeSubscription);
+    console.log('Refreshed subscription_level:', stripeSubscription.subscription_level);
 
-    // Map to UserSubscription format
+    // Map stripe_subscriptions data to UserSubscription format
+    const subscriptionLevel = stripeSubscription.subscription_level || 'free';
+    
     const mappedSubscription: UserSubscription = {
-      subscription_level: subscription.subscription_level || 'free',
-      subscription_status: subscription.status,
-      current_period_start: subscription.current_period_start,
-      current_period_end: subscription.current_period_end,
-      cancel_at_period_end: subscription.cancel_at_period_end || false,
-      daily_conversation_minutes: getConversationLimits(subscription.subscription_level),
-      video_call_minutes: getVideoCallLimits(subscription.subscription_level),
-      subjects_access: getSubjectsAccess(subscription.subscription_level),
-      advanced_analytics: hasAdvancedAnalytics(subscription.subscription_level),
-      downloadable_transcripts: hasDownloadableTranscripts(subscription.subscription_level),
-      early_access: hasEarlyAccess(subscription.subscription_level),
+      subscription_level: subscriptionLevel as 'free' | 'premium' | 'ultimate',
+      subscription_status: stripeSubscription.status,
+      current_period_start: stripeSubscription.current_period_start,
+      current_period_end: stripeSubscription.current_period_end,
+      cancel_at_period_end: stripeSubscription.cancel_at_period_end || false,
+      daily_conversation_minutes: getConversationLimits(subscriptionLevel),
+      video_call_minutes: getVideoCallLimits(subscriptionLevel),
+      subjects_access: getSubjectsAccess(subscriptionLevel),
+      advanced_analytics: hasAdvancedAnalytics(subscriptionLevel),
+      downloadable_transcripts: hasDownloadableTranscripts(subscriptionLevel),
+      early_access: hasEarlyAccess(subscriptionLevel),
     };
 
+    console.log('Refreshed and mapped subscription:', mappedSubscription);
     return mappedSubscription;
   } catch (error) {
-    console.error('Error in refreshSubscription:', error);
+    console.error('Error in refreshSubscription from stripe_subscriptions:', error);
     return null;
   }
 };
@@ -364,10 +372,10 @@ export const trackDailyUsage = async (conversationMinutes: number = 0, videoMinu
 
 export const getUserSubscriptionLevel = async (): Promise<'free' | 'premium' | 'ultimate'> => {
   try {
-    // Use the updated getSubscriptionLevel function that reads from stripe_subscriptions
+    // Directly read subscription_level from stripe_subscriptions table
     return await getSubscriptionLevel();
   } catch (error) {
-    console.error('Error getting user subscription level:', error);
+    console.error('Error getting user subscription level from stripe_subscriptions:', error);
     return 'free';
   }
 };
