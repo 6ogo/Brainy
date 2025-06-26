@@ -6,9 +6,9 @@ import { Button } from '../components/Button';
 import { useAuth } from '../contexts/AuthContext';
 import { useStore } from '../store/store';
 import { TavusService } from '../services/tavusService';
+import { isTavusConfigured } from '../config/api';
 import { 
   Video, 
-  Brain, 
   ArrowLeft, 
   AlertCircle,
   CheckCircle,
@@ -17,7 +17,13 @@ import {
   Clock,
   BookOpen,
   Award,
-  TrendingUp
+  TrendingUp,
+  Crown,
+  Zap,
+  Users,
+  Lock,
+  Unlock,
+  Timer
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -29,6 +35,22 @@ interface StudyInsights {
   strugglingTopics: string[];
   nextTopics: string[];
   strengths: string[];
+}
+
+interface VideoCallInfo {
+  can_start: boolean;
+  max_duration_minutes: number;
+  subscription_level: string;
+}
+
+interface DailyUsageInfo {
+  canStart: boolean;
+  usage: {
+    conversation_minutes: number;
+    video_call_minutes: number;
+    messages_sent: number;
+    subscription_level: string;
+  };
 }
 
 export const StudyAdvisorPage: React.FC = () => {
@@ -43,6 +65,9 @@ export const StudyAdvisorPage: React.FC = () => {
   const [isStartingSession, setIsStartingSession] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [insights, setInsights] = useState<StudyInsights | null>(null);
+  const [videoCallInfo, setVideoCallInfo] = useState<VideoCallInfo | null>(null);
+  const [dailyUsage, setDailyUsage] = useState<DailyUsageInfo | null>(null);
+  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) {
@@ -50,27 +75,40 @@ export const StudyAdvisorPage: React.FC = () => {
       return;
     }
     
-    checkEligibilityAndLoadData();
+    checkConfigurationAndLoadData();
   }, [user, navigate]);
 
-  const checkEligibilityAndLoadData = async () => {
+  const checkConfigurationAndLoadData = async () => {
     if (!user) return;
     
     try {
       setIsLoading(true);
       setError(null);
       
-      // Check eligibility and get session count
-      const [eligible, count] = await Promise.all([
+      // Check if Tavus is configured
+      if (!isTavusConfigured()) {
+        setError('Video conversations are not configured. Please contact support.');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Load all data in parallel
+      const [eligible, count, videoCall, dailyUsageData, history] = await Promise.all([
         TavusService.checkEligibilityForTavus(user.id),
-        TavusService.getCompletedSessionCount(user.id)
+        TavusService.getCompletedSessionCount(user.id),
+        TavusService.checkVideoCallAvailability(user.id),
+        TavusService.checkDailyConversationLimits(user.id, 30),
+        TavusService.getTavusConversationHistory(user.id, 5)
       ]);
       
       setIsEligible(eligible);
       setSessionCount(count);
+      setVideoCallInfo(videoCall);
+      setDailyUsage(dailyUsageData);
+      setConversationHistory(history);
       
-      if (eligible) {
-        // Load learning insights
+      if (eligible && videoCall.can_start) {
+        // Load learning insights only if user is eligible
         const progress = await TavusService.getUserLearningProgress(user.id, currentSubject);
         setInsights({
           totalSessions: count,
@@ -91,7 +129,7 @@ export const StudyAdvisorPage: React.FC = () => {
   };
 
   const handleStartSession = async () => {
-    if (!user || !isEligible) return;
+    if (!user || !isEligible || !videoCallInfo?.can_start) return;
     
     setIsStartingSession(true);
     setError(null);
@@ -101,7 +139,11 @@ export const StudyAdvisorPage: React.FC = () => {
       
       if (response.conversation_url) {
         setConversationUrl(response.conversation_url);
-        toast.success('Study advisor session started! You can now have a face-to-face conversation.');
+        
+        toast.success(`Study advisor session started! You have ${videoCallInfo.max_duration_minutes} minutes for this session.`, {
+          duration: 5000,
+          icon: '🎥'
+        });
       } else {
         throw new Error('No conversation URL received');
       }
@@ -110,15 +152,49 @@ export const StudyAdvisorPage: React.FC = () => {
       console.error('Error starting study session:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to start study session';
       setError(errorMessage);
-      toast.error('Failed to start study session. Please try again.');
+      toast.error(errorMessage);
     } finally {
       setIsStartingSession(false);
     }
   };
 
-  const handleEndSession = () => {
+  const handleEndSession = async () => {
+    if (conversationUrl) {
+      // Track the video call time (estimate based on session duration)
+      const estimatedMinutes = Math.min(videoCallInfo?.max_duration_minutes || 10, 5); // Estimate 5 minutes or max allowed
+      
+      try {
+        await TavusService.addConversationTime(user!.id, estimatedMinutes, true);
+      } catch (error) {
+        console.error('Error tracking video call time:', error);
+      }
+    }
+    
     setConversationUrl(null);
     toast.success('Study session ended. You can start a new one anytime!');
+    // Refresh data to get updated usage
+    checkConfigurationAndLoadData();
+  };
+
+  const handleUpgrade = () => {
+    navigate('/pricing');
+  };
+
+  const getSubscriptionBadge = (level: string) => {
+    switch (level) {
+      case 'ultimate':
+        return { icon: Crown, color: 'text-purple-600 bg-purple-100', text: 'Ultimate' };
+      case 'premium':
+        return { icon: Zap, color: 'text-blue-600 bg-blue-100', text: 'Premium' };
+      default:
+        return { icon: Users, color: 'text-gray-600 bg-gray-100', text: 'Free' };
+    }
+  };
+
+  const formatTimeLimit = (minutes: number) => {
+    if (minutes === -1) return 'Unlimited';
+    if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+    return `${minutes}m`;
   };
 
   if (isLoading) {
@@ -134,6 +210,49 @@ export const StudyAdvisorPage: React.FC = () => {
     );
   }
 
+  // Error state
+  if (error && !videoCallInfo) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <Button
+            variant="outline"
+            leftIcon={<ArrowLeft className="h-4 w-4" />}
+            onClick={() => navigate(-1)}
+            className="mb-6"
+          >
+            Back
+          </Button>
+          
+          <Card className="max-w-2xl mx-auto p-8 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="p-4 bg-red-100 rounded-full">
+                <AlertCircle className="h-12 w-12 text-red-600" />
+              </div>
+            </div>
+            
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              Study Advisor Unavailable
+            </h1>
+            
+            <p className="text-gray-600 mb-6">
+              {error}
+            </p>
+            
+            <Button
+              variant="primary"
+              onClick={() => navigate('/study')}
+            >
+              Continue Learning
+            </Button>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Not eligible state
   if (!isEligible) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -151,7 +270,7 @@ export const StudyAdvisorPage: React.FC = () => {
           <Card className="max-w-2xl mx-auto p-8 text-center">
             <div className="flex justify-center mb-6">
               <div className="p-4 bg-blue-100 rounded-full">
-                <Video className="h-12 w-12 text-blue-600" />
+                <Lock className="h-12 w-12 text-blue-600" />
               </div>
             </div>
             
@@ -160,7 +279,7 @@ export const StudyAdvisorPage: React.FC = () => {
             </h1>
             
             <p className="text-lg text-gray-600 mb-8">
-              Complete at least 3 learning sessions to unlock personalized study advice from your AI advisor.
+              Complete at least 3 learning sessions to unlock personalized video advice from your AI study advisor.
             </p>
             
             <div className="mb-8">
@@ -175,18 +294,22 @@ export const StudyAdvisorPage: React.FC = () => {
               </p>
             </div>
             
-            <div className="space-y-4 mb-8">
-              <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span>Personalized study recommendations</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <CheckCircle className="h-6 w-6 text-green-500 mx-auto mb-2" />
+                <p className="text-sm text-green-700">Personalized study advice</p>
               </div>
-              <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span>5-minute face-to-face video sessions</span>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <CheckCircle className="h-6 w-6 text-green-500 mx-auto mb-2" />
+                <p className="text-sm text-green-700">Face-to-face video sessions</p>
               </div>
-              <div className="flex items-center justify-center space-x-2 text-sm text-gray-600">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <span>Learning style analysis</span>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <CheckCircle className="h-6 w-6 text-green-500 mx-auto mb-2" />
+                <p className="text-sm text-green-700">Learning style analysis</p>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-lg">
+                <CheckCircle className="h-6 w-6 text-green-500 mx-auto mb-2" />
+                <p className="text-sm text-green-700">Progress tracking</p>
               </div>
             </div>
             
@@ -205,6 +328,99 @@ export const StudyAdvisorPage: React.FC = () => {
                 Choose Subject
               </Button>
             </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Video calls not available state
+  if (videoCallInfo && !videoCallInfo.can_start) {
+    const badge = getSubscriptionBadge(videoCallInfo.subscription_level);
+    const Icon = badge.icon;
+    
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <Button
+            variant="outline"
+            leftIcon={<ArrowLeft className="h-4 w-4" />}
+            onClick={() => navigate(-1)}
+            className="mb-6"
+          >
+            Back
+          </Button>
+          
+          <Card className="max-w-2xl mx-auto p-8 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="p-4 bg-amber-100 rounded-full">
+                <Lock className="h-12 w-12 text-amber-600" />
+              </div>
+            </div>
+            
+            <div className="flex justify-center mb-4">
+              <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${badge.color}`}>
+                <Icon className="h-4 w-4 mr-1" />
+                {badge.text} Plan
+              </div>
+            </div>
+            
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">
+              Video Calls Not Available
+            </h1>
+            
+            {videoCallInfo.subscription_level === 'free' ? (
+              <div>
+                <p className="text-lg text-gray-600 mb-6">
+                  Video calls are not available on the free plan.
+                </p>
+                
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h3 className="font-semibold text-blue-800 mb-2">Upgrade for Video Sessions</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-700">
+                    <div className="text-center p-3 bg-white rounded">
+                      <Zap className="h-6 w-6 text-blue-600 mx-auto mb-1" />
+                      <strong>Premium:</strong><br />10-minute video calls
+                    </div>
+                    <div className="text-center p-3 bg-white rounded">
+                      <Crown className="h-6 w-6 text-purple-600 mx-auto mb-1" />
+                      <strong>Ultimate:</strong><br />60-minute video calls
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Button
+                    variant="primary"
+                    onClick={handleUpgrade}
+                    leftIcon={<Crown className="h-5 w-5" />}
+                  >
+                    Upgrade Plan
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate('/study')}
+                    leftIcon={<BookOpen className="h-5 w-5" />}
+                  >
+                    Continue Text Learning
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-lg text-gray-600 mb-6">
+                  There was an issue accessing video calls for your account.
+                </p>
+                
+                <Button
+                  variant="primary"
+                  onClick={() => checkConfigurationAndLoadData()}
+                >
+                  Try Again
+                </Button>
+              </div>
+            )}
           </Card>
         </div>
       </div>
@@ -233,6 +449,19 @@ export const StudyAdvisorPage: React.FC = () => {
             <p className="text-gray-600">
               Get personalized study advice for {currentSubject}
             </p>
+            
+            {videoCallInfo && dailyUsage && (
+              <div className="flex justify-center items-center space-x-4 mt-4">
+                <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getSubscriptionBadge(videoCallInfo.subscription_level).color}`}>
+                  {React.createElement(getSubscriptionBadge(videoCallInfo.subscription_level).icon, { className: "h-4 w-4 mr-1" })}
+                  {getSubscriptionBadge(videoCallInfo.subscription_level).text} Plan
+                </div>
+                <div className="text-sm text-gray-500 flex items-center">
+                  <Timer className="h-4 w-4 mr-1" />
+                  {formatTimeLimit(videoCallInfo.max_duration_minutes)} video calls
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Main Content */}
@@ -296,7 +525,7 @@ export const StudyAdvisorPage: React.FC = () => {
               <Card className="p-8 text-center">
                 <div className="flex justify-center mb-6">
                   <div className="p-4 bg-green-100 rounded-full">
-                    <Video className="h-12 w-12 text-green-600" />
+                    <Unlock className="h-12 w-12 text-green-600" />
                   </div>
                 </div>
                 
@@ -305,9 +534,23 @@ export const StudyAdvisorPage: React.FC = () => {
                 </h2>
                 
                 <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                  Have a 5-minute face-to-face conversation with your AI study advisor. 
-                  Get personalized tips and guidance for {currentSubject}.
+                  Have a personalized face-to-face conversation with your AI study advisor. 
+                  Get tailored tips and guidance for {currentSubject}.
                 </p>
+                
+                {videoCallInfo && (
+                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-center justify-center space-x-2 mb-2">
+                      <Timer className="h-5 w-5 text-blue-600" />
+                      <span className="font-medium text-blue-800">
+                        Session Duration: {formatTimeLimit(videoCallInfo.max_duration_minutes)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-blue-700">
+                      Make the most of your personalized video session
+                    </p>
+                  </div>
+                )}
                 
                 <Button
                   variant="primary"
@@ -315,16 +558,16 @@ export const StudyAdvisorPage: React.FC = () => {
                   onClick={handleStartSession}
                   isLoading={isStartingSession}
                   leftIcon={<Play className="h-5 w-5" />}
-                  disabled={isStartingSession}
+                  disabled={isStartingSession || !videoCallInfo?.can_start}
                 >
                   {isStartingSession ? 'Starting Session...' : 'Start Video Session'}
                 </Button>
               </Card>
 
-              {/* Study Insights */}
-              {insights && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Stats */}
+              {/* Study Insights and Conversation History */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Study Insights */}
+                {insights && (
                   <Card className="p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                       <TrendingUp className="h-5 w-5 mr-2 text-primary-600" />
@@ -344,19 +587,9 @@ export const StudyAdvisorPage: React.FC = () => {
                         <span className="text-gray-600">Current Streak</span>
                         <span className="font-semibold">{insights.currentStreak} days</span>
                       </div>
-                    </div>
-                  </Card>
-
-                  {/* Learning Analysis */}
-                  <Card className="p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <Brain className="h-5 w-5 mr-2 text-primary-600" />
-                      Learning Analysis
-                    </h3>
-                    
-                    <div className="space-y-3">
+                      
                       {insights.strengths.length > 0 && (
-                        <div>
+                        <div className="pt-2 border-t">
                           <h4 className="text-sm font-medium text-green-700 mb-1">Strengths</h4>
                           <p className="text-sm text-gray-600">{insights.strengths.join(', ')}</p>
                         </div>
@@ -368,17 +601,48 @@ export const StudyAdvisorPage: React.FC = () => {
                           <p className="text-sm text-gray-600">{insights.nextTopics.slice(0, 2).join(', ')}</p>
                         </div>
                       )}
-                      
-                      {insights.strugglingTopics.length > 0 && (
-                        <div>
-                          <h4 className="text-sm font-medium text-amber-700 mb-1">Focus Areas</h4>
-                          <p className="text-sm text-gray-600">{insights.strugglingTopics.join(', ')}</p>
-                        </div>
-                      )}
                     </div>
                   </Card>
-                </div>
-              )}
+                )}
+
+                {/* Recent Conversations */}
+                <Card className="p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <MessageCircle className="h-5 w-5 mr-2 text-primary-600" />
+                    Recent Sessions
+                  </h3>
+                  
+                  {conversationHistory.length > 0 ? (
+                    <div className="space-y-3">
+                      {conversationHistory.map((conv) => (
+                        <div key={conv.id} className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-sm font-medium text-gray-700">
+                              {conv.subject}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(conv.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-2 h-2 rounded-full ${
+                              conv.status === 'active' ? 'bg-green-500' : 'bg-gray-400'
+                            }`}></div>
+                            <span className="text-xs text-gray-500 capitalize">
+                              {conv.status}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-gray-500">
+                      <Video className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No video sessions yet</p>
+                    </div>
+                  )}
+                </Card>
+              </div>
 
               {/* What to Expect */}
               <Card className="p-6">
@@ -399,8 +663,8 @@ export const StudyAdvisorPage: React.FC = () => {
                     <div className="p-3 bg-green-100 rounded-full w-12 h-12 mx-auto mb-3 flex items-center justify-center">
                       <Clock className="h-6 w-6 text-green-600" />
                     </div>
-                    <h4 className="font-semibold text-gray-900 mb-1">5-Minute Sessions</h4>
-                    <p className="text-sm text-gray-600">Focused conversations that respect your time</p>
+                    <h4 className="font-semibold text-gray-900 mb-1">Focused Sessions</h4>
+                    <p className="text-sm text-gray-600">Efficient conversations that respect your time and goals</p>
                   </div>
                   
                   <div className="text-center">

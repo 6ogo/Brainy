@@ -5,6 +5,27 @@ export const API_CONFIG = {
   TAVUS_REPLICA_ID: import.meta.env.VITE_TAVUS_REPLICA_ID || '',
   GROQ_API_KEY: import.meta.env.VITE_GROQ_API_KEY || '',
   
+  // Tavus Configuration
+  TAVUS_BASE_URL: 'https://tavusapi.com/v2',
+  TAVUS_TIMEOUT: 15000, // 15 seconds
+  
+  // Tavus Personas for different use cases
+  TAVUS_PERSONAS: {
+    STUDY_ADVISOR: 'pa0f81e3a6ca', // Main study advisor persona
+    STUDENT_COUNSELOR: 'pa0f81e3a6ca', // Student counselor (can be same or different)
+    SUBJECT_TUTOR: 'pa0f81e3a6ca', // Subject-specific tutor
+  },
+  
+  // Tavus Conversation Properties
+  TAVUS_CONVERSATION_DEFAULTS: {
+    participant_left_timeout: 30,
+    participant_absent_timeout: 60,
+    enable_recording: false, // Privacy by default
+    enable_closed_captions: true,
+    apply_greenscreen: false,
+    language: 'english'
+  },
+  
   // Enhanced ElevenLabs Configuration
   ELEVENLABS_BASE_URL: 'https://api.elevenlabs.io/v1',
   ELEVENLABS_TIMEOUT: 10000, // 10 seconds
@@ -22,6 +43,38 @@ export const API_CONFIG = {
     similarity_boost: 0.8,    // High similarity to original voice
     style: 0.6,              // Moderate style amplification
     use_speaker_boost: true   // Enhanced clarity for voice chat
+  }
+};
+
+// User Limits Configuration
+export const USER_LIMITS = {
+  // Daily limits based on subscription level
+  FREE: {
+    daily_conversation_minutes: 30,    // 30 minutes daily conversation
+    video_calls_enabled: false,        // No video calls
+    video_call_duration_minutes: 0,    // No video call time
+    available_subjects: ['Math', 'English'], // Only Math and English
+    advanced_analytics: false,         // Basic progress tracking only
+    downloadable_transcripts: false,   // No downloadable transcripts
+    features: ['basic_chat', 'basic_progress']
+  },
+  PREMIUM: {
+    daily_conversation_minutes: 240,   // 4 hours (240 minutes) daily
+    video_calls_enabled: true,         // Video calls available
+    video_call_duration_minutes: 10,   // 10 minute video calls
+    available_subjects: ['Math', 'English', 'Science', 'History', 'Languages', 'Test Prep'], // All subjects
+    advanced_analytics: true,          // Advanced analytics and insights
+    downloadable_transcripts: true,    // Can download transcripts
+    features: ['advanced_chat', 'video_calls', 'analytics', 'transcripts', 'all_subjects']
+  },
+  ULTIMATE: {
+    daily_conversation_minutes: -1,    // Unlimited (-1 means unlimited)
+    video_calls_enabled: true,         // Video calls available
+    video_call_duration_minutes: 60,   // 60 minute video calls
+    available_subjects: ['Math', 'English', 'Science', 'History', 'Languages', 'Test Prep'], // All subjects
+    advanced_analytics: true,          // Advanced analytics and insights
+    downloadable_transcripts: true,    // Can download transcripts
+    features: ['unlimited_chat', 'extended_video_calls', 'analytics', 'transcripts', 'all_subjects', 'early_access']
   }
 };
 
@@ -90,24 +143,33 @@ export const DEFAULT_VOICE = VOICE_MAPPINGS['encouraging-emma'];
 // Enhanced validation function
 export const validateApiKeys = () => {
   const missingKeys = [];
+  const warnings = [];
   
-  if (!API_CONFIG.TAVUS_API_KEY) {
-    missingKeys.push('VITE_TAVUS_API_KEY');
-  }
-  if (!API_CONFIG.ELEVENLABS_API_KEY) {
-    missingKeys.push('VITE_ELEVENLABS_API_KEY');
-  }
-  if (!API_CONFIG.TAVUS_REPLICA_ID) {
-    missingKeys.push('VITE_TAVUS_REPLICA_ID');
-  }
+  // Required keys
   if (!API_CONFIG.GROQ_API_KEY) {
     missingKeys.push('VITE_GROQ_API_KEY');
   }
+  
+  // Optional but recommended keys
+  if (!API_CONFIG.TAVUS_API_KEY) {
+    warnings.push('VITE_TAVUS_API_KEY - Video conversations will be unavailable');
+  }
+  if (!API_CONFIG.ELEVENLABS_API_KEY) {
+    warnings.push('VITE_ELEVENLABS_API_KEY - Voice features will use browser fallback');
+  }
+  if (!API_CONFIG.TAVUS_REPLICA_ID) {
+    warnings.push('VITE_TAVUS_REPLICA_ID - Video conversations will be unavailable');
+  }
 
   if (missingKeys.length > 0) {
-    console.warn(`Some API keys are missing: ${missingKeys.join(', ')}. Add them to your .env file for full functionality.`);
+    console.error(`Critical API keys missing: ${missingKeys.join(', ')}. Add them to your .env file.`);
     return false;
   }
+  
+  if (warnings.length > 0) {
+    console.warn(`Optional API keys missing: ${warnings.join(', ')}`);
+  }
+  
   return true;
 };
 
@@ -282,14 +344,47 @@ function createSilentAudioBlob(): Blob {
   }
 }
 
-// Utility function to get voice configuration for a persona
+// Utility functions
 export const getVoiceConfig = (persona: string) => {
   return VOICE_MAPPINGS[persona as keyof typeof VOICE_MAPPINGS] || DEFAULT_VOICE;
 };
 
-// Check if ElevenLabs is properly configured
 export const isElevenLabsConfigured = () => {
   return !!API_CONFIG.ELEVENLABS_API_KEY;
+};
+
+export const isTavusConfigured = () => {
+  return !!(API_CONFIG.TAVUS_API_KEY && API_CONFIG.TAVUS_REPLICA_ID);
+};
+
+export const getUserLimits = (subscriptionLevel: string) => {
+  const level = subscriptionLevel.toUpperCase() as keyof typeof USER_LIMITS;
+  return USER_LIMITS[level] || USER_LIMITS.FREE;
+};
+
+export const hasSubjectAccess = (subscriptionLevel: string, subject: string) => {
+  const limits = getUserLimits(subscriptionLevel);
+  return limits.available_subjects.includes(subject);
+};
+
+export const canUseVideoCall = (subscriptionLevel: string) => {
+  const limits = getUserLimits(subscriptionLevel);
+  return limits.video_calls_enabled;
+};
+
+export const getVideoCallDuration = (subscriptionLevel: string) => {
+  const limits = getUserLimits(subscriptionLevel);
+  return limits.video_call_duration_minutes * 60; // Convert to seconds for Tavus API
+};
+
+export const hasAdvancedAnalytics = (subscriptionLevel: string) => {
+  const limits = getUserLimits(subscriptionLevel);
+  return limits.advanced_analytics;
+};
+
+export const canDownloadTranscripts = (subscriptionLevel: string) => {
+  const limits = getUserLimits(subscriptionLevel);
+  return limits.downloadable_transcripts;
 };
 
 // Export the validation result
