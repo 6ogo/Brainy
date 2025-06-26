@@ -38,6 +38,123 @@ export interface Database {
           last_login?: string | null
         }
       }
+      stripe_customers: {
+        Row: {
+          id: string
+          user_id: string
+          customer_id: string
+          created_at: string
+          updated_at: string
+          deleted_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          customer_id: string
+          created_at?: string
+          updated_at?: string
+          deleted_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          customer_id?: string
+          created_at?: string
+          updated_at?: string
+          deleted_at?: string | null
+        }
+      }
+      stripe_subscriptions: {
+        Row: {
+          id: string
+          customer_id: string
+          subscription_id: string | null
+          price_id: string | null
+          subscription_level: 'free' | 'premium' | 'ultimate'
+          status: string
+          current_period_start: number | null
+          current_period_end: number | null
+          cancel_at_period_end: boolean | null
+          payment_method_brand: string | null
+          payment_method_last4: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_id: string
+          subscription_id?: string | null
+          price_id?: string | null
+          subscription_level?: 'free' | 'premium' | 'ultimate'
+          status?: string
+          current_period_start?: number | null
+          current_period_end?: number | null
+          cancel_at_period_end?: boolean | null
+          payment_method_brand?: string | null
+          payment_method_last4?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          customer_id?: string
+          subscription_id?: string | null
+          price_id?: string | null
+          subscription_level?: 'free' | 'premium' | 'ultimate'
+          status?: string
+          current_period_start?: number | null
+          current_period_end?: number | null
+          cancel_at_period_end?: boolean | null
+          payment_method_brand?: string | null
+          payment_method_last4?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      stripe_orders: {
+        Row: {
+          id: string
+          checkout_session_id: string
+          payment_intent_id: string | null
+          customer_id: string
+          amount_subtotal: number | null
+          amount_total: number | null
+          currency: string | null
+          payment_status: string
+          status: string
+          order_date: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          checkout_session_id: string
+          payment_intent_id?: string | null
+          customer_id: string
+          amount_subtotal?: number | null
+          amount_total?: number | null
+          currency?: string | null
+          payment_status?: string
+          status?: string
+          order_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          checkout_session_id?: string
+          payment_intent_id?: string | null
+          customer_id?: string
+          amount_subtotal?: number | null
+          amount_total?: number | null
+          currency?: string | null
+          payment_status?: string
+          status?: string
+          order_date?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
       conversations: {
         Row: {
           id: string

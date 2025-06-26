@@ -81,26 +81,40 @@ export async function createPortalSession(): Promise<string> {
 
 export async function getCurrentSubscription() {
   try {
+    // Get current user first
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      console.error('Auth error:', authError);
+      return null;
+    }
+
+    // Read from stripe_subscriptions table using subscription_level column
     const { data, error } = await supabase
-      .from('stripe_user_subscriptions')
-      .select('*')
+      .from('stripe_subscriptions')
+      .select('subscription_level, status, current_period_start, current_period_end, cancel_at_period_end')
+      .eq('customer_id', user.id)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (error) {
-      throw error;
+      console.error('Error fetching subscription from stripe_subscriptions:', error);
+      return null;
     }
 
     return data;
   } catch (error) {
     console.error('Error fetching subscription:', error);
-    throw error;
+    return null;
   }
 }
 
 export async function getOrderHistory() {
   try {
     const { data, error } = await supabase
-      .from('stripe_user_orders')
+      .from('stripe_orders')
       .select('*')
       .order('order_date', { ascending: false });
 
