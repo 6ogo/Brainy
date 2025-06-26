@@ -27,11 +27,23 @@ export const getCurrentSubscription = async (): Promise<UserSubscription | null>
 
     console.log('Fetching subscription for user:', user.id);
 
-    // Read ONLY from stripe_subscriptions table using subscription_level column
+    // First, look up the Stripe customer ID for the current user
+    const { data: customer, error: customerError } = await supabase
+      .from('stripe_customers')
+      .select('customer_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (customerError || !customer) {
+      console.error('Error fetching Stripe customer ID:', customerError);
+      return getFreeSubscription();
+    }
+
+    // Now query stripe_subscriptions using the Stripe customer_id
     const { data, error } = await supabase
       .from('stripe_subscriptions')
       .select('subscription_level, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at')
-      .eq('customer_id', user.id)
+      .eq('customer_id', customer.customer_id)
       .eq('status', 'active') // Only get active subscriptions
       .order('created_at', { ascending: false })
       .limit(1);
@@ -139,11 +151,23 @@ export const getSubscriptionLevel = async (): Promise<'free' | 'premium' | 'ulti
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return 'free';
 
-    // Read subscription_level directly from stripe_subscriptions table
+    // First, look up the Stripe customer ID for the current user
+    const { data: customer, error: customerError } = await supabase
+      .from('stripe_customers')
+      .select('customer_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (customerError || !customer) {
+      console.error('Error fetching Stripe customer ID:', customerError);
+      return 'free';
+    }
+
+    // Read subscription_level directly from stripe_subscriptions table using Stripe customer_id
     const { data, error } = await supabase
       .from('stripe_subscriptions')
       .select('subscription_level')
-      .eq('customer_id', user.id)
+      .eq('customer_id', customer.customer_id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(1)
@@ -172,10 +196,23 @@ export const refreshSubscription = async (): Promise<UserSubscription | null> =>
 
     console.log('Refreshing subscription from stripe_subscriptions for user:', user.id);
 
+    // First, look up the Stripe customer ID for the current user
+    const { data: customer, error: customerError } = await supabase
+      .from('stripe_customers')
+      .select('customer_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (customerError || !customer) {
+      console.error('Error fetching Stripe customer ID:', customerError);
+      return getFreeSubscription();
+    }
+
+    // Now query stripe_subscriptions using the Stripe customer_id
     const { data, error } = await supabase
       .from('stripe_subscriptions')
       .select('subscription_level, status, current_period_start, current_period_end, cancel_at_period_end, created_at, updated_at')
-      .eq('customer_id', user.id)
+      .eq('customer_id', customer.customer_id)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(1);
