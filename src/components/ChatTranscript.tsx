@@ -66,12 +66,6 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({ className }) => 
     const message = inputMessage;
     setInputMessage('');
     
-    // Update session stats before sending message
-    updateSessionStats({
-      ...sessionStats,
-      messagesCount: sessionStats.messagesCount + 1
-    });
-    
     await sendMessage(message, isVoiceMode);
   };
 

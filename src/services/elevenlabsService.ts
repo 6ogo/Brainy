@@ -116,13 +116,13 @@ export class ElevenLabsService {
   static async playAudio(audioBlob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        // Only play actual audio files, not silent compatibility blobs
-        if (audioBlob.size > 1000) { 
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const audio = new Audio(audioUrl);
-          
-          // Test audio output before playing
-          this.testAudioOutput().then(() => {
+        // Test audio output before playing
+        this.testAudioOutput().then(() => {
+          // Only play actual audio files, not silent compatibility blobs
+          if (audioBlob.size > 1000) { 
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            
             audio.onended = () => {
               URL.revokeObjectURL(audioUrl);
               console.log('Audio playback completed');
@@ -136,16 +136,16 @@ export class ElevenLabsService {
             };
             
             audio.play().catch(reject);
-          }).catch(error => {
-            console.error('Audio output test failed:', error);
-            reject(new Error('Audio output test failed. Please check your audio settings.'));
-          });
-        } else {
-          // For silent compatibility blobs, just resolve immediately 
-          // (browser speech synthesis is handling the actual audio)
-          console.log('Using browser speech synthesis for audio playback');
-          resolve();
-        }
+          } else {
+            // For silent compatibility blobs, just resolve immediately 
+            // (browser speech synthesis is handling the actual audio)
+            console.log('Using browser speech synthesis for audio playback');
+            resolve();
+          }
+        }).catch(error => {
+          console.error('Audio output test failed:', error);
+          reject(new Error('Audio output test failed. Please check your audio settings.'));
+        });
       } catch (error) {
         reject(error);
       }

@@ -162,7 +162,7 @@ export const useConversation = () => {
       const newXP = 10;
       const updatedSessionStats = {
         ...sessionStats,
-        messagesCount: sessionStats.messagesCount + 2,
+        messagesCount: sessionStats.messagesCount + 2, // +2 for both user message and AI response
         xpEarned: sessionStats.xpEarned + newXP
       };
       

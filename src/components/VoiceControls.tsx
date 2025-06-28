@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Volume2, Volume1, VolumeX, Download, AlertCircle, Pause, Play, MessageSquare } from 'lucide-react';
+import { Mic, MicOff, Volume2, Volume1, VolumeX, Download, AlertCircle, Pause, Play, MessageSquare, Send, Zap } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useVoiceChat } from '../hooks/useVoiceChat';
@@ -8,6 +8,9 @@ import toast from 'react-hot-toast';
 import { cn } from '../styles/utils';
 import { Button } from './Button';
 import { useNavigate } from 'react-router-dom';
+import { AudioVisualizer } from './AudioVisualizer';
+import { PauseDetectionIndicator } from './PauseDetectionIndicator';
+import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 
 export const VoiceControls: React.FC = () => {
   const { 
@@ -18,7 +21,8 @@ export const VoiceControls: React.FC = () => {
     toggleRecording,
     learningMode,
     isSpeaking,
-    setLearningMode
+    setLearningMode,
+    isListening
   } = useStore();
   
   const navigate = useNavigate();
@@ -37,7 +41,10 @@ export const VoiceControls: React.FC = () => {
     startVoiceChat, 
     stopVoiceChat, 
     pauseVoiceChat, 
-    resumeVoiceChat
+    resumeVoiceChat,
+    forceSubmitTranscript,
+    setPauseThreshold,
+    pauseThreshold
   } = useVoiceChat();
   
   const [volume, setVolume] = useState(70);
@@ -45,6 +52,8 @@ export const VoiceControls: React.FC = () => {
   const [showPermissionBanner, setShowPermissionBanner] = useState(!isMicrophoneAvailable);
   const [showVoiceGuide, setShowVoiceGuide] = useState(true);
   const [isBrowserSupported, setIsBrowserSupported] = useState(true);
+  const [visualizationData, setVisualizationData] = useState<number[]>([]);
+  const [lastSpeechTimestamp, setLastSpeechTimestamp] = useState(0);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
 
   // Check browser support for speech recognition
@@ -70,6 +79,27 @@ export const VoiceControls: React.FC = () => {
       setShowPermissionBanner(false);
     }
   }, [isMicrophoneAvailable]);
+
+  // Update last speech timestamp when transcript changes
+  useEffect(() => {
+    if (transcript) {
+      setLastSpeechTimestamp(Date.now());
+    }
+  }, [transcript]);
+
+  // Generate random visualization data for demo purposes
+  useEffect(() => {
+    if (listening) {
+      const interval = setInterval(() => {
+        const newData = Array.from({ length: 20 }, () => 
+          Math.floor(Math.random() * (listening ? 50 : 10)) + (listening ? 5 : 2)
+        );
+        setVisualizationData(newData);
+      }, 100);
+      
+      return () => clearInterval(interval);
+    }
+  }, [listening]);
 
   const handleVoiceModeChange = async (mode: VoiceMode) => {
     if (!isBrowserSupported && mode !== 'muted') {
@@ -151,6 +181,11 @@ export const VoiceControls: React.FC = () => {
     setLearningMode('conversational');
     setVoiceMode('muted');
     navigate('/study');
+  };
+
+  const handlePauseThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value, 10);
+    setPauseThreshold(value);
   };
 
   return (
@@ -242,6 +277,15 @@ export const VoiceControls: React.FC = () => {
         </div>
       )}
 
+      {/* Voice Status Indicator */}
+      <div className="flex justify-center mb-4">
+        <VoiceStatusIndicator 
+          isListening={listening} 
+          isSpeaking={isSpeaking} 
+          isPaused={isPaused} 
+        />
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           {/* Voice mode selector */}
@@ -286,6 +330,15 @@ export const VoiceControls: React.FC = () => {
             </div>
           </div>
 
+          {/* Audio visualization */}
+          <div className="mb-4">
+            <AudioVisualizer 
+              audioData={visualizationData}
+              isActive={listening}
+              height={40}
+            />
+          </div>
+
           {/* Push to talk button */}
           <div className="flex flex-col items-center">
             <p className="text-sm text-gray-500 mb-2">Push to Talk</p>
@@ -310,6 +363,27 @@ export const VoiceControls: React.FC = () => {
             <p className="text-xs text-gray-500 mt-2">
               {listening ? "Release to stop" : "Press and hold to speak"}
             </p>
+            
+            {/* Pause detection indicator */}
+            <PauseDetectionIndicator 
+              isListening={listening}
+              pauseThreshold={pauseThreshold}
+              lastSpeechTimestamp={lastSpeechTimestamp}
+              className="mt-2"
+            />
+            
+            {/* Force submit button */}
+            {transcript && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={forceSubmitTranscript}
+                className="mt-3"
+                leftIcon={<Send className="h-3 w-3" />}
+              >
+                Submit Now
+              </Button>
+            )}
             
             {/* Live transcript */}
             {showTranscript && transcript && (
@@ -353,6 +427,32 @@ export const VoiceControls: React.FC = () => {
                 Text Chat
               </Button>
             </div>
+          </div>
+          
+          {/* Pause threshold control */}
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700">Pause Threshold</h3>
+              <span className="text-sm text-gray-500">{pauseThreshold}ms</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Zap className="h-4 w-4 text-amber-500" />
+              <input
+                type="range"
+                min="300"
+                max="2000"
+                step="100"
+                value={pauseThreshold}
+                onChange={handlePauseThresholdChange}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                aria-label="Pause Threshold"
+              />
+              <Zap className="h-5 w-5 text-amber-700" />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Adjust how long to wait after you stop speaking before processing your input.
+              Lower values (left) are more responsive but may cut you off. Higher values (right) give you more time to think.
+            </p>
           </div>
           
           {/* Volume control */}
@@ -471,6 +571,11 @@ export const VoiceControls: React.FC = () => {
         <div className="text-xs font-medium px-2 py-1 bg-gray-100 rounded-full">
           Mode: {voiceMode === 'muted' ? 'Off' : voiceMode === 'push-to-talk' ? 'Push-to-Talk' : 'Continuous'}
         </div>
+      </div>
+
+      {/* Visually hidden live region for screen reader announcements */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only" id="voice-status-live-region">
+        {listening ? 'Listening' : isSpeaking ? 'AI Speaking' : isPaused ? 'Conversation Paused' : isMicrophoneAvailable ? 'Microphone Ready' : 'Microphone Access Needed'}
       </div>
     </div>
   );
