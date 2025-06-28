@@ -58,6 +58,15 @@ export class VoiceConversationService {
   private maxFeedbackOccurrences = 3;
   private lastFeedbackTime = 0;
   private feedbackCooldown = 2000; // 2 seconds cooldown between feedback detections
+  private isAISpeaking = false;
+  private voiceActivityDetector: AnalyserNode | null = null;
+  private voiceActivityThreshold = 0.05;
+  private voiceActivityHistory: boolean[] = [];
+  private voiceActivityHistorySize = 10;
+  private aiAudioFingerprint: Float32Array | null = null;
+  private audioFingerprinter: ScriptProcessorNode | null = null;
+  private isUserSpeaking = false;
+  private isAIAudioPlaying = false;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -90,6 +99,10 @@ export class VoiceConversationService {
       this.microphoneGainNode.gain.value = 1.0;
       this.speakerOutputNode.gain.value = 0.8;
       
+      // Create voice activity detector
+      this.voiceActivityDetector = this.audioContext.createAnalyser();
+      this.voiceActivityDetector.fftSize = 256;
+      
       // Try to use AudioWorklet for better performance if supported
       if ('audioWorklet' in this.audioContext) {
         try {
@@ -104,6 +117,18 @@ export class VoiceConversationService {
                 this.feedbackDetected = false;
                 this.cooldownCounter = 0;
                 this.cooldownPeriod = 128; // About 3 seconds at 44.1kHz
+                this.isAISpeaking = false;
+                this.aiAudioFingerprint = null;
+                this.userVoiceFingerprint = null;
+                
+                // Listen for messages from the main thread
+                this.port.onmessage = (event) => {
+                  if (event.data.type === 'aiSpeaking') {
+                    this.isAISpeaking = event.data.value;
+                  } else if (event.data.type === 'aiFingerprint') {
+                    this.aiAudioFingerprint = event.data.fingerprint;
+                  }
+                };
               }
               
               process(inputs, outputs, parameters) {
@@ -132,6 +157,42 @@ export class VoiceConversationService {
                 // Normalize correlation
                 const normalizedCorrelation = power > 0 ? Math.abs(correlation / power) : 0;
                 
+                // Calculate audio fingerprint similarity if AI is speaking
+                let aiSimilarity = 0;
+                if (this.isAISpeaking && this.aiAudioFingerprint) {
+                  let similaritySum = 0;
+                  let count = 0;
+                  
+                  for (let i = 0; i < Math.min(input.length, this.aiAudioFingerprint.length); i++) {
+                    // Compare frequency patterns
+                    const diff = Math.abs(input[i] - this.aiAudioFingerprint[i]);
+                    similaritySum += 1 - Math.min(1, diff);
+                    count++;
+                  }
+                  
+                  aiSimilarity = count > 0 ? similaritySum / count : 0;
+                  
+                  // If high similarity to AI audio and AI is speaking, likely feedback
+                  if (aiSimilarity > 0.7 && power > 0.01) {
+                    this.feedbackDetected = true;
+                    this.cooldownCounter = this.cooldownPeriod;
+                    this.port.postMessage({ 
+                      feedbackDetected: true, 
+                      level: aiSimilarity,
+                      power: power,
+                      isAIAudio: true
+                    });
+                    
+                    // Store AI audio fingerprint for future comparison
+                    if (!this.aiAudioFingerprint) {
+                      this.aiAudioFingerprint = new Float32Array(input.length);
+                      this.aiAudioFingerprint.set(input);
+                    }
+                    
+                    return true;
+                  }
+                }
+                
                 // Detect feedback if correlation is above threshold
                 if (normalizedCorrelation > this.threshold && power > 0.01) {
                   this.feedbackDetected = true;
@@ -139,13 +200,15 @@ export class VoiceConversationService {
                   this.port.postMessage({ 
                     feedbackDetected: true, 
                     level: normalizedCorrelation,
-                    power: power
+                    power: power,
+                    isAIAudio: false
                   });
                 } else {
                   this.port.postMessage({ 
                     feedbackDetected: false, 
                     level: normalizedCorrelation,
-                    power: power
+                    power: power,
+                    aiSimilarity: aiSimilarity
                   });
                 }
                 
@@ -170,10 +233,10 @@ export class VoiceConversationService {
           
           // Listen for messages from the worklet
           this.audioWorkletNode.port.onmessage = (event) => {
-            const { feedbackDetected, level, power } = event.data;
+            const { feedbackDetected, level, power, isAIAudio } = event.data;
             
             if (feedbackDetected) {
-              console.log(`Feedback detected! Level: ${level.toFixed(2)}, Power: ${power.toFixed(2)}`);
+              console.log(`Feedback detected! Level: ${level.toFixed(2)}, Power: ${power.toFixed(2)}, AI Audio: ${isAIAudio}`);
               this.handleFeedbackDetection();
             }
           };
@@ -187,6 +250,10 @@ export class VoiceConversationService {
         console.log('AudioWorklet not supported, using ScriptProcessorNode');
         this.initializeScriptProcessor();
       }
+      
+      // Create audio fingerprinter for AI voice detection
+      this.audioFingerprinter = this.audioContext.createScriptProcessor(4096, 1, 1);
+      this.audioFingerprinter.onaudioprocess = this.createAudioFingerprint.bind(this);
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
     }
@@ -201,9 +268,36 @@ export class VoiceConversationService {
     
     console.log('ScriptProcessorNode initialized for feedback detection');
   }
+  
+  private createAudioFingerprint(event: AudioProcessingEvent): void {
+    if (!this.isAIAudioPlaying) return;
+    
+    const input = event.inputBuffer.getChannelData(0);
+    
+    // Create a fingerprint of the AI audio
+    if (!this.aiAudioFingerprint) {
+      this.aiAudioFingerprint = new Float32Array(input.length);
+    }
+    
+    // Update fingerprint with a weighted average
+    for (let i = 0; i < input.length; i++) {
+      if (this.aiAudioFingerprint) {
+        // 80% old data, 20% new data for smooth updates
+        this.aiAudioFingerprint[i] = this.aiAudioFingerprint[i] * 0.8 + input[i] * 0.2;
+      }
+    }
+    
+    // Send fingerprint to AudioWorklet if available
+    if (this.audioWorkletNode) {
+      this.audioWorkletNode.port.postMessage({
+        type: 'aiFingerprint',
+        fingerprint: this.aiAudioFingerprint
+      });
+    }
+  }
 
   private detectNoise(event: AudioProcessingEvent): void {
-    if (!this.noiseDetectionEnabled || !this.isListening || this.isProcessing) return;
+    if (!this.noiseDetectionEnabled) return;
     
     const input = event.inputBuffer.getChannelData(0);
     let sum = 0;
@@ -216,8 +310,21 @@ export class VoiceConversationService {
     const rms = Math.sqrt(sum / input.length);
     const db = 20 * Math.log10(Math.max(rms, 1e-10));
     
-    // If sound level is above threshold, update last speech timestamp
-    if (db > -50) { // Adjust threshold as needed
+    // Detect voice activity
+    const isVoiceActive = db > -50; // Adjust threshold as needed
+    
+    // Update voice activity history
+    this.voiceActivityHistory.push(isVoiceActive);
+    if (this.voiceActivityHistory.length > this.voiceActivityHistorySize) {
+      this.voiceActivityHistory.shift();
+    }
+    
+    // Determine if user is speaking based on recent history
+    const activeFrames = this.voiceActivityHistory.filter(active => active).length;
+    this.isUserSpeaking = activeFrames > this.voiceActivityHistorySize / 3;
+    
+    // If sound level is above threshold and not AI speaking, update last speech timestamp
+    if (isVoiceActive && !this.isAISpeaking) {
       this.lastSpeechTimestamp = Date.now();
     }
     
@@ -245,6 +352,28 @@ export class VoiceConversationService {
       } else if (!highLevel) {
         // Reset counter if levels are normal
         this.feedbackOccurrences = Math.max(0, this.feedbackOccurrences - 1);
+      }
+    }
+    
+    // If AI is speaking, check for AI audio in the microphone input
+    if (this.isAISpeaking && this.aiAudioFingerprint && this.feedbackPreventionEnabled) {
+      // Compare current audio with AI fingerprint
+      let similaritySum = 0;
+      let count = 0;
+      
+      for (let i = 0; i < Math.min(input.length, this.aiAudioFingerprint.length); i++) {
+        // Compare frequency patterns
+        const diff = Math.abs(input[i] - this.aiAudioFingerprint[i]);
+        similaritySum += 1 - Math.min(1, diff);
+        count++;
+      }
+      
+      const similarity = count > 0 ? similaritySum / count : 0;
+      
+      // If similarity is high, it might be feedback
+      if (similarity > this.feedbackDetectionThreshold && rms > 0.05) {
+        console.log(`AI audio detected in microphone input, similarity: ${similarity.toFixed(2)}, rms: ${rms.toFixed(2)}`);
+        this.handleFeedbackDetection();
       }
     }
     
@@ -309,7 +438,9 @@ export class VoiceConversationService {
     
     // Unmute after a longer delay to ensure feedback is broken
     setTimeout(() => {
-      this.unmuteUserMicrophone();
+      if (!this.isAISpeaking) {
+        this.unmuteUserMicrophone();
+      }
     }, 2000);
   }
 
@@ -336,6 +467,12 @@ export class VoiceConversationService {
         
         // Only process if transcript is longer than noise threshold
         if (transcript.length > this.noiseThreshold) {
+          // Skip processing if AI is speaking (to prevent feedback)
+          if (this.isAISpeaking && this.feedbackPreventionEnabled) {
+            console.log('Skipping transcript processing while AI is speaking:', transcript);
+            return;
+          }
+          
           // Update current transcript
           this.currentTranscript = transcript;
           
@@ -360,7 +497,7 @@ export class VoiceConversationService {
           if (lastResult.isFinal && transcript) {
             // Set a shorter delay for final results
             this.processingTimeout = window.setTimeout(() => {
-              if (!this.isProcessing && transcript !== '') {
+              if (!this.isProcessing && transcript !== '' && !this.isAISpeaking) {
                 this.handleUserSpeech(transcript);
               }
               this.processingTimeout = null;
@@ -369,7 +506,7 @@ export class VoiceConversationService {
             // Start silence detection timer
             this.silenceTimer = window.setTimeout(() => {
               const silenceDuration = Date.now() - this.lastSpeechTimestamp;
-              if (silenceDuration >= this.maxSilenceTime && transcript && !this.isProcessing) {
+              if (silenceDuration >= this.maxSilenceTime && transcript && !this.isProcessing && !this.isAISpeaking) {
                 console.log(`Processing after silence detection (${silenceDuration}ms):`, transcript);
                 this.handleUserSpeech(transcript);
               }
@@ -412,17 +549,21 @@ export class VoiceConversationService {
         this.isListening = false;
         
         // If we have a transcript but haven't processed it yet, process it now
-        if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing && !this.isPaused) {
+        if (this.currentTranscript && 
+            this.currentTranscript.length > this.noiseThreshold && 
+            !this.isProcessing && 
+            !this.isPaused && 
+            !this.isAISpeaking) {
           console.log('Processing transcript on recognition end:', this.currentTranscript);
           this.handleUserSpeech(this.currentTranscript);
           return;
         }
         
         // Restart if we're supposed to be listening continuously
-        if (!this.isPaused && this.recognition && !this.isProcessing) {
+        if (!this.isPaused && this.recognition && !this.isProcessing && !this.isAISpeaking) {
           try {
             setTimeout(() => {
-              if (!this.isPaused && !this.isListening && this.recognition && !this.isProcessing) {
+              if (!this.isPaused && !this.isListening && this.recognition && !this.isProcessing && !this.isAISpeaking) {
                 this.recognition.start();
                 this.isListening = true;
                 console.log('Restarted speech recognition');
@@ -500,6 +641,17 @@ export class VoiceConversationService {
             this.microphoneGainNode.connect(this.noiseDetector);
             this.noiseDetector.connect(this.audioContext.destination);
           }
+          
+          // Connect to voice activity detector
+          if (this.voiceActivityDetector) {
+            this.microphoneGainNode.connect(this.voiceActivityDetector);
+          }
+          
+          // Connect to audio fingerprinter
+          if (this.audioFingerprinter) {
+            this.microphoneGainNode.connect(this.audioFingerprinter);
+            this.audioFingerprinter.connect(this.audioContext.destination);
+          }
         } else {
           source.connect(this.analyser);
           
@@ -509,6 +661,17 @@ export class VoiceConversationService {
           } else if (this.noiseDetector) {
             source.connect(this.noiseDetector);
             this.noiseDetector.connect(this.audioContext.destination);
+          }
+          
+          // Connect to voice activity detector
+          if (this.voiceActivityDetector) {
+            source.connect(this.voiceActivityDetector);
+          }
+          
+          // Connect to audio fingerprinter
+          if (this.audioFingerprinter) {
+            source.connect(this.audioFingerprinter);
+            this.audioFingerprinter.connect(this.audioContext.destination);
           }
         }
         
@@ -545,7 +708,11 @@ export class VoiceConversationService {
     if (this.recognition && this.isListening) {
       try {
         // If we have a transcript but haven't processed it yet, process it now
-        if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing && !this.isPaused) {
+        if (this.currentTranscript && 
+            this.currentTranscript.length > this.noiseThreshold && 
+            !this.isProcessing && 
+            !this.isPaused && 
+            !this.isAISpeaking) {
           console.log('Processing transcript before stopping:', this.currentTranscript);
           this.handleUserSpeech(this.currentTranscript);
         }
@@ -625,6 +792,22 @@ export class VoiceConversationService {
           // Ignore disconnection errors
         }
       }
+      
+      if (this.voiceActivityDetector) {
+        try {
+          this.voiceActivityDetector.disconnect();
+        } catch (e) {
+          // Ignore disconnection errors
+        }
+      }
+      
+      if (this.audioFingerprinter) {
+        try {
+          this.audioFingerprinter.disconnect();
+        } catch (e) {
+          // Ignore disconnection errors
+        }
+      }
     }
   }
 
@@ -679,6 +862,18 @@ export class VoiceConversationService {
     
     // Reset speaking end time
     this.speakingEndTime = 0;
+    
+    // Reset AI speaking state
+    this.isAISpeaking = false;
+    this.isAIAudioPlaying = false;
+    
+    // Notify AudioWorklet
+    if (this.audioWorkletNode) {
+      this.audioWorkletNode.port.postMessage({
+        type: 'aiSpeaking',
+        value: false
+      });
+    }
   }
 
   setLanguage(languageCode: string): void {
@@ -724,8 +919,11 @@ export class VoiceConversationService {
     this.lastFeedbackTime = 0;
     
     // If enabling, immediately mute if AI is speaking
-    if (enabled && this.config.onAudioStart) {
+    if (enabled && this.isAISpeaking) {
       this.muteUserMicrophone();
+    } else if (!enabled && this.isAISpeaking) {
+      // If disabling while AI is speaking, unmute
+      this.unmuteUserMicrophone();
     }
   }
 
@@ -806,6 +1004,12 @@ export class VoiceConversationService {
       return;
     }
 
+    // Skip processing if AI is speaking to prevent feedback
+    if (this.isAISpeaking && this.feedbackPreventionEnabled) {
+      console.log('Skipping processing while AI is speaking');
+      return;
+    }
+
     try {
       this.isProcessing = true;
       console.log('Processing speech input:', transcript);
@@ -841,6 +1045,18 @@ export class VoiceConversationService {
 
       // Generate and play speech
       this.config.onAudioStart?.();
+      
+      // Set AI speaking state
+      this.isAISpeaking = true;
+      this.isAIAudioPlaying = true;
+      
+      // Notify AudioWorklet
+      if (this.audioWorkletNode) {
+        this.audioWorkletNode.port.postMessage({
+          type: 'aiSpeaking',
+          value: true
+        });
+      }
       
       // Record AI frequency pattern for feedback detection
       if (this.analyser && this.audioDataArray) {
@@ -907,6 +1123,18 @@ export class VoiceConversationService {
         
         // Use browser's speech synthesis as fallback
         await this.useBrowserSpeech(aiResponse);
+      } finally {
+        // Reset AI speaking state
+        this.isAISpeaking = false;
+        this.isAIAudioPlaying = false;
+        
+        // Notify AudioWorklet
+        if (this.audioWorkletNode) {
+          this.audioWorkletNode.port.postMessage({
+            type: 'aiSpeaking',
+            value: false
+          });
+        }
       }
     } catch (error) {
       console.error('Error in voice conversation:', error);
@@ -941,13 +1169,13 @@ export class VoiceConversationService {
       setTimeout(() => {
         // Restart listening if in continuous mode and not paused
         if (!this.isPaused && !this.isListening && this.recognition) {
-          if (this.feedbackPreventionEnabled) {
+          if (this.feedbackPreventionEnabled && !this.isAISpeaking) {
             this.unmuteUserMicrophone();
           }
           setTimeout(() => {
             this.startListening();
           }, 300);
-        } else if (this.feedbackPreventionEnabled) {
+        } else if (this.feedbackPreventionEnabled && !this.isAISpeaking) {
           this.unmuteUserMicrophone();
         }
       }, this.delayAfterSpeaking);
@@ -994,15 +1222,67 @@ export class VoiceConversationService {
       // Set up event handlers
       utterance.onstart = () => {
         console.log('Browser speech synthesis started');
+        this.isAISpeaking = true;
+        this.isAIAudioPlaying = true;
+        
+        // Notify AudioWorklet
+        if (this.audioWorkletNode) {
+          this.audioWorkletNode.port.postMessage({
+            type: 'aiSpeaking',
+            value: true
+          });
+        }
+        
+        // Mute microphone to prevent feedback
+        if (this.feedbackPreventionEnabled) {
+          this.muteUserMicrophone();
+        }
       };
       
       utterance.onend = () => {
         console.log('Browser speech synthesis ended');
+        this.isAISpeaking = false;
+        this.isAIAudioPlaying = false;
+        
+        // Notify AudioWorklet
+        if (this.audioWorkletNode) {
+          this.audioWorkletNode.port.postMessage({
+            type: 'aiSpeaking',
+            value: false
+          });
+        }
+        
+        // Set speaking end time for delayed unmuting
+        this.speakingEndTime = Date.now();
+        
+        // Unmute after delay
+        setTimeout(() => {
+          if (this.feedbackPreventionEnabled && !this.isAISpeaking) {
+            this.unmuteUserMicrophone();
+          }
+        }, this.delayAfterSpeaking);
+        
         resolve();
       };
       
       utterance.onerror = (event) => {
         console.error('Browser speech synthesis error:', event.error);
+        this.isAISpeaking = false;
+        this.isAIAudioPlaying = false;
+        
+        // Notify AudioWorklet
+        if (this.audioWorkletNode) {
+          this.audioWorkletNode.port.postMessage({
+            type: 'aiSpeaking',
+            value: false
+          });
+        }
+        
+        // Unmute microphone
+        if (this.feedbackPreventionEnabled) {
+          this.unmuteUserMicrophone();
+        }
+        
         reject(new Error(`Speech synthesis error: ${event.error}`));
       };
       
@@ -1061,6 +1341,25 @@ export class VoiceConversationService {
       
       // Set speaking end time for delayed unmuting
       this.speakingEndTime = Date.now();
+      
+      // Reset AI speaking state
+      this.isAISpeaking = false;
+      this.isAIAudioPlaying = false;
+      
+      // Notify AudioWorklet
+      if (this.audioWorkletNode) {
+        this.audioWorkletNode.port.postMessage({
+          type: 'aiSpeaking',
+          value: false
+        });
+      }
+      
+      // Unmute after delay
+      setTimeout(() => {
+        if (this.feedbackPreventionEnabled && !this.isAISpeaking) {
+          this.unmuteUserMicrophone();
+        }
+      }, this.delayAfterSpeaking);
       
       return;
     }
@@ -1134,6 +1433,23 @@ export class VoiceConversationService {
           reject(new Error(errorMessage));
         };
         
+        // Set AI speaking state
+        this.isAISpeaking = true;
+        this.isAIAudioPlaying = true;
+        
+        // Notify AudioWorklet
+        if (this.audioWorkletNode) {
+          this.audioWorkletNode.port.postMessage({
+            type: 'aiSpeaking',
+            value: true
+          });
+        }
+        
+        // Mute microphone to prevent feedback
+        if (this.feedbackPreventionEnabled) {
+          this.muteUserMicrophone();
+        }
+        
         // Set the current audio
         this.currentAudio = audio;
         
@@ -1146,6 +1462,11 @@ export class VoiceConversationService {
             // Connect through gain node for volume control
             source.connect(this.speakerOutputNode);
             this.speakerOutputNode.connect(this.audioContext.destination);
+            
+            // Connect to audio fingerprinter
+            if (this.audioFingerprinter) {
+              source.connect(this.audioFingerprinter);
+            }
           } catch (error) {
             console.warn('Failed to connect audio to volume control:', error);
             // Fall back to direct volume control
@@ -1218,7 +1539,10 @@ export class VoiceConversationService {
 
   // Force submit current transcript
   forceSubmitTranscript(): void {
-    if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing) {
+    if (this.currentTranscript && 
+        this.currentTranscript.length > this.noiseThreshold && 
+        !this.isProcessing && 
+        !this.isAISpeaking) {
       // Clear any pending timeout
       if (this.processingTimeout) {
         clearTimeout(this.processingTimeout);

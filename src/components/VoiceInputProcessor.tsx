@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/store';
 import { useVoiceChat } from '../hooks/useVoiceChat';
-import { Mic, MicOff, Send, AlertCircle } from 'lucide-react';
+import { Mic, MicOff, Send, AlertCircle, Shield, Headphones } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
 import { AudioVisualizer } from './AudioVisualizer';
@@ -33,24 +33,22 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
     stopVoiceChat,
     forceSubmitTranscript,
     visualizationData,
-    pauseThreshold
+    pauseThreshold,
+    feedbackPreventionEnabled,
+    toggleFeedbackPrevention
   } = useVoiceChat();
   
   const [lastSpeechTimestamp, setLastSpeechTimestamp] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isMicMuted, setIsMicMuted] = useState(false);
-  const [audioThreshold, setAudioThreshold] = useState(0.05);
-  const [delayAfterSpeaking, setDelayAfterSpeaking] = useState(500); // 500ms delay after AI stops speaking
+  const [isUsingHeadphones, setIsUsingHeadphones] = useState(false);
+  const [showAIFilterIndicator, setShowAIFilterIndicator] = useState(true);
   
   // Refs for audio processing
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const speakingEndTimeRef = useRef<number>(0);
-  const microphoneTrackRef = useRef<MediaStreamTrack | null>(null);
-  const frequencyDataRef = useRef<Uint8Array | null>(null);
-  const aiFrequencyPatternRef = useRef<number[]>([]);
   
   // Initialize audio context and analyzer
   useEffect(() => {
@@ -60,7 +58,6 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         analyserRef.current = audioContextRef.current.createAnalyser();
         analyserRef.current.fftSize = 256;
-        frequencyDataRef.current = new Uint8Array(analyserRef.current.frequencyBinCount);
         
         // Request microphone access
         const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -72,14 +69,10 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
         });
         
         microphoneStreamRef.current = stream;
-        microphoneTrackRef.current = stream.getAudioTracks()[0];
         
         // Connect microphone to analyzer
         const source = audioContextRef.current.createMediaStreamSource(stream);
         source.connect(analyserRef.current);
-        
-        // Start monitoring audio levels
-        requestAnimationFrame(monitorAudioLevels);
       } catch (error) {
         console.error('Error initializing audio:', error);
         setError('Failed to initialize audio. Please check your microphone permissions.');
@@ -106,106 +99,10 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
     }
   }, [currentTranscript]);
   
-  // Automatically mute microphone when AI is speaking
+  // Show AI filter indicator when AI is speaking
   useEffect(() => {
-    if (isSpeaking && !isMicMuted) {
-      muteUserMicrophone();
-      
-      // Record AI frequency pattern for feedback detection
-      if (analyserRef.current && frequencyDataRef.current) {
-        analyserRef.current.getByteFrequencyData(frequencyDataRef.current);
-        aiFrequencyPatternRef.current = Array.from(frequencyDataRef.current);
-      }
-    } else if (!isSpeaking && isMicMuted && speakingEndTimeRef.current === 0) {
-      // AI just stopped speaking, set a delay before unmuting
-      speakingEndTimeRef.current = Date.now();
-    }
-  }, [isSpeaking, isMicMuted]);
-  
-  // Monitor audio levels to detect potential feedback
-  const monitorAudioLevels = () => {
-    if (!analyserRef.current || !frequencyDataRef.current) return;
-    
-    analyserRef.current.getByteFrequencyData(frequencyDataRef.current);
-    
-    // Calculate average volume level
-    const average = Array.from(frequencyDataRef.current)
-      .reduce((sum, value) => sum + value, 0) / frequencyDataRef.current.length;
-    
-    // Check if it's time to unmute after AI finished speaking
-    if (!isSpeaking && isMicMuted && speakingEndTimeRef.current > 0) {
-      const timeSinceAIStopped = Date.now() - speakingEndTimeRef.current;
-      
-      if (timeSinceAIStopped >= delayAfterSpeaking) {
-        unmuteUserMicrophone();
-        speakingEndTimeRef.current = 0;
-      }
-    }
-    
-    // Check if current audio matches AI frequency pattern (potential feedback)
-    if (!isSpeaking && !isMicMuted && aiFrequencyPatternRef.current.length > 0) {
-      const similarityScore = calculateFrequencySimilarity(
-        frequencyDataRef.current, 
-        aiFrequencyPatternRef.current
-      );
-      
-      // If similarity is high and volume is above threshold, it might be feedback
-      if (similarityScore > 0.8 && average > audioThreshold * 255) {
-        console.log('Potential feedback detected, muting microphone');
-        muteUserMicrophone();
-        
-        // Unmute after a short delay
-        setTimeout(() => {
-          unmuteUserMicrophone();
-        }, 1000);
-      }
-    }
-    
-    // Continue monitoring
-    requestAnimationFrame(monitorAudioLevels);
-  };
-  
-  // Calculate similarity between current audio and AI voice pattern
-  const calculateFrequencySimilarity = (current: Uint8Array, pattern: number[]): number => {
-    if (pattern.length === 0) return 0;
-    
-    let matchCount = 0;
-    const threshold = 20; // Tolerance for frequency matching
-    
-    for (let i = 0; i < Math.min(current.length, pattern.length); i++) {
-      if (Math.abs(current[i] - pattern[i]) < threshold) {
-        matchCount++;
-      }
-    }
-    
-    return matchCount / Math.min(current.length, pattern.length);
-  };
-  
-  // Mute the user's microphone
-  const muteUserMicrophone = () => {
-    if (microphoneTrackRef.current) {
-      microphoneTrackRef.current.enabled = false;
-      setIsMicMuted(true);
-      
-      // Also pause voice chat to prevent processing
-      if (isActive && !isPaused) {
-        pauseVoiceChat();
-      }
-    }
-  };
-  
-  // Unmute the user's microphone
-  const unmuteUserMicrophone = () => {
-    if (microphoneTrackRef.current) {
-      microphoneTrackRef.current.enabled = true;
-      setIsMicMuted(false);
-      
-      // Resume voice chat if it was active before
-      if (isActive && isPaused) {
-        resumeVoiceChat();
-      }
-    }
-  };
+    setShowAIFilterIndicator(isSpeaking && feedbackPreventionEnabled);
+  }, [isSpeaking, feedbackPreventionEnabled]);
   
   const handleToggleMic = async () => {
     try {
@@ -241,6 +138,18 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
     }
   };
   
+  const toggleHeadphonesMode = () => {
+    setIsUsingHeadphones(!isUsingHeadphones);
+    
+    // If enabling headphones mode, we can disable feedback prevention
+    if (!isUsingHeadphones && feedbackPreventionEnabled) {
+      toggleFeedbackPrevention();
+      toast.success('Headphones mode enabled - feedback prevention adjusted');
+    } else {
+      toast.success(`Headphones mode ${isUsingHeadphones ? 'disabled' : 'enabled'}`);
+    }
+  };
+  
   return (
     <div className={cn("flex flex-col", className)}>
       {/* Error display */}
@@ -265,12 +174,25 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
         )}
       </div>
       
+      {/* Headphones toggle */}
+      <div className="flex justify-center mb-3">
+        <Button
+          variant={isUsingHeadphones ? "primary" : "outline"}
+          size="sm"
+          onClick={toggleHeadphonesMode}
+          leftIcon={<Headphones className="h-4 w-4" />}
+        >
+          {isUsingHeadphones ? "Using Headphones" : "Using Speakers"}
+        </Button>
+      </div>
+      
       {/* Audio visualization */}
       <div className="mb-3">
         <AudioVisualizer
           audioData={visualizationData || []}
           isActive={isActive && !isMicMuted}
           height={40}
+          showAIFilter={showAIFilterIndicator}
         />
       </div>
       
@@ -325,14 +247,18 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
       </div>
       
       {/* Feedback prevention info */}
-      <div className="mt-3 p-2 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700">
-        <p className="font-medium mb-1">Feedback Prevention Active</p>
-        <ul className="list-disc list-inside space-y-1">
-          <li>Microphone automatically mutes while AI is speaking</li>
-          <li>{delayAfterSpeaking}ms delay after AI finishes speaking</li>
-          <li>Audio pattern analysis to detect and prevent feedback</li>
-        </ul>
-      </div>
+      {feedbackPreventionEnabled && (
+        <div className="mt-3 p-2 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700">
+          <div className="flex items-center space-x-2 mb-1">
+            <Shield className="h-4 w-4 text-blue-600" />
+            <p className="font-medium">AI Audio Filtering Active</p>
+          </div>
+          <p className="ml-6">
+            The system is actively filtering out AI-generated audio from your microphone input.
+            Only your voice will be processed for transcription.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

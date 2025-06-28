@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sliders, Shield, Clock, Volume2, VolumeX, Info, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Sliders, Shield, Clock, Volume2, VolumeX, Info, RefreshCw, AlertTriangle, Headphones } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
 import { ElevenLabsService } from '../services/elevenlabsService';
@@ -24,6 +24,7 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
   const [isResetting, setIsResetting] = useState(false);
   const [isTestingAudio, setIsTestingAudio] = useState(false);
   const [audioFeedbackRisk, setAudioFeedbackRisk] = useState<'low' | 'medium' | 'high'>('medium');
+  const [isUsingHeadphones, setIsUsingHeadphones] = useState(false);
   
   // Test for audio feedback risk on component mount
   useEffect(() => {
@@ -120,6 +121,21 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
     }
   };
   
+  const toggleHeadphonesMode = () => {
+    setIsUsingHeadphones(!isUsingHeadphones);
+    
+    // If enabling headphones mode, we can reduce feedback prevention measures
+    if (!isUsingHeadphones) {
+      // Reduce delay after speaking for headphones users
+      setDelayAfterSpeaking(300); // 300ms is enough for headphones
+      toast.success('Headphones mode enabled - reduced delay after speaking');
+    } else {
+      // Restore normal delay for speakers
+      setDelayAfterSpeaking(500);
+      toast.success('Headphones mode disabled - restored normal delay');
+    }
+  };
+  
   return (
     <div className={cn("p-4 bg-gray-50 rounded-lg border border-gray-200", className)}>
       <div className="flex items-center justify-between mb-3">
@@ -133,13 +149,24 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
             <Info className="h-4 w-4" />
           </button>
         </div>
-        <Button
-          variant={feedbackPreventionEnabled ? "primary" : "outline"}
-          size="sm"
-          onClick={toggleFeedbackPrevention}
-        >
-          {feedbackPreventionEnabled ? "Enabled" : "Disabled"}
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant={isUsingHeadphones ? "primary" : "outline"}
+            size="sm"
+            onClick={toggleHeadphonesMode}
+            leftIcon={<Headphones className="h-4 w-4" />}
+          >
+            {isUsingHeadphones ? "Using Headphones" : "Using Speakers"}
+          </Button>
+          <Button
+            variant={feedbackPreventionEnabled ? "primary" : "outline"}
+            size="sm"
+            onClick={toggleFeedbackPrevention}
+            leftIcon={<Shield className="h-4 w-4" />}
+          >
+            {feedbackPreventionEnabled ? "Enabled" : "Disabled"}
+          </Button>
+        </div>
       </div>
       
       {/* Audio Feedback Risk Indicator */}
@@ -187,20 +214,30 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
               'Feedback prevention is recommended for your audio setup.' : 
               'Your audio setup has low feedback risk, but prevention is still recommended.'}
           </p>
-          {audioFeedbackRisk === 'high' && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => {
-                if (!feedbackPreventionEnabled) {
-                  toggleFeedbackPrevention();
-                }
-                toast.success('Feedback prevention enabled');
-              }}
-            >
-              Enable Protection
-            </Button>
+          {audioFeedbackRisk === 'high' && !isUsingHeadphones && (
+            <div className="mt-2 flex space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<Headphones className="h-3 w-3" />}
+                onClick={toggleHeadphonesMode}
+              >
+                I'm Using Headphones
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<Shield className="h-3 w-3" />}
+                onClick={() => {
+                  if (!feedbackPreventionEnabled) {
+                    toggleFeedbackPrevention();
+                  }
+                  toast.success('Feedback prevention enabled');
+                }}
+              >
+                Enable Protection
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -217,6 +254,7 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
             <li>Adds a short delay after the AI finishes before unmuting</li>
             <li>Analyzes audio patterns to detect and prevent potential feedback</li>
             <li>Adjusts microphone sensitivity based on background noise</li>
+            <li>Filters out AI voice patterns from speech recognition</li>
           </ul>
         </div>
       )}

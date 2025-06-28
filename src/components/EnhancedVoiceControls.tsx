@@ -88,6 +88,7 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
   const [lastSpeechTimestamp, setLastSpeechTimestamp] = useState(0);
   const [noiseThreshold, setNoiseThreshold] = useState(0.05);
   const [isUsingHeadphones, setIsUsingHeadphones] = useState(false);
+  const [showAIFilterIndicator, setShowAIFilterIndicator] = useState(true);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
 
   // Check browser support for speech recognition
@@ -120,6 +121,11 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
       setLastSpeechTimestamp(Date.now());
     }
   }, [transcript]);
+  
+  // Show AI filter indicator when AI is speaking
+  useEffect(() => {
+    setShowAIFilterIndicator(isSpeaking && feedbackPreventionEnabled);
+  }, [isSpeaking, feedbackPreventionEnabled]);
 
   const handleVoiceModeChange = async (mode: VoiceMode) => {
     if (!isBrowserSupported && mode !== 'muted') {
@@ -243,11 +249,16 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
 
   const toggleHeadphonesMode = () => {
     setIsUsingHeadphones(!isUsingHeadphones);
-    toast.success(`Headphones mode ${!isUsingHeadphones ? 'enabled' : 'disabled'}`);
     
-    // If enabling headphones mode, we can disable feedback prevention
-    if (!isUsingHeadphones && feedbackPreventionEnabled) {
-      toggleFeedbackPrevention();
+    // If enabling headphones mode, we can adjust feedback prevention settings
+    if (!isUsingHeadphones) {
+      // Reduce delay after speaking for headphones users
+      setDelayAfterSpeaking(300); // 300ms is enough for headphones
+      toast.success('Headphones mode enabled - reduced delay after speaking');
+    } else {
+      // Restore normal delay for speakers
+      setDelayAfterSpeaking(500);
+      toast.success('Headphones mode disabled - restored normal delay');
     }
   };
 
@@ -384,6 +395,7 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
               audioData={visualizationData || []}
               isActive={listening}
               height={40}
+              showAIFilter={showAIFilterIndicator}
             />
           </div>
 
@@ -448,6 +460,17 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
                   </div>
                 </div>
                 <p className="text-sm text-gray-700">{transcript}</p>
+                
+                {/* AI audio filtering indicator */}
+                {showAIFilterIndicator && (
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <div className="flex items-center text-green-600">
+                      <Shield className="h-3 w-3 mr-1" />
+                      <span>AI audio filtered out</span>
+                    </div>
+                    <span className="text-gray-500">Only your voice processed</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -564,91 +587,6 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
             </div>
           </div>
           
-          {/* Advanced Settings Toggle */}
-          <div className="flex justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<Sliders className="h-4 w-4" />}
-              onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-            >
-              {showAdvancedSettings ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
-            </Button>
-          </div>
-          
-          {/* Advanced Settings */}
-          {showAdvancedSettings && (
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-sm font-medium text-gray-700 mb-3">Advanced Settings</h3>
-              
-              {/* Noise Threshold */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-600">Noise Threshold</span>
-                  <span className="text-xs text-gray-600">{noiseThreshold.toFixed(2)}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.01"
-                  max="0.2"
-                  step="0.01"
-                  value={noiseThreshold}
-                  onChange={handleNoiseThresholdChange}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                  style={{
-                    background: 'linear-gradient(to right, #6B7280 0%, #6B7280 ' + 
-                      (noiseThreshold * 500) + '%, #E5E7EB ' + 
-                      (noiseThreshold * 500) + '%, #E5E7EB 100%)'
-                  }}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Adjust sensitivity to background noise. Higher values filter out more noise.
-                </p>
-              </div>
-              
-              {/* Current Noise Level Indicator */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-600">Current Noise Level</span>
-                </div>
-                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
-                    className={cn(
-                      "h-full rounded-full transition-all",
-                      noiseLevel > 100 ? "bg-red-500" : 
-                      noiseLevel > 50 ? "bg-amber-500" : 
-                      "bg-green-500"
-                    )}
-                    style={{ width: `${Math.min(100, noiseLevel / 2)}%` }}
-                  ></div>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {noiseLevel > 100 ? 'High noise level detected' : 
-                   noiseLevel > 50 ? 'Moderate noise level' : 
-                   'Low noise level - good for voice recognition'}
-                </p>
-              </div>
-              
-              {/* Recognition Language */}
-              <div>
-                <label htmlFor="recognition-language" className="block text-xs text-gray-600 mb-2">
-                  Recognition Language
-                </label>
-                <select
-                  id="recognition-language"
-                  className="w-full p-2 text-sm border border-gray-300 rounded-md"
-                  defaultValue="en-US"
-                >
-                  <option value="en-US">English (US)</option>
-                  <option value="en-GB">English (UK)</option>
-                  <option value="es-ES">Spanish</option>
-                  <option value="fr-FR">French</option>
-                  <option value="de-DE">German</option>
-                </select>
-              </div>
-            </div>
-          )}
-          
           {/* Switch to text chat button */}
           <Button
             variant="outline"
@@ -722,7 +660,7 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
           {feedbackPreventionEnabled && (
             <span className="flex items-center text-green-600">
               <Shield className="h-4 w-4 mr-1" />
-              Feedback Prevention
+              AI Audio Filtered
             </span>
           )}
           
