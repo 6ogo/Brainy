@@ -1,10 +1,10 @@
 import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useStore } from '../store/store';
-import { Card } from '../components/Card';
 import { cn, commonStyles } from '../styles/utils';
 import { AvatarPersonality } from '../types';
 import { ArrowLeft } from 'lucide-react';
+import { TeacherCard } from '../components/TeacherCard';
 
 const teachers: Array<{
   id: AvatarPersonality;
@@ -13,6 +13,7 @@ const teachers: Array<{
   imageUrl: string;
   specialty: string;
   style: string;
+  convaiId: string;
 }> = [
   {
     id: 'encouraging-emma',
@@ -21,6 +22,7 @@ const teachers: Array<{
     imageUrl: '/EMMA.jpg',
     specialty: 'Making complex topics accessible',
     style: 'bg-rose-100 border-rose-300',
+    convaiId: 'emma'
   },
   {
     id: 'challenge-charlie',
@@ -29,6 +31,7 @@ const teachers: Array<{
     imageUrl: '/CHARLIE.png',
     specialty: 'Advanced problem-solving',
     style: 'bg-blue-100 border-blue-300',
+    convaiId: 'charlie'
   },
   {
     id: 'fun-freddy',
@@ -37,17 +40,12 @@ const teachers: Array<{
     imageUrl: '/FREDDY.webp',
     specialty: 'Engaging and interactive learning',
     style: 'bg-yellow-100 border-yellow-300',
+    convaiId: 'freddy'
   },
 ];
 
 export const TeacherSelection: React.FC = () => {
-  const { currentSubject, setCurrentAvatar } = useStore();
-  const navigate = useNavigate();
-
-  const handleTeacherSelect = (teacher: AvatarPersonality) => {
-    setCurrentAvatar(teacher);
-    navigate('/study'); // Navigate directly to study page instead of learning mode
-  };
+  const { currentSubject } = useStore();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 py-12 px-4">
@@ -74,31 +72,16 @@ export const TeacherSelection: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {teachers.map((teacher) => (
-            <Card
+            <TeacherCard
               key={teacher.id}
-              variant="interactive"
-              className={cn("p-6 border-2", teacher.style)}
-              onClick={() => handleTeacherSelect(teacher.id)}
-            >
-              <div className="flex flex-col items-center">
-                <div className="w-32 h-32 rounded-full overflow-hidden mb-4 border-2 border-primary-300">
-                  <img 
-                    src={teacher.imageUrl} 
-                    alt={teacher.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <h3 className={cn(commonStyles.heading.h3, "mb-2 text-center")}>
-                  {teacher.name}
-                </h3>
-                <p className="text-sm text-primary-700 font-medium mb-2">
-                  Specialty: {teacher.specialty}
-                </p>
-                <p className={cn(commonStyles.text.base, "text-center")}>
-                  {teacher.description}
-                </p>
-              </div>
-            </Card>
+              id={teacher.id}
+              name={teacher.name}
+              description={teacher.description}
+              imageUrl={teacher.imageUrl}
+              specialty={teacher.specialty}
+              style={teacher.style}
+              convaiId={teacher.convaiId}
+            />
           ))}
         </div>
       </div>
