@@ -31,6 +31,7 @@ export const VoiceControls: React.FC = () => {
     transcript,
     listening,
     isMicrophoneAvailable,
+    browserSupportsSpeechRecognition,
     startListening,
     stopListening
   } = useSpeechRecognition();
@@ -44,15 +45,15 @@ export const VoiceControls: React.FC = () => {
     resumeVoiceChat,
     forceSubmitTranscript,
     setPauseThreshold,
-    pauseThreshold
+    pauseThreshold,
+    visualizationData
   } = useVoiceChat();
   
-  const [volume, setVolume] = useState(70);
+  const [volume, setVolume] = useState(0.8);
   const [showTranscript, setShowTranscript] = useState(true);
   const [showPermissionBanner, setShowPermissionBanner] = useState(!isMicrophoneAvailable);
   const [showVoiceGuide, setShowVoiceGuide] = useState(true);
   const [isBrowserSupported, setIsBrowserSupported] = useState(true);
-  const [visualizationData, setVisualizationData] = useState<number[]>([]);
   const [lastSpeechTimestamp, setLastSpeechTimestamp] = useState(0);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
 
@@ -86,20 +87,6 @@ export const VoiceControls: React.FC = () => {
       setLastSpeechTimestamp(Date.now());
     }
   }, [transcript]);
-
-  // Generate random visualization data for demo purposes
-  useEffect(() => {
-    if (listening) {
-      const interval = setInterval(() => {
-        const newData = Array.from({ length: 20 }, () => 
-          Math.floor(Math.random() * (listening ? 50 : 10)) + (listening ? 5 : 2)
-        );
-        setVisualizationData(newData);
-      }, 100);
-      
-      return () => clearInterval(interval);
-    }
-  }, [listening]);
 
   const handleVoiceModeChange = async (mode: VoiceMode) => {
     if (!isBrowserSupported && mode !== 'muted') {
@@ -167,13 +154,13 @@ export const VoiceControls: React.FC = () => {
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseInt(e.target.value, 10);
+    const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
     
     // Apply volume to all audio elements
     const audioElements = document.querySelectorAll('audio');
     audioElements.forEach(audio => {
-      audio.volume = newVolume / 100;
+      audio.volume = newVolume;
     });
   };
 
@@ -333,7 +320,7 @@ export const VoiceControls: React.FC = () => {
           {/* Audio visualization */}
           <div className="mb-4">
             <AudioVisualizer 
-              audioData={visualizationData}
+              audioData={visualizationData || []}
               isActive={listening}
               height={40}
             />
@@ -459,7 +446,7 @@ export const VoiceControls: React.FC = () => {
           <div className="p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-gray-700">Volume Control</h3>
-              <span className="text-sm text-gray-500">{volume}%</span>
+              <span className="text-sm text-gray-500">{Math.round(volume * 100)}%</span>
             </div>
             <div className="flex items-center space-x-3">
               <button
@@ -478,7 +465,8 @@ export const VoiceControls: React.FC = () => {
               <input
                 type="range"
                 min="0"
-                max="100"
+                max="1"
+                step="0.1"
                 value={volume}
                 onChange={handleVolumeChange}
                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
@@ -486,9 +474,9 @@ export const VoiceControls: React.FC = () => {
               />
               
               <div className="w-8 text-center">
-                {volume > 66 ? (
+                {volume > 0.66 ? (
                   <Volume2 className="h-5 w-5 text-gray-700 mx-auto" />
-                ) : volume > 33 ? (
+                ) : volume > 0.33 ? (
                   <Volume1 className="h-5 w-5 text-gray-700 mx-auto" />
                 ) : (
                   <VolumeX className="h-5 w-5 text-gray-700 mx-auto" />

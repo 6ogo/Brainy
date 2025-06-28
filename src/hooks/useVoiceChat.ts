@@ -39,6 +39,7 @@ export const useVoiceChat = () => {
   const lastProcessedTranscriptRef = useRef<string>('');
   const processingRef = useRef<boolean>(false);
   const pauseThresholdRef = useRef<number>(600); // 0.6 seconds pause threshold
+  const [visualizationData, setVisualizationData] = useState<Uint8Array | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -122,6 +123,13 @@ export const useVoiceChat = () => {
           }
         }
       });
+
+      // Set up audio visualization callback
+      if (voiceServiceRef.current) {
+        voiceServiceRef.current.setAudioVisualizationCallback((data) => {
+          setVisualizationData(data);
+        });
+      }
     } catch (error) {
       console.error('Failed to initialize voice service:', error);
       setError('Failed to initialize voice service');
@@ -293,6 +301,12 @@ export const useVoiceChat = () => {
   const setPauseThreshold = useCallback((milliseconds: number) => {
     if (milliseconds >= 300 && milliseconds <= 2000) {
       pauseThresholdRef.current = milliseconds;
+      
+      // Also update the voice service if available
+      if (voiceServiceRef.current) {
+        voiceServiceRef.current.setSilenceThreshold(milliseconds);
+      }
+      
       toast.success(`Pause threshold set to ${milliseconds}ms`);
     } else {
       toast.error('Pause threshold must be between 300ms and 2000ms');
@@ -349,6 +363,7 @@ export const useVoiceChat = () => {
     toggleVoiceChat,
     forceSubmitTranscript,
     setPauseThreshold,
-    pauseThreshold: pauseThresholdRef.current
+    pauseThreshold: pauseThresholdRef.current,
+    visualizationData
   };
 };

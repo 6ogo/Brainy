@@ -84,6 +84,10 @@ export const useStore = create<AppState>((set) => ({
       ) {
         return { ...state };
       }
+
+      // Increment message count by 1 (not 2) to properly track individual messages
+      const newMessageCount = state.sessionStats.messagesCount + 1;
+      
       return {
         messages: [
           ...state.messages,
@@ -97,7 +101,7 @@ export const useStore = create<AppState>((set) => ({
         ],
         sessionStats: {
           ...state.sessionStats,
-          messagesCount: state.sessionStats.messagesCount + 1,
+          messagesCount: newMessageCount,
           xpEarned: state.sessionStats.xpEarned + totalXP,
         },
         socialStats: {
