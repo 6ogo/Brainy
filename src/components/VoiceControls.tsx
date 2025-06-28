@@ -61,8 +61,7 @@ export const SimplifiedVoiceControls: React.FC<SimplifiedVoiceControlsProps> = (
     feedbackPreventionEnabled,
     toggleFeedbackPrevention,
     delayAfterSpeaking,
-    setDelayAfterSpeaking,
-    testElevenLabsVoice
+    setDelayAfterSpeaking
   } = useVoiceChat();
   
   const [volume, setVolume] = useState(0.8);
@@ -437,7 +436,7 @@ export const SimplifiedVoiceControls: React.FC<SimplifiedVoiceControlsProps> = (
           {/* Call Controls */}
           <div className="p-4 bg-gray-50 rounded-lg">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Controls</h3>
-            <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="grid grid-cols-2 gap-3">
               <Button
                 variant={isPaused ? "primary" : "secondary"}
                 onClick={isPaused ? resumeVoiceChat : pauseVoiceChat}
@@ -455,17 +454,6 @@ export const SimplifiedVoiceControls: React.FC<SimplifiedVoiceControlsProps> = (
                 Text Chat
               </Button>
             </div>
-            
-            {/* Test ElevenLabs button */}
-            <Button
-              variant="outline"
-              onClick={testElevenLabsVoice}
-              size="sm"
-              className="w-full"
-              leftIcon={<Volume2 className="h-4 w-4" />}
-            >
-              Test ElevenLabs Voice
-            </Button>
           </div>
           
           {/* Feedback Prevention */}

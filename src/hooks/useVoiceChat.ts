@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useStore } from '../store/store';
 import { VoiceConversationService } from '../services/voiceConversationService';
-import { SimplifiedElevenLabsService } from '../services/simplifiedElevenLabsService';
 import { useAuth } from '../contexts/AuthContext';
 import { ERROR_MESSAGES } from '../constants/ai';
 import toast from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
 
 export const useVoiceChat = () => {
   const { 
@@ -32,6 +32,10 @@ export const useVoiceChat = () => {
   const [noiseLevel, setNoiseLevel] = useState<number>(0);
   const [feedbackPreventionEnabled, setFeedbackPreventionEnabled] = useState(true);
   const [delayAfterSpeaking, setDelayAfterSpeaking] = useState(500);
+  
+  // Get current location to check if we're on the study page
+  const location = useLocation();
+  const isStudyPage = location.pathname === '/study';
 
   // Cleanup on unmount
   useEffect(() => {
@@ -45,12 +49,12 @@ export const useVoiceChat = () => {
     };
   }, []);
 
-  // Initialize voice service when needed
+  // Initialize voice service only on study page
   useEffect(() => {
-    if (!user || !currentSubject || !currentAvatar) return;
+    if (!user || !isStudyPage) return;
 
     try {
-      console.log('🎤 Initializing voice service');
+      console.log('Initializing simplified voice service');
       
       voiceServiceRef.current = new VoiceConversationService({
         userId: user.id,
@@ -59,34 +63,30 @@ export const useVoiceChat = () => {
         difficultyLevel: difficultyLevel,
         onResponse: (text) => {
           if (isMounted.current) {
-            console.log('📝 AI Response received:', text.substring(0, 50) + '...');
+            // Add the AI response to messages
             addMessage(text, 'ai');
           }
         },
         onAudioStart: () => {
           if (isMounted.current) {
-            console.log('🔊 Audio playback started');
             setIsSpeaking(true);
             setAvatarEmotion('speaking');
           }
         },
         onAudioEnd: () => {
           if (isMounted.current) {
-            console.log('🔇 Audio playback ended');
             setIsSpeaking(false);
             setAvatarEmotion('neutral');
           }
         },
         onError: (errorMessage) => {
           if (isMounted.current) {
-            console.error('❌ Voice service error:', errorMessage);
             setError(errorMessage);
             toast.error(errorMessage);
           }
         },
         onTranscript: (text, isFinal) => {
           if (isMounted.current) {
-            console.log('🎙️ Transcript update:', text, 'Final:', isFinal);
             setCurrentTranscript(text);
             
             // If final transcript, add user message
@@ -114,17 +114,17 @@ export const useVoiceChat = () => {
       voiceServiceRef.current.setFeedbackPrevention(feedbackPreventionEnabled);
       voiceServiceRef.current.setDelayAfterSpeaking(delayAfterSpeaking);
       
-      console.log('✅ Voice service initialized successfully');
+      console.log('Voice service initialized successfully');
     } catch (error) {
-      console.error('❌ Failed to initialize voice service:', error);
+      console.error('Failed to initialize voice service:', error);
       setError('Failed to initialize voice service');
     }
-  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion]);
+  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, isStudyPage]);
 
   // Update voice service when difficulty level changes
   useEffect(() => {
-    if (voiceServiceRef.current && user && isMounted.current) {
-      console.log('🔄 Updating voice service with new difficulty level:', difficultyLevel);
+    if (voiceServiceRef.current && user && isMounted.current && isStudyPage) {
+      console.log('Reinitializing voice service with new difficulty level:', difficultyLevel);
       
       // Dispose of old service
       voiceServiceRef.current.dispose();
@@ -181,15 +181,17 @@ export const useVoiceChat = () => {
         }
       });
     }
-  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion]);
+  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, isStudyPage]);
 
   const startVoiceChat = useCallback(async () => {
-    console.log('🎤 Starting voice chat...');
+    if (!isStudyPage) {
+      console.warn('Attempted to start voice chat outside of study page');
+      return;
+    }
     
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      const errorMsg = ERROR_MESSAGES.BROWSER_SUPPORT;
-      setError(errorMsg);
-      toast.error(errorMsg);
+      setError(ERROR_MESSAGES.BROWSER_SUPPORT);
+      toast.error(ERROR_MESSAGES.BROWSER_SUPPORT);
       return;
     }
     
@@ -202,24 +204,19 @@ export const useVoiceChat = () => {
           setIsPaused(false);
           setAvatarEmotion('listening');
           setError(null);
-          toast.success('🎤 Voice chat started - speak naturally');
+          toast.success('Voice chat started - speak naturally');
         }
-      } else {
-        throw new Error('Voice service not initialized');
       }
     } catch (error) {
-      console.error('❌ Failed to start voice chat:', error);
+      console.error('Failed to start voice chat:', error);
       if (isMounted.current) {
-        const errorMsg = ERROR_MESSAGES.MICROPHONE_ACCESS;
-        setError(errorMsg);
-        toast.error(errorMsg);
+        setError(ERROR_MESSAGES.MICROPHONE_ACCESS);
+        toast.error(ERROR_MESSAGES.MICROPHONE_ACCESS);
       }
     }
-  }, [setAvatarEmotion]);
+  }, [setAvatarEmotion, isStudyPage]);
 
   const stopVoiceChat = useCallback(() => {
-    console.log('🛑 Stopping voice chat...');
-    
     if (voiceServiceRef.current) {
       voiceServiceRef.current.stopListening();
     }
@@ -230,13 +227,11 @@ export const useVoiceChat = () => {
       setIsSpeaking(false);
       setAvatarEmotion('neutral');
       setCurrentTranscript('');
-      toast.success('🛑 Voice chat stopped');
+      toast.success('Voice chat stopped');
     }
   }, [setIsSpeaking, setAvatarEmotion]);
 
   const pauseVoiceChat = useCallback(() => {
-    console.log('⏸️ Pausing voice chat...');
-    
     if (voiceServiceRef.current) {
       voiceServiceRef.current.pauseConversation();
     }
@@ -244,22 +239,20 @@ export const useVoiceChat = () => {
     if (isMounted.current) {
       setIsPaused(true);
       setIsSpeaking(false);
-      toast.success('⏸️ Conversation paused');
+      toast.success('Conversation paused');
     }
   }, [setIsSpeaking]);
 
   const resumeVoiceChat = useCallback(() => {
-    console.log('▶️ Resuming voice chat...');
-    
-    if (voiceServiceRef.current) {
+    if (voiceServiceRef.current && isStudyPage) {
       voiceServiceRef.current.resumeConversation();
       
       if (isMounted.current) {
         setIsPaused(false);
-        toast.success('▶️ Conversation resumed');
+        toast.success('Conversation resumed');
       }
     }
-  }, []);
+  }, [isStudyPage]);
 
   const toggleVoiceChat = useCallback(() => {
     if (isPaused) {
@@ -270,13 +263,11 @@ export const useVoiceChat = () => {
   }, [isPaused, pauseVoiceChat, resumeVoiceChat]);
   
   const forceSubmitTranscript = useCallback(() => {
-    console.log('📤 Force submitting transcript...');
-    
-    if (voiceServiceRef.current) {
+    if (voiceServiceRef.current && isStudyPage) {
       voiceServiceRef.current.forceSubmitTranscript();
-      toast.success('📤 Transcript submitted manually');
+      toast.success('Transcript submitted manually');
     }
-  }, []);
+  }, [isStudyPage]);
   
   const setPauseThreshold = useCallback((milliseconds: number) => {
     if (milliseconds >= 500 && milliseconds <= 3000) {
@@ -286,7 +277,7 @@ export const useVoiceChat = () => {
         voiceServiceRef.current.setSilenceThreshold(milliseconds);
       }
       
-      toast.success(`⏱️ Speech end delay set to ${milliseconds}ms`);
+      toast.success(`Speech end delay set to ${milliseconds}ms`);
     } else {
       toast.error('Speech end delay must be between 500ms and 3000ms');
     }
@@ -300,7 +291,7 @@ export const useVoiceChat = () => {
         voiceServiceRef.current.setDelayAfterSpeaking(milliseconds);
       }
       
-      toast.success(`⏱️ Delay after speaking set to ${milliseconds}ms`);
+      toast.success(`Delay after speaking set to ${milliseconds}ms`);
     } else {
       toast.error('Delay after speaking must be between 200ms and 1000ms');
     }
@@ -314,37 +305,32 @@ export const useVoiceChat = () => {
       voiceServiceRef.current.setFeedbackPrevention(newValue);
     }
     
-    toast.success(`🛡️ Feedback prevention ${newValue ? 'enabled' : 'disabled'}`);
+    toast.success(`Feedback prevention ${newValue ? 'enabled' : 'disabled'}`);
   }, [feedbackPreventionEnabled]);
 
-  // Test function for debugging ElevenLabs
-  const testElevenLabsVoice = useCallback(async () => {
-    try {
-      console.log('🧪 Testing ElevenLabs voice...');
-      toast.loading('Testing ElevenLabs voice...');
-      
-      // Test API status first
-      const isWorking = await SimplifiedElevenLabsService.testAPI();
-      if (!isWorking) {
-        toast.error('❌ ElevenLabs API test failed');
-        return;
-      }
-      
-      // Test voice generation
-      const testText = "Hello, this is a test of the ElevenLabs voice system.";
-      const audioBlob = await SimplifiedElevenLabsService.generateSpeech(testText, currentAvatar);
-      
-      if (audioBlob && audioBlob.size > 1000) {
-        await SimplifiedElevenLabsService.playAudioBlob(audioBlob);
-        toast.success('✅ ElevenLabs voice test successful!');
-      } else {
-        toast.warning('⚠️ ElevenLabs returned fallback audio');
-      }
-    } catch (error) {
-      console.error('❌ ElevenLabs test failed:', error);
-      toast.error('❌ ElevenLabs test failed: ' + (error as Error).message);
-    }
-  }, [currentAvatar]);
+  // Return empty or disabled values when not on study page
+  if (!isStudyPage) {
+    return {
+      isActive: false,
+      isPaused: false,
+      error: null,
+      currentTranscript: '',
+      startVoiceChat: async () => {},
+      stopVoiceChat: () => {},
+      pauseVoiceChat: () => {},
+      resumeVoiceChat: () => {},
+      toggleVoiceChat: () => {},
+      forceSubmitTranscript: () => {},
+      setPauseThreshold: () => {},
+      setDelayAfterSpeaking: () => {},
+      pauseThreshold: 1500,
+      delayAfterSpeaking: 500,
+      feedbackPreventionEnabled: true,
+      toggleFeedbackPrevention: () => {},
+      visualizationData: null,
+      noiseLevel: 0
+    };
+  }
 
   return { 
     isActive,
@@ -364,7 +350,6 @@ export const useVoiceChat = () => {
     feedbackPreventionEnabled,
     toggleFeedbackPrevention,
     visualizationData,
-    noiseLevel,
-    testElevenLabsVoice
+    noiseLevel
   };
 };
