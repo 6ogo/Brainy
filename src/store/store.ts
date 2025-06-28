@@ -15,6 +15,7 @@ export const useStore = create<AppState>((set) => ({
   isRecording: false,
   learningMode: 'conversational',
   isStudyMode: false,
+  learningAnalytics: null,
   socialStats: {
     streak: {
       current: 1,
@@ -252,4 +253,12 @@ export const useStore = create<AppState>((set) => ({
     
   setStudyMode: (isEnabled: boolean) =>
     set({ isStudyMode: isEnabled }),
+    
+  updateLearningAnalytics: (analytics) =>
+    set((state) => ({
+      learningAnalytics: {
+        ...state.learningAnalytics,
+        ...analytics
+      }
+    })),
 }));

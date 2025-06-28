@@ -1,3 +1,5 @@
+import { create } from 'zustand';
+
 // Core types for the application
 
 export type Subject = 'Math' | 'Science' | 'English' | 'History' | 'Languages' | 'Test Prep' | 'All';
@@ -91,6 +93,23 @@ export interface SocialStats {
   levelProgress: number;
 }
 
+export interface LearningAnalytics {
+  learningStyle: 'visual' | 'auditory' | 'kinesthetic' | 'reading/writing';
+  peakStudyTime: 'Morning' | 'Afternoon' | 'Evening' | 'Night';
+  retentionRate: number;
+  topicsAnalysis: {
+    mastered: string[];
+    inProgress: string[];
+    struggling: string[];
+    recommended: string[];
+  };
+  subjectDistribution: Record<Subject, number>;
+  weeklyActivity: number[];
+  averageSessionLength: number;
+  totalStudyTime: number;
+  consistencyRating: 'Building' | 'Good' | 'Excellent';
+}
+
 export interface AppState {
   messages: Message[];
   currentSubject: Subject;
@@ -107,6 +126,7 @@ export interface AppState {
   socialStats: SocialStats;
   learningMode: LearningMode;
   isStudyMode: boolean;
+  learningAnalytics: LearningAnalytics | null;
   
   // Actions
   setCurrentSubject: (subject: Subject) => void;
@@ -128,4 +148,5 @@ export interface AppState {
   updateStreak: () => void;
   setLearningMode: (mode: LearningMode) => void;
   setStudyMode: (isEnabled: boolean) => void;
+  updateLearningAnalytics: (analytics: Partial<LearningAnalytics>) => void;
 }

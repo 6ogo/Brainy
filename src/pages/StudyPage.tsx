@@ -29,6 +29,7 @@ import { supabase } from '../lib/supabase';
 import { StudyModeToggle } from '../components/StudyModeToggle';
 import { QuickActionButtons } from '../components/QuickActionButtons';
 import { StudyModePrompt } from '../components/StudyModePrompt';
+import { StudySessionEndModal } from '../components/StudySessionEndModal';
 
 export const StudyPage: React.FC = () => {
   const { 
@@ -59,6 +60,7 @@ export const StudyPage: React.FC = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
   const [showStudyModePrompt, setShowStudyModePrompt] = useState(false);
+  const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   
   // Refs
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -364,19 +366,7 @@ export const StudyPage: React.FC = () => {
   };
 
   const endSession = () => {
-    // Clean up any ongoing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
-    }
-    
-    toast.success('Study session completed!');
-    navigate('/analytics');
+    setShowEndSessionModal(true);
   };
 
   const switchMode = (newMode: 'text' | 'voice') => {
@@ -523,6 +513,16 @@ export const StudyPage: React.FC = () => {
         {showStudyModePrompt && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <StudyModePrompt onClose={() => setShowStudyModePrompt(false)} />
+          </div>
+        )}
+
+        {/* End Session Modal */}
+        {showEndSessionModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <StudySessionEndModal 
+              onClose={() => setShowEndSessionModal(false)} 
+              className="w-full max-w-md"
+            />
           </div>
         )}
 
