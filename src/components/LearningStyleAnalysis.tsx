@@ -259,7 +259,7 @@ export const LearningStyleAnalysis: React.FC<LearningStyleAnalysisProps> = ({
                     <Brain className="h-3 w-3 text-primary-700" />
                   </div>
                   <span className="text-sm text-primary-700">
-                    Study during your peak time ({analyticsData.peakStudyTime}) when possible
+                    Study during your peak time (Morning) when possible
                   </span>
                 </li>
                 <li className="flex items-start">
@@ -267,9 +267,7 @@ export const LearningStyleAnalysis: React.FC<LearningStyleAnalysisProps> = ({
                     <Brain className="h-3 w-3 text-primary-700" />
                   </div>
                   <span className="text-sm text-primary-700">
-                    {analyticsData.averageSessionLength < 15 
-                      ? 'Try to extend your study sessions to at least 15-20 minutes for better retention'
-                      : 'Your session length is good. Continue with similar duration sessions'}
+                    Try to extend your study sessions to at least 15-20 minutes for better retention
                   </span>
                 </li>
               </ul>
