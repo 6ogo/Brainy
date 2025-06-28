@@ -7,6 +7,7 @@ import { useAchievements } from './useAchievements';
 import { hasAccess, checkDailyUsageLimit, trackDailyUsage } from '../services/subscriptionService';
 import { conversationRateLimiter } from '../utils/rateLimiter';
 import { SecurityUtils } from '../utils/security';
+import { ERROR_MESSAGES } from '../constants/ai';
 import toast from 'react-hot-toast';
 
 export const useConversation = () => {
@@ -31,13 +32,13 @@ export const useConversation = () => {
 
   const sendMessage = async (message: string, useVoice: boolean = false) => {
     if (!user) {
-      toast.error('Please sign in to continue.');
+      toast.error(ERROR_MESSAGES.UNAUTHORIZED);
       return;
     }
 
     // Rate limiting check
     if (!conversationRateLimiter.isAllowed(user.id)) {
-      toast.error('Too many messages. Please wait a moment before sending another.');
+      toast.error(ERROR_MESSAGES.RATE_LIMIT);
       return;
     }
 
@@ -57,7 +58,7 @@ export const useConversation = () => {
       // Check daily usage limits
       const canUseConversation = await checkDailyUsageLimit('conversation');
       if (!canUseConversation) {
-        toast.error('Daily conversation limit reached. Upgrade your plan for more usage.');
+        toast.error(ERROR_MESSAGES.DAILY_LIMIT_REACHED);
         return;
       }
 
@@ -65,13 +66,13 @@ export const useConversation = () => {
       if (useVoice) {
         const hasPremiumAccess = await hasAccess('premium');
         if (!hasPremiumAccess) {
-          toast.error('Voice features require a premium subscription.');
+          toast.error(ERROR_MESSAGES.SUBSCRIPTION_REQUIRED);
           return;
         }
 
         const canUseVideo = await checkDailyUsageLimit('video');
         if (!canUseVideo) {
-          toast.error('Daily video call limit reached. Upgrade your plan for more usage.');
+          toast.error(ERROR_MESSAGES.DAILY_LIMIT_REACHED);
           return;
         }
       }
@@ -127,6 +128,8 @@ export const useConversation = () => {
               toast.error('Audio playback not supported in this browser');
             } else if (audioError.message.includes('timeout')) {
               toast.error('Audio loading timeout - please try again');
+            } else if (audioError.message.includes('permission')) {
+              toast.error('Audio playback permission denied. Please check your browser settings.');
             } else {
               toast.error('Failed to play audio response');
             }
@@ -151,9 +154,6 @@ export const useConversation = () => {
 
       // Track daily usage
       try {
-        // Format the month_year field correctly (YYYY-MM)
-        const now = new Date();
-        
         await trackDailyUsage(conversationMinutes, videoMinutes);
       } catch (usageError) {
         console.error('Error tracking daily usage:', usageError);
@@ -195,24 +195,24 @@ export const useConversation = () => {
       // Provide user-friendly error messages
       if (error instanceof Error) {
         if (error.message.includes('rate limit')) {
-          toast.error('Too many requests. Please wait a moment.');
+          toast.error(ERROR_MESSAGES.RATE_LIMIT);
         } else if (error.message.includes('network')) {
-          toast.error('Network error. Please check your connection.');
+          toast.error(ERROR_MESSAGES.NETWORK);
         } else if (error.message.includes('Invalid response')) {
           toast.error('Received invalid response. Please try again.');
         } else if (error.message.includes('Daily conversation limit')) {
-          toast.error('Daily conversation limit reached. Upgrade for more usage.');
+          toast.error(ERROR_MESSAGES.DAILY_LIMIT_REACHED);
         } else if (error.message.includes('Premium subscription required')) {
-          toast.error('Voice features require a premium subscription.');
+          toast.error(ERROR_MESSAGES.SUBSCRIPTION_REQUIRED);
         } else if (error.message.includes('Voice service')) {
-          toast.error('Voice service temporarily unavailable. Please try text mode.');
+          toast.error(ERROR_MESSAGES.VOICE_SERVICE);
         } else if (error.message.includes('not configured')) {
           toast.error('Voice service not configured. Please add your API keys to the .env file.');
         } else {
-          toast.error('Failed to process message. Please try again.');
+          toast.error(ERROR_MESSAGES.GENERAL);
         }
       } else {
-        toast.error('An unexpected error occurred. Please try again.');
+        toast.error(ERROR_MESSAGES.GENERAL);
       }
       
       setIsSpeaking(false);

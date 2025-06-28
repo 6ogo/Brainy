@@ -3,6 +3,7 @@ import { useStore } from '../store/store';
 import { VoiceConversationService } from '../services/voiceConversationService';
 import { useAuth } from '../contexts/AuthContext';
 import { useSpeechRecognition } from './useSpeechRecognition';
+import { ERROR_MESSAGES } from '../constants/ai';
 import toast from 'react-hot-toast';
 
 export const useVoiceChat = () => {
@@ -41,9 +42,8 @@ export const useVoiceChat = () => {
   const pauseThresholdRef = useRef<number>(600); // 0.6 seconds pause threshold
   const [visualizationData, setVisualizationData] = useState<Uint8Array | null>(null);
   const [noiseLevel, setNoiseLevel] = useState<number>(0);
-  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [feedbackPreventionEnabled, setFeedbackPreventionEnabled] = useState(true);
-  const [delayAfterSpeaking, _setDelayAfterSpeaking] = useState(500); // 500ms delay
+  const [delayAfterSpeaking, setDelayAfterSpeaking] = useState(500); // 500ms delay
 
   // Cleanup on unmount
   useEffect(() => {
@@ -62,86 +62,96 @@ export const useVoiceChat = () => {
     if (!user) return;
 
     try {
-      voiceServiceRef.current = new VoiceConversationService({
-        userId: user.id,
-        subject: currentSubject,
-        avatarPersonality: currentAvatar,
-        difficultyLevel: difficultyLevel,
-        onResponse: (text) => {
-          if (isMounted.current) {
-            // If in study mode, make responses more concise
-            if (isStudyMode) {
-              // Simplify and shorten the response
-              const simplifiedText = simplifyResponse(text);
-              addMessage(simplifiedText, 'ai');
-            } else {
-              addMessage(text, 'ai');
-            }
-          }
-        },
-        onAudioStart: () => {
-          if (isMounted.current) {
-            setIsSpeaking(true);
-            setAvatarEmotion('neutral');
-            
-            // Mute microphone when AI starts speaking to prevent feedback
-            if (voiceServiceRef.current && feedbackPreventionEnabled) {
-              voiceServiceRef.current.setFeedbackPrevention(true);
-            }
-          }
-        },
-        onAudioEnd: () => {
-          if (isMounted.current) {
-            setIsSpeaking(false);
-            setAvatarEmotion('neutral');
-            processingRef.current = false;
-            
-            // Keep microphone muted for a short delay after AI stops speaking
-            setTimeout(() => {
-              // Then unmute if we're still mounted
-              if (isMounted.current && voiceServiceRef.current) {
-                // Voice service will handle unmuting after the delay
+      // Create a new voice service instance if one doesn't exist
+      if (!voiceServiceRef.current) {
+        voiceServiceRef.current = new VoiceConversationService({
+          userId: user.id,
+          subject: currentSubject,
+          avatarPersonality: currentAvatar,
+          difficultyLevel: difficultyLevel,
+          onResponse: (text) => {
+            if (isMounted.current) {
+              // If in study mode, make responses more concise
+              if (isStudyMode) {
+                // Simplify and shorten the response
+                const simplifiedText = simplifyResponse(text);
+                addMessage(simplifiedText, 'ai');
+              } else {
+                addMessage(text, 'ai');
               }
-            }, delayAfterSpeaking);
-          }
-        },
-        onError: (errorMessage) => {
-          if (isMounted.current) {
-            setError(errorMessage);
-            toast.error(errorMessage);
-            processingRef.current = false;
-          }
-        },
-        onTranscript: (text, isFinal) => {
-          if (isMounted.current) {
-            setCurrentTranscript(text);
-            
-            if (isFinal) {
-              if (text.trim().length > 3) {
-                if (isStudyMode) {
-                  // In study mode, wait for pause threshold after user stops speaking
-                  if (transcriptTimeoutRef.current) {
-                    clearTimeout(transcriptTimeoutRef.current);
-                  }
-                  
-                  transcriptTimeoutRef.current = window.setTimeout(() => {
-                    if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
-                      lastProcessedTranscriptRef.current = text;
-                      processingRef.current = true;
-                      addMessage(text, 'user');
-                    }
-                  }, pauseThresholdRef.current);
-                } else if (!processingRef.current) {
-                  processingRef.current = true;
-                  addMessage(text, 'user');
+            }
+          },
+          onAudioStart: () => {
+            if (isMounted.current) {
+              setIsSpeaking(true);
+              setAvatarEmotion('neutral');
+              
+              // Mute microphone when AI starts speaking to prevent feedback
+              if (voiceServiceRef.current && feedbackPreventionEnabled) {
+                voiceServiceRef.current.setFeedbackPrevention(true);
+              }
+            }
+          },
+          onAudioEnd: () => {
+            if (isMounted.current) {
+              setIsSpeaking(false);
+              setAvatarEmotion('neutral');
+              processingRef.current = false;
+              
+              // Keep microphone muted for a short delay after AI stops speaking
+              setTimeout(() => {
+                // Then unmute if we're still mounted
+                if (isMounted.current && voiceServiceRef.current) {
+                  // Voice service will handle unmuting after the delay
                 }
-              } else if (text.trim().length > 0) {
-                toast('Speech too short. Please try again.', { icon: '🗣️' });
+              }, delayAfterSpeaking);
+            }
+          },
+          onError: (errorMessage) => {
+            if (isMounted.current) {
+              setError(errorMessage);
+              toast.error(errorMessage);
+              processingRef.current = false;
+            }
+          },
+          onTranscript: (text, isFinal) => {
+            if (isMounted.current) {
+              setCurrentTranscript(text);
+              
+              if (isFinal) {
+                if (text.trim().length > 3) {
+                  if (isStudyMode) {
+                    // In study mode, wait for pause threshold after user stops speaking
+                    if (transcriptTimeoutRef.current) {
+                      clearTimeout(transcriptTimeoutRef.current);
+                    }
+                    
+                    transcriptTimeoutRef.current = window.setTimeout(() => {
+                      if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
+                        lastProcessedTranscriptRef.current = text;
+                        processingRef.current = true;
+                        addMessage(text, 'user');
+                      }
+                    }, pauseThresholdRef.current);
+                  } else if (!processingRef.current) {
+                    processingRef.current = true;
+                    addMessage(text, 'user');
+                  }
+                } else if (text.trim().length > 0) {
+                  toast('Speech too short. Please try again.', { icon: '🗣️' });
+                }
               }
             }
           }
-        }
-      });
+        });
+      } else {
+        // Update the configuration of the existing service
+        voiceServiceRef.current.updateConfiguration({
+          subject: currentSubject,
+          avatarPersonality: currentAvatar,
+          difficultyLevel: difficultyLevel
+        });
+      }
 
       // Set up audio visualization callback
       if (voiceServiceRef.current) {
@@ -160,6 +170,9 @@ export const useVoiceChat = () => {
         
         // Set delay after speaking
         voiceServiceRef.current.setDelayAfterSpeaking(delayAfterSpeaking);
+        
+        // Set silence threshold
+        voiceServiceRef.current.setSilenceThreshold(pauseThresholdRef.current);
       }
     } catch (error) {
       console.error('Failed to initialize voice service:', error);
@@ -167,129 +180,10 @@ export const useVoiceChat = () => {
     }
   }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode, feedbackPreventionEnabled, delayAfterSpeaking]);
 
-  // Update voice service when difficulty level changes
-  useEffect(() => {
-    if (voiceServiceRef.current && user && isMounted.current) {
-      // Reinitialize the service with the new difficulty level
-      voiceServiceRef.current = new VoiceConversationService({
-        userId: user.id,
-        subject: currentSubject,
-        avatarPersonality: currentAvatar,
-        difficultyLevel: difficultyLevel,
-        onResponse: (text) => {
-          if (isMounted.current) {
-            // If in study mode, make responses more concise
-            if (isStudyMode) {
-              // Simplify and shorten the response
-              const simplifiedText = simplifyResponse(text);
-              addMessage(simplifiedText, 'ai');
-            } else {
-              addMessage(text, 'ai');
-            }
-          }
-        },
-        onAudioStart: () => {
-          if (isMounted.current) {
-            setIsSpeaking(true);
-            setAvatarEmotion('neutral');
-            
-            // Mute microphone when AI starts speaking to prevent feedback
-            if (voiceServiceRef.current && feedbackPreventionEnabled) {
-              voiceServiceRef.current.setFeedbackPrevention(true);
-            }
-          }
-        },
-        onAudioEnd: () => {
-          if (isMounted.current) {
-            setIsSpeaking(false);
-            setAvatarEmotion('neutral');
-            processingRef.current = false;
-            
-            // Keep microphone muted for a short delay after AI stops speaking
-            setTimeout(() => {
-              // Then unmute if we're still mounted
-              if (isMounted.current && voiceServiceRef.current) {
-                // Voice service will handle unmuting after the delay
-              }
-            }, delayAfterSpeaking);
-          }
-        },
-        onError: (errorMessage) => {
-          if (isMounted.current) {
-            setError(errorMessage);
-            toast.error(errorMessage);
-            processingRef.current = false;
-          }
-        },
-        onTranscript: (text, isFinal) => {
-          if (isMounted.current) {
-            setCurrentTranscript(text);
-            if (isFinal && text.trim()) {
-              if (isStudyMode) {
-                // In study mode, wait for pause threshold after user stops speaking
-                if (transcriptTimeoutRef.current) {
-                  clearTimeout(transcriptTimeoutRef.current);
-                }
-                
-                transcriptTimeoutRef.current = window.setTimeout(() => {
-                  if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
-                    lastProcessedTranscriptRef.current = text;
-                    processingRef.current = true;
-                    addMessage(text, 'user');
-                  }
-                }, pauseThresholdRef.current);
-              } else if (!processingRef.current) {
-                processingRef.current = true;
-                addMessage(text, 'user');
-              }
-            }
-          }
-        }
-      });
-      
-      // Set up audio visualization callback
-      if (voiceServiceRef.current) {
-        voiceServiceRef.current.setAudioVisualizationCallback((data) => {
-          setVisualizationData(data);
-          
-          // Calculate noise level
-          if (data.length > 0) {
-            const sum = Array.from(data).reduce((acc, val) => acc + val, 0);
-            setNoiseLevel(sum / data.length);
-          }
-        });
-        
-        // Set feedback prevention
-        voiceServiceRef.current.setFeedbackPrevention(feedbackPreventionEnabled);
-        
-        // Set delay after speaking
-        voiceServiceRef.current.setDelayAfterSpeaking(delayAfterSpeaking);
-      }
-      
-      console.log(`Voice service updated with difficulty level: ${difficultyLevel}`);
-    }
-  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode, feedbackPreventionEnabled, delayAfterSpeaking]);
-
-  // Initialize audio context for noise detection
-  useEffect(() => {
-    try {
-      const context = new (window.AudioContext || (window as any).webkitAudioContext)();
-      setAudioContext(context);
-      
-      return () => {
-        context.close().catch(err => {
-          console.error('Error closing audio context:', err);
-        });
-      };
-    } catch (error) {
-      console.error('Failed to initialize audio context:', error);
-    }
-  }, []);
-
   const startVoiceChat = useCallback(async () => {
     if (!browserSupportsSpeechRecognition) {
-      setError('Speech recognition is not supported in this browser');
-      toast.error('Speech recognition is not supported in this browser. Please try Chrome, Edge, or Safari.');
+      setError(ERROR_MESSAGES.BROWSER_SUPPORT);
+      toast.error(ERROR_MESSAGES.BROWSER_SUPPORT);
       return;
     }
     
@@ -311,8 +205,8 @@ export const useVoiceChat = () => {
     } catch (error) {
       console.error('Failed to start voice chat:', error);
       if (isMounted.current) {
-        setError('Failed to start voice chat. Please check your microphone permissions.');
-        toast.error('Failed to start voice chat. Please check your microphone permissions.');
+        setError(ERROR_MESSAGES.MICROPHONE_ACCESS);
+        toast.error(ERROR_MESSAGES.MICROPHONE_ACCESS);
       }
     }
   }, [setAvatarEmotion, browserSupportsSpeechRecognition]);
@@ -408,9 +302,9 @@ export const useVoiceChat = () => {
   }, []);
   
   // Set delay after speaking
-  const setDelayAfterSpeaking = useCallback((milliseconds: number) => {
+  const setDelayAfterSpeakingCallback = useCallback((milliseconds: number) => {
     if (milliseconds >= 200 && milliseconds <= 1000) {
-      _setDelayAfterSpeaking(milliseconds);
+      setDelayAfterSpeaking(milliseconds);
       
       // Also update the voice service if available
       if (voiceServiceRef.current) {
@@ -486,7 +380,7 @@ export const useVoiceChat = () => {
     toggleVoiceChat,
     forceSubmitTranscript,
     setPauseThreshold,
-    setDelayAfterSpeaking,
+    setDelayAfterSpeaking: setDelayAfterSpeakingCallback,
     pauseThreshold: pauseThresholdRef.current,
     delayAfterSpeaking,
     feedbackPreventionEnabled,

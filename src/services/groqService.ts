@@ -1,4 +1,4 @@
-import { API_CONFIG } from '../config/api';
+import { AI_MODELS, GENERATION_PARAMS, ERROR_MESSAGES } from '../constants/ai';
 import { SecurityUtils } from '../utils/security';
 
 interface GroqMessage {
@@ -17,6 +17,7 @@ interface GroqResponse {
 export class GroqService {
   private static API_URL = 'https://api.groq.com/openai/v1/chat/completions';
   private static conversationHistory = new Map<string, GroqMessage[]>();
+  private static apiKey = import.meta.env.VITE_GROQ_API_KEY || '';
 
   static async generateResponse(
     message: string,
@@ -27,7 +28,7 @@ export class GroqService {
     isStudyMode: boolean = false
   ): Promise<string> {
     try {
-      if (!API_CONFIG.GROQ_API_KEY) {
+      if (!this.apiKey) {
         throw new Error('GROQ API key not configured');
       }
 
@@ -54,21 +55,34 @@ export class GroqService {
       const response = await fetch(this.API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${API_CONFIG.GROQ_API_KEY}`,
+          'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: AI_MODELS.GROQ.DEFAULT,
           messages,
-          temperature: 0.7,
-          max_tokens: 1024,
+          temperature: isStudyMode ? GENERATION_PARAMS.STUDY_MODE_TEMPERATURE : GENERATION_PARAMS.DEFAULT_TEMPERATURE,
+          max_tokens: isStudyMode ? GENERATION_PARAMS.STUDY_MODE_MAX_TOKENS : GENERATION_PARAMS.DEFAULT_MAX_TOKENS,
           stream: false
         })
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`GROQ API error: ${response.status} - ${errorText}`);
+        console.error(`GROQ API error: ${response.status} - ${errorText}`);
+        
+        // Provide specific error messages based on status code
+        if (response.status === 401) {
+          throw new Error('Invalid API key. Please check your GROQ API key configuration.');
+        } else if (response.status === 429) {
+          throw new Error('Rate limit exceeded. Please try again later.');
+        } else if (response.status === 400) {
+          throw new Error('Invalid request parameters. Please check your input.');
+        } else if (response.status === 500) {
+          throw new Error('GROQ service error. Please try again later.');
+        } else {
+          throw new Error(`GROQ API error: ${response.status} - ${errorText}`);
+        }
       }
 
       const data: GroqResponse = await response.json();
@@ -94,7 +108,23 @@ export class GroqService {
       return aiResponse;
     } catch (error) {
       console.error('GROQ Service error:', error);
-      throw error;
+      
+      // Provide user-friendly error messages
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          throw new Error('AI service configuration error. Please contact support.');
+        } else if (error.message.includes('Rate limit')) {
+          throw new Error(ERROR_MESSAGES.RATE_LIMIT);
+        } else if (error.message.includes('Invalid request')) {
+          throw new Error('Invalid request. Please try a different question.');
+        } else if (error.message.includes('GROQ service error')) {
+          throw new Error(ERROR_MESSAGES.VOICE_SERVICE);
+        } else {
+          throw new Error(ERROR_MESSAGES.GENERAL);
+        }
+      } else {
+        throw new Error(ERROR_MESSAGES.GENERAL);
+      }
     }
   }
 
@@ -103,7 +133,7 @@ export class GroqService {
     aiResponse: string
   ): Promise<string> {
     try {
-      if (!API_CONFIG.GROQ_API_KEY) {
+      if (!this.apiKey) {
         throw new Error('GROQ API key not configured');
       }
 
@@ -118,20 +148,22 @@ export class GroqService {
       const response = await fetch(this.API_URL, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${API_CONFIG.GROQ_API_KEY}`,
+          'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: AI_MODELS.GROQ.DEFAULT,
           messages,
-          temperature: 0.3,
-          max_tokens: 100,
+          temperature: GENERATION_PARAMS.SUMMARY_TEMPERATURE,
+          max_tokens: GENERATION_PARAMS.SUMMARY_MAX_TOKENS,
           stream: false
         })
       });
 
       if (!response.ok) {
-        throw new Error(`GROQ API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`GROQ API error during summary generation: ${response.status} - ${errorText}`);
+        return '';
       }
 
       const data: GroqResponse = await response.json();
@@ -142,7 +174,7 @@ export class GroqService {
     }
   }
 
-  private static createSystemPrompt(
+  static createSystemPrompt(
     subject: string,
     avatarPersonality: string,
     difficultyLevel: string,

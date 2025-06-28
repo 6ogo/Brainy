@@ -1,4 +1,18 @@
-import { API_CONFIG, getVoiceConfig, isElevenLabsConfigured, createFallbackResponse } from '../config/api';
+import { createSilentAudioBlob, generateSpeech } from '../utils/speechSynthesisFallback';
+import { VOICE_IDS, VOICE_SETTINGS, API_TIMEOUTS, RETRY_CONFIG, ERROR_MESSAGES } from '../constants/ai';
+import { AvatarPersonality } from '../types';
+
+interface VoiceConfig {
+  voiceId: string;
+  model: string;
+  settings: {
+    stability: number;
+    similarity_boost: number;
+    style: number;
+    use_speaker_boost: boolean;
+  };
+  description: string;
+}
 
 export class ElevenLabsService {
   private static apiCallsInProgress = 0;
@@ -9,6 +23,8 @@ export class ElevenLabsService {
   private static quotaExceeded = false;
   private static lastQuotaCheckTime = 0;
   private static quotaCheckInterval = 5 * 60 * 1000; // 5 minutes
+  private static apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY || '';
+  private static baseUrl = 'https://api.elevenlabs.io/v1';
   
   static async generateSpeech(text: string, persona: string): Promise<Blob> {
     try {
@@ -27,16 +43,16 @@ export class ElevenLabsService {
       }
 
       // Check if ElevenLabs is configured
-      if (!isElevenLabsConfigured()) {
+      if (!this.isElevenLabsConfigured()) {
         console.log('ElevenLabs not configured, using fallback speech synthesis');
-        return await createFallbackResponse('elevenlabs', text, persona) as Blob;
+        return this.useSpeechSynthesisFallback(text, persona as AvatarPersonality);
       }
       
       // If quota was exceeded recently, use fallback directly without trying API
       const now = Date.now();
       if (this.quotaExceeded && (now - this.lastQuotaCheckTime) < this.quotaCheckInterval) {
         console.log('Quota exceeded recently, using fallback directly');
-        return await createFallbackResponse('elevenlabs', text, persona) as Blob;
+        return this.useSpeechSynthesisFallback(text, persona as AvatarPersonality);
       }
 
       // Queue the request if too many are in progress
@@ -85,7 +101,7 @@ export class ElevenLabsService {
         }
         
         // Use browser's speech synthesis as fallback
-        return await createFallbackResponse('elevenlabs', text, persona) as Blob;
+        return this.useSpeechSynthesisFallback(text, persona as AvatarPersonality);
       } finally {
         this.apiCallsInProgress--;
         this.processQueue();
@@ -94,13 +110,13 @@ export class ElevenLabsService {
       console.error('Error generating speech:', error);
       
       // Final fallback to browser speech synthesis
-      return await createFallbackResponse('elevenlabs', text, persona) as Blob;
+      return this.useSpeechSynthesisFallback(text, persona as AvatarPersonality);
     }
   }
 
   private static async callElevenLabsAPI(text: string, persona: string): Promise<Blob> {
     // Get voice configuration for the persona
-    const voiceConfig = getVoiceConfig(persona);
+    const voiceConfig = this.getVoiceConfig(persona);
     
     // Truncate text based on model capabilities
     const maxLength = voiceConfig.model === 'eleven_flash_v2_5' ? 5000 : 
@@ -120,19 +136,19 @@ export class ElevenLabsService {
     console.log('Request settings:', JSON.stringify(voiceConfig.settings, null, 2));
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.ELEVENLABS_TIMEOUT);
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUTS.ELEVENLABS);
 
     try {
       // Add retry logic
       let retries = 0;
-      const maxRetries = 2;
+      const maxRetries = RETRY_CONFIG.MAX_RETRIES;
       
       while (retries <= maxRetries) {
         try {
-          const response = await fetch(`${API_CONFIG.ELEVENLABS_BASE_URL}/text-to-speech/${voiceConfig.voiceId}`, {
+          const response = await fetch(`${this.baseUrl}/text-to-speech/${voiceConfig.voiceId}`, {
             method: 'POST',
             headers: {
-              'xi-api-key': API_CONFIG.ELEVENLABS_API_KEY,
+              'xi-api-key': this.apiKey,
               'Content-Type': 'application/json',
               'Accept': 'audio/mpeg',
             },
@@ -193,7 +209,7 @@ export class ElevenLabsService {
           console.log(`Retrying ElevenLabs API call (${retries}/${maxRetries})`);
           
           // Wait before retrying (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+          await new Promise(resolve => setTimeout(resolve, RETRY_CONFIG.INITIAL_BACKOFF * Math.pow(2, retries)));
         }
       }
       
@@ -288,44 +304,19 @@ export class ElevenLabsService {
 
   // Create a silent audio blob for compatibility
   static async createFallbackAudio(text?: string): Promise<Blob> {
-    return new Promise((resolve) => {
-      if (text && 'speechSynthesis' in window) {
-        // Use browser's speech synthesis
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-        
-        window.speechSynthesis.speak(utterance);
+    if (text && 'speechSynthesis' in window) {
+      // Use browser's speech synthesis
+      try {
+        await generateSpeech({
+          text,
+          onError: (error) => console.error('Speech synthesis fallback error:', error)
+        });
+      } catch (error) {
+        console.error('Failed to use speech synthesis fallback:', error);
       }
-      
-      // Create minimal WAV header for silent audio
-      const arrayBuffer = new ArrayBuffer(44);
-      const view = new DataView(arrayBuffer);
-      
-      const writeString = (offset: number, string: string) => {
-        for (let i = 0; i < string.length; i++) {
-          view.setUint8(offset + i, string.charCodeAt(i));
-        }
-      };
-      
-      // WAV file header
-      writeString(0, 'RIFF');
-      view.setUint32(4, 36, true);
-      writeString(8, 'WAVE');
-      writeString(12, 'fmt ');
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, 1, true);
-      view.setUint32(24, 22050, true);
-      view.setUint32(28, 44100, true);
-      view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true);
-      writeString(36, 'data');
-      view.setUint32(40, 0, true);
-      
-      resolve(new Blob([arrayBuffer], { type: 'audio/wav' }));
-    });
+    }
+    
+    return createSilentAudioBlob();
   }
 
   // Process the next request in the queue
@@ -354,51 +345,60 @@ export class ElevenLabsService {
     this.cache.set(key, blob);
   }
 
-  // Utility method to get available voices for debugging
-  static getAvailableVoices(): SpeechSynthesisVoice[] {
-    if ('speechSynthesis' in window) {
-      return window.speechSynthesis.getVoices();
-    }
-    return [];
-  }
-
-  // Method to test voice generation
-  static async testVoice(persona: string, testText: string = "Hello, this is a voice test."): Promise<boolean> {
-    try {
-      console.log(`Testing voice for persona: ${persona}`);
-      const audioBlob = await this.generateSpeech(testText, persona);
-      console.log(`Voice test successful: ${audioBlob.size} bytes generated`);
-      return true;
-    } catch (error) {
-      console.error(`Voice test failed for ${persona}:`, error);
-      return false;
-    }
-  }
-
-  // Method to get voice information
-  static getVoiceInfo(persona: string) {
-    const config = getVoiceConfig(persona);
+  // Get voice configuration for a persona
+  private static getVoiceConfig(persona: string): VoiceConfig {
+    const voiceId = VOICE_IDS[persona as keyof typeof VOICE_IDS] || VOICE_IDS['encouraging-emma'];
+    
     return {
-      persona,
-      voiceId: config.voiceId,
-      model: config.model,
-      description: config.description,
-      settings: config.settings
+      voiceId,
+      model: VOICE_SETTINGS.PERSONA_SETTINGS[persona as keyof typeof VOICE_SETTINGS.PERSONA_SETTINGS]?.model || 'eleven_monolingual_v1',
+      settings: {
+        stability: 0.5,
+        similarity_boost: 0.75,
+        style: 0.5,
+        use_speaker_boost: true
+      },
+      description: `Voice for ${persona}`
     };
+  }
+
+  // Check if ElevenLabs API is configured
+  static isElevenLabsConfigured(): boolean {
+    return !!this.apiKey;
+  }
+
+  // Use speech synthesis fallback
+  private static async useSpeechSynthesisFallback(text: string, persona?: AvatarPersonality): Promise<Blob> {
+    console.log('Using speech synthesis fallback');
+    
+    try {
+      // Use the centralized speech synthesis utility
+      await generateSpeech({
+        text,
+        persona,
+        onError: (error) => console.error('Speech synthesis fallback error:', error)
+      });
+      
+      // Return a silent blob for compatibility with audio interfaces
+      return createSilentAudioBlob();
+    } catch (error) {
+      console.error('Speech synthesis fallback failed:', error);
+      return createSilentAudioBlob();
+    }
   }
 
   // Method to check ElevenLabs API status
   static async checkApiStatus(): Promise<boolean> {
-    if (!isElevenLabsConfigured()) {
+    if (!this.isElevenLabsConfigured()) {
       console.log('ElevenLabs API key not configured');
       return false;
     }
 
     try {
       // Try a simple API call to check if the key works
-      const response = await fetch(`${API_CONFIG.ELEVENLABS_BASE_URL}/voices`, {
+      const response = await fetch(`${this.baseUrl}/voices`, {
         headers: {
-          'xi-api-key': API_CONFIG.ELEVENLABS_API_KEY,
+          'xi-api-key': this.apiKey,
         },
       });
 

@@ -1,7 +1,8 @@
+import { generateSpeech } from '../utils/speechSynthesisFallback';
 import { ElevenLabsService } from './elevenlabsService';
 import { GroqService } from './groqService';
 import { SecurityUtils } from '../utils/security';
-import { API_CONFIG } from '../config/api';
+import { ERROR_MESSAGES, VOICE_SETTINGS } from '../constants/ai';
 
 interface VoiceConversationConfig {
   userId: string;
@@ -26,7 +27,7 @@ export class VoiceConversationService {
   private recognitionLanguage = 'en-US';
   private stream: MediaStream | null = null;
   private processingTimeout: number | null = null;
-  private maxSilenceTime = 600; // Default 600ms of silence before processing
+  private silenceThreshold = 600; // Default 600ms of silence before processing
   private lastSpeechTimestamp = 0;
   private silenceTimer: number | null = null;
   private noiseThreshold = 3; // Minimum characters to consider as valid speech
@@ -47,9 +48,44 @@ export class VoiceConversationService {
     this.initializeAudioContext();
   }
 
+  /**
+   * Updates the configuration of the voice conversation service
+   * @param newConfig Updated configuration parameters
+   */
+  updateConfiguration(newConfig: Partial<VoiceConversationConfig>): void {
+    this.config = { ...this.config, ...newConfig };
+    console.log('Voice conversation service configuration updated:', newConfig);
+  }
+
+  /**
+   * Cleans up resources when the service is no longer needed
+   */
+  dispose(): void {
+    this.stopListening();
+    this.stopSpeaking();
+    
+    // Stop visualization loop
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    
+    // Close audio context
+    if (this.audioContext) {
+      this.audioContext.close().catch(err => {
+        console.error('Error closing audio context:', err);
+      });
+    }
+    
+    // Clear callbacks
+    this.audioVisualizationCallback = null;
+    
+    console.log('Voice conversation service disposed');
+  }
+
   private initializeSpeechRecognition(): void {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      this.config.onError?.('Speech recognition is not supported in this browser');
+      this.config.onError?.(ERROR_MESSAGES.BROWSER_SUPPORT);
       return;
     }
 
@@ -76,7 +112,7 @@ export class VoiceConversationService {
           // Notify about interim results for UI feedback
           this.config.onTranscript?.(transcript, lastResult.isFinal);
           
-          // Clear any pending timeout
+          // Clear any existing timeout
           if (this.processingTimeout) {
             clearTimeout(this.processingTimeout);
             this.processingTimeout = null;
@@ -100,11 +136,11 @@ export class VoiceConversationService {
             // Start silence detection timer
             this.silenceTimer = window.setTimeout(() => {
               const silenceDuration = Date.now() - this.lastSpeechTimestamp;
-              if (silenceDuration >= this.maxSilenceTime && transcript && !this.isProcessing) {
+              if (silenceDuration >= this.silenceThreshold && transcript && !this.isProcessing) {
                 console.log('Processing after silence detection:', transcript);
                 this.handleUserSpeech(transcript);
               }
-            }, this.maxSilenceTime);
+            }, this.silenceThreshold);
           }
         }
       };
@@ -247,7 +283,7 @@ export class VoiceConversationService {
       console.log('Speech recognition started');
     } catch (error) {
       console.error('Failed to start listening:', error);
-      this.config.onError?.('Failed to access microphone. Please check your browser permissions.');
+      this.config.onError?.(ERROR_MESSAGES.MICROPHONE_ACCESS);
     }
   }
 
@@ -337,7 +373,7 @@ export class VoiceConversationService {
 
   setSilenceThreshold(milliseconds: number): void {
     if (milliseconds >= 300 && milliseconds <= 2000) {
-      this.maxSilenceTime = milliseconds;
+      this.silenceThreshold = milliseconds;
       console.log(`Silence threshold set to: ${milliseconds}ms`);
     }
   }
@@ -394,7 +430,7 @@ export class VoiceConversationService {
 
       // Generate AI response
       let aiResponse;
-      if (!API_CONFIG.GROQ_API_KEY) {
+      if (!import.meta.env.VITE_GROQ_API_KEY) {
         aiResponse = `I heard you say: "${sanitizedTranscript}". However, I'm currently operating in fallback mode because the AI service is not fully configured. Please check your API keys in the .env file.`;
       } else {
         aiResponse = await GroqService.generateResponse(
@@ -420,7 +456,7 @@ export class VoiceConversationService {
       
       let audioBlob;
       try {
-        if (!API_CONFIG.ELEVENLABS_API_KEY) {
+        if (!import.meta.env.VITE_ELEVENLABS_API_KEY) {
           // Use fallback if ElevenLabs API key is not configured
           audioBlob = await ElevenLabsService.createFallbackAudio(aiResponse);
           console.log('Using fallback speech generation');
@@ -434,18 +470,14 @@ export class VoiceConversationService {
         }
       } catch (audioError) {
         console.error('Audio generation or playback error:', audioError);
+        
         // Use browser's speech synthesis as fallback
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(aiResponse);
-          utterance.rate = 1;
-          utterance.pitch = 1;
-          utterance.volume = 1;
-          
-          window.speechSynthesis.speak(utterance);
-          
-          // Wait for speech to complete
-          return new Promise<void>((resolve) => {
-            utterance.onend = () => {
+        try {
+          await generateSpeech({
+            text: aiResponse,
+            persona: this.config.avatarPersonality as any,
+            onStart: () => console.log('Browser speech synthesis started'),
+            onEnd: () => {
               this.config.onAudioEnd?.();
               
               // Keep microphone muted for a short delay after AI stops speaking
@@ -454,24 +486,12 @@ export class VoiceConversationService {
                   this.unmuteRecognition();
                 }, this.delayAfterSpeaking);
               }
-              
-              resolve();
-            };
-            
-            // Fallback timeout in case onend doesn't fire
-            setTimeout(() => {
-              this.config.onAudioEnd?.();
-              
-              // Keep microphone muted for a short delay after AI stops speaking
-              if (this.feedbackPrevention) {
-                setTimeout(() => {
-                  this.unmuteRecognition();
-                }, this.delayAfterSpeaking);
-              }
-              
-              resolve();
-            }, aiResponse.length * 50); // Rough estimate of speech duration
+            },
+            onError: (error) => console.error('Browser speech synthesis error:', error)
           });
+        } catch (synthError) {
+          console.error('Speech synthesis fallback failed:', synthError);
+          this.config.onError?.('Voice output failed. Please check your audio settings.');
         }
       } finally {
         this.config.onAudioEnd?.();
@@ -595,28 +615,5 @@ export class VoiceConversationService {
 
   getCurrentTranscript(): string {
     return this.currentTranscript;
-  }
-
-  dispose(): void {
-    this.stopListening();
-    this.stopSpeaking();
-    
-    // Stop visualization loop
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
-    
-    // Close audio context
-    if (this.audioContext) {
-      this.audioContext.close().catch(err => {
-        console.error('Error closing audio context:', err);
-      });
-    }
-    
-    // Clear callbacks
-    this.audioVisualizationCallback = null;
-    
-    console.log('Voice conversation service disposed');
   }
 }
