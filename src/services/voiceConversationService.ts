@@ -48,6 +48,16 @@ export class VoiceConversationService {
   private useBrowserSpeechSynthesis = false;
   private consecutiveApiFailures = 0;
   private maxConsecutiveFailures = 3;
+  private audioWorkletNode: AudioWorkletNode | null = null;
+  private feedbackDetectionThreshold = 0.7;
+  private microphoneGainNode: GainNode | null = null;
+  private speakerOutputNode: GainNode | null = null;
+  private audioLevelHistory: number[] = [];
+  private audioLevelHistorySize = 10;
+  private feedbackOccurrences = 0;
+  private maxFeedbackOccurrences = 3;
+  private lastFeedbackTime = 0;
+  private feedbackCooldown = 2000; // 2 seconds cooldown between feedback detections
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -61,21 +71,135 @@ export class VoiceConversationService {
     }
   }
 
-  private initializeAudioContext(): void {
+  private async initializeAudioContext(): Promise<void> {
     try {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      console.log('Audio context initialized successfully');
+      
+      // Create analyzer for visualization
       this.analyser = this.audioContext.createAnalyser();
-      this.analyser.fftSize = 256;
+      this.analyser.fftSize = 1024; // Higher resolution for better visualization
+      this.analyser.smoothingTimeConstant = 0.8; // Smoother transitions
       this.audioDataArray = new Uint8Array(this.analyser.frequencyBinCount);
       
-      // Create noise detector
-      this.noiseDetector = this.audioContext.createScriptProcessor(4096, 1, 1);
-      this.noiseDetector.onaudioprocess = this.detectNoise.bind(this);
+      // Create gain nodes for volume control
+      this.microphoneGainNode = this.audioContext.createGain();
+      this.speakerOutputNode = this.audioContext.createGain();
       
-      console.log('Audio context initialized successfully');
+      // Set initial volume
+      this.microphoneGainNode.gain.value = 1.0;
+      this.speakerOutputNode.gain.value = 0.8;
+      
+      // Try to use AudioWorklet for better performance if supported
+      if ('audioWorklet' in this.audioContext) {
+        try {
+          // Create a blob URL for the worklet processor code
+          const workletCode = `
+            class FeedbackDetectionProcessor extends AudioWorkletProcessor {
+              constructor() {
+                super();
+                this.lastSamples = new Float32Array(1024).fill(0);
+                this.currentSamples = new Float32Array(1024);
+                this.threshold = 0.8;
+                this.feedbackDetected = false;
+                this.cooldownCounter = 0;
+                this.cooldownPeriod = 128; // About 3 seconds at 44.1kHz
+              }
+              
+              process(inputs, outputs, parameters) {
+                const input = inputs[0][0];
+                if (!input) return true;
+                
+                // Store current samples
+                this.currentSamples.set(input);
+                
+                // Skip processing during cooldown
+                if (this.cooldownCounter > 0) {
+                  this.cooldownCounter--;
+                  this.port.postMessage({ feedbackDetected: false, level: 0 });
+                  return true;
+                }
+                
+                // Calculate correlation between current and last samples
+                let correlation = 0;
+                let power = 0;
+                
+                for (let i = 0; i < input.length; i++) {
+                  correlation += this.currentSamples[i] * this.lastSamples[i];
+                  power += this.currentSamples[i] * this.currentSamples[i];
+                }
+                
+                // Normalize correlation
+                const normalizedCorrelation = power > 0 ? Math.abs(correlation / power) : 0;
+                
+                // Detect feedback if correlation is above threshold
+                if (normalizedCorrelation > this.threshold && power > 0.01) {
+                  this.feedbackDetected = true;
+                  this.cooldownCounter = this.cooldownPeriod;
+                  this.port.postMessage({ 
+                    feedbackDetected: true, 
+                    level: normalizedCorrelation,
+                    power: power
+                  });
+                } else {
+                  this.port.postMessage({ 
+                    feedbackDetected: false, 
+                    level: normalizedCorrelation,
+                    power: power
+                  });
+                }
+                
+                // Store current samples for next comparison
+                this.lastSamples.set(this.currentSamples);
+                
+                return true;
+              }
+            }
+            
+            registerProcessor('feedback-detection-processor', FeedbackDetectionProcessor);
+          `;
+          
+          const blob = new Blob([workletCode], { type: 'application/javascript' });
+          const workletUrl = URL.createObjectURL(blob);
+          
+          // Load the worklet
+          await this.audioContext.audioWorklet.addModule(workletUrl);
+          
+          // Create worklet node
+          this.audioWorkletNode = new AudioWorkletNode(this.audioContext, 'feedback-detection-processor');
+          
+          // Listen for messages from the worklet
+          this.audioWorkletNode.port.onmessage = (event) => {
+            const { feedbackDetected, level, power } = event.data;
+            
+            if (feedbackDetected) {
+              console.log(`Feedback detected! Level: ${level.toFixed(2)}, Power: ${power.toFixed(2)}`);
+              this.handleFeedbackDetection();
+            }
+          };
+          
+          console.log('AudioWorklet initialized for feedback detection');
+        } catch (workletError) {
+          console.warn('Failed to initialize AudioWorklet, falling back to ScriptProcessorNode:', workletError);
+          this.initializeScriptProcessor();
+        }
+      } else {
+        console.log('AudioWorklet not supported, using ScriptProcessorNode');
+        this.initializeScriptProcessor();
+      }
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
     }
+  }
+
+  private initializeScriptProcessor(): void {
+    if (!this.audioContext) return;
+    
+    // Create script processor for audio analysis
+    this.noiseDetector = this.audioContext.createScriptProcessor(4096, 1, 1);
+    this.noiseDetector.onaudioprocess = this.detectNoise.bind(this);
+    
+    console.log('ScriptProcessorNode initialized for feedback detection');
   }
 
   private detectNoise(event: AudioProcessingEvent): void {
@@ -90,11 +214,38 @@ export class VoiceConversationService {
     }
     
     const rms = Math.sqrt(sum / input.length);
-    const db = 20 * Math.log10(rms);
+    const db = 20 * Math.log10(Math.max(rms, 1e-10));
     
     // If sound level is above threshold, update last speech timestamp
     if (db > -50) { // Adjust threshold as needed
       this.lastSpeechTimestamp = Date.now();
+    }
+    
+    // Track audio levels for feedback detection
+    this.audioLevelHistory.push(rms);
+    if (this.audioLevelHistory.length > this.audioLevelHistorySize) {
+      this.audioLevelHistory.shift();
+    }
+    
+    // Check for potential feedback by analyzing audio level patterns
+    if (this.feedbackPreventionEnabled && this.audioLevelHistory.length === this.audioLevelHistorySize) {
+      const increasing = this.isAudioLevelIncreasing();
+      const highLevel = rms > 0.1; // Threshold for high audio level
+      
+      // If audio levels are consistently increasing and high, it might be feedback
+      if (increasing && highLevel && Date.now() - this.lastFeedbackTime > this.feedbackCooldown) {
+        this.feedbackOccurrences++;
+        this.lastFeedbackTime = Date.now();
+        
+        if (this.feedbackOccurrences >= this.maxFeedbackOccurrences) {
+          console.log('Feedback loop detected, muting microphone');
+          this.handleFeedbackDetection();
+          this.feedbackOccurrences = 0;
+        }
+      } else if (!highLevel) {
+        // Reset counter if levels are normal
+        this.feedbackOccurrences = Math.max(0, this.feedbackOccurrences - 1);
+      }
     }
     
     // If AI is speaking, record the frequency pattern
@@ -109,14 +260,9 @@ export class VoiceConversationService {
         );
         
         // If similarity is high, it might be feedback
-        if (similarityScore > 0.7 && db > -40) {
-          console.log('Potential feedback detected, muting microphone');
-          this.muteUserMicrophone();
-          
-          // Unmute after a short delay
-          setTimeout(() => {
-            this.unmuteUserMicrophone();
-          }, 1000);
+        if (similarityScore > this.feedbackDetectionThreshold && db > -40) {
+          console.log(`Potential feedback detected, similarity: ${similarityScore.toFixed(2)}, db: ${db.toFixed(2)}`);
+          this.handleFeedbackDetection();
         }
       }
       
@@ -125,6 +271,46 @@ export class VoiceConversationService {
         this.audioVisualizationCallback(this.audioDataArray);
       }
     }
+  }
+
+  private isAudioLevelIncreasing(): boolean {
+    if (this.audioLevelHistory.length < 3) return false;
+    
+    // Check if audio levels are consistently increasing
+    for (let i = 2; i < this.audioLevelHistory.length; i++) {
+      if (this.audioLevelHistory[i] <= this.audioLevelHistory[i-1] || 
+          this.audioLevelHistory[i-1] <= this.audioLevelHistory[i-2]) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+
+  private handleFeedbackDetection(): void {
+    // Mute microphone immediately
+    this.muteUserMicrophone();
+    
+    // Reduce speaker volume temporarily
+    if (this.speakerOutputNode) {
+      const currentVolume = this.speakerOutputNode.gain.value;
+      this.speakerOutputNode.gain.setValueAtTime(currentVolume * 0.5, this.audioContext?.currentTime || 0);
+      
+      // Restore volume after a delay
+      setTimeout(() => {
+        if (this.speakerOutputNode) {
+          this.speakerOutputNode.gain.linearRampToValueAtTime(
+            currentVolume,
+            (this.audioContext?.currentTime || 0) + 1
+          );
+        }
+      }, 1000);
+    }
+    
+    // Unmute after a longer delay to ensure feedback is broken
+    setTimeout(() => {
+      this.unmuteUserMicrophone();
+    }, 2000);
   }
 
   private initializeSpeechRecognition(): void {
@@ -298,12 +484,33 @@ export class VoiceConversationService {
       this.stream = stream;
       this.microphoneTrack = stream.getAudioTracks()[0];
       
-      // Connect to audio context for visualization if available
-      if (this.audioContext && this.analyser && this.noiseDetector) {
+      // Connect to audio context for visualization and feedback prevention
+      if (this.audioContext && this.analyser) {
         const source = this.audioContext.createMediaStreamSource(stream);
-        source.connect(this.analyser);
-        source.connect(this.noiseDetector);
-        this.noiseDetector.connect(this.audioContext.destination);
+        
+        // Connect through gain node for volume control
+        if (this.microphoneGainNode) {
+          source.connect(this.microphoneGainNode);
+          this.microphoneGainNode.connect(this.analyser);
+          
+          // Connect to feedback detection
+          if (this.audioWorkletNode) {
+            this.microphoneGainNode.connect(this.audioWorkletNode);
+          } else if (this.noiseDetector) {
+            this.microphoneGainNode.connect(this.noiseDetector);
+            this.noiseDetector.connect(this.audioContext.destination);
+          }
+        } else {
+          source.connect(this.analyser);
+          
+          // Connect to feedback detection
+          if (this.audioWorkletNode) {
+            source.connect(this.audioWorkletNode);
+          } else if (this.noiseDetector) {
+            source.connect(this.noiseDetector);
+            this.noiseDetector.connect(this.audioContext.destination);
+          }
+        }
         
         // Start visualization loop
         this.startAudioVisualization();
@@ -357,10 +564,8 @@ export class VoiceConversationService {
       this.stream = null;
     }
     
-    // Disconnect noise detector
-    if (this.noiseDetector) {
-      this.noiseDetector.disconnect();
-    }
+    // Disconnect audio nodes
+    this.disconnectAudioNodes();
     
     // Stop audio visualization
     this.stopAudioVisualization();
@@ -375,6 +580,51 @@ export class VoiceConversationService {
     if (this.silenceTimer) {
       clearTimeout(this.silenceTimer);
       this.silenceTimer = null;
+    }
+  }
+
+  private disconnectAudioNodes(): void {
+    // Disconnect all audio nodes
+    if (this.audioContext) {
+      if (this.noiseDetector) {
+        try {
+          this.noiseDetector.disconnect();
+        } catch (e) {
+          // Ignore disconnection errors
+        }
+      }
+      
+      if (this.audioWorkletNode) {
+        try {
+          this.audioWorkletNode.disconnect();
+        } catch (e) {
+          // Ignore disconnection errors
+        }
+      }
+      
+      if (this.analyser) {
+        try {
+          this.analyser.disconnect();
+        } catch (e) {
+          // Ignore disconnection errors
+        }
+      }
+      
+      if (this.microphoneGainNode) {
+        try {
+          this.microphoneGainNode.disconnect();
+        } catch (e) {
+          // Ignore disconnection errors
+        }
+      }
+      
+      if (this.speakerOutputNode) {
+        try {
+          this.speakerOutputNode.disconnect();
+        } catch (e) {
+          // Ignore disconnection errors
+        }
+      }
     }
   }
 
@@ -464,6 +714,21 @@ export class VoiceConversationService {
     this.audioVisualizationCallback = callback;
   }
 
+  // Set feedback prevention
+  setFeedbackPrevention(enabled: boolean): void {
+    this.feedbackPreventionEnabled = enabled;
+    console.log(`Feedback prevention ${enabled ? 'enabled' : 'disabled'}`);
+    
+    // Reset feedback detection counters
+    this.feedbackOccurrences = 0;
+    this.lastFeedbackTime = 0;
+    
+    // If enabling, immediately mute if AI is speaking
+    if (enabled && this.config.onAudioStart) {
+      this.muteUserMicrophone();
+    }
+  }
+
   // Start audio visualization loop
   private startAudioVisualization(): void {
     if (!this.analyser || !this.audioDataArray || !this.audioVisualizationCallback) return;
@@ -491,6 +756,12 @@ export class VoiceConversationService {
       this.microphoneTrack.enabled = false;
       console.log('Microphone muted to prevent feedback');
     }
+    
+    // Also reduce gain if gain node is available
+    if (this.microphoneGainNode) {
+      const currentTime = this.audioContext?.currentTime || 0;
+      this.microphoneGainNode.gain.setValueAtTime(0, currentTime);
+    }
   }
   
   // Unmute the user's microphone
@@ -498,6 +769,13 @@ export class VoiceConversationService {
     if (this.microphoneTrack) {
       this.microphoneTrack.enabled = true;
       console.log('Microphone unmuted');
+    }
+    
+    // Gradually restore gain to prevent sudden noise
+    if (this.microphoneGainNode && this.audioContext) {
+      const currentTime = this.audioContext.currentTime;
+      this.microphoneGainNode.gain.setValueAtTime(0, currentTime);
+      this.microphoneGainNode.gain.linearRampToValueAtTime(1.0, currentTime + 0.1);
     }
   }
   
@@ -533,7 +811,9 @@ export class VoiceConversationService {
       console.log('Processing speech input:', transcript);
       
       // Mute microphone during processing to prevent feedback
-      this.muteUserMicrophone();
+      if (this.feedbackPreventionEnabled) {
+        this.muteUserMicrophone();
+      }
       
       // Sanitize input
       const sanitizedTranscript = SecurityUtils.sanitizeInput(transcript);
@@ -661,11 +941,13 @@ export class VoiceConversationService {
       setTimeout(() => {
         // Restart listening if in continuous mode and not paused
         if (!this.isPaused && !this.isListening && this.recognition) {
-          this.unmuteUserMicrophone();
+          if (this.feedbackPreventionEnabled) {
+            this.unmuteUserMicrophone();
+          }
           setTimeout(() => {
             this.startListening();
           }, 300);
-        } else {
+        } else if (this.feedbackPreventionEnabled) {
           this.unmuteUserMicrophone();
         }
       }, this.delayAfterSpeaking);
@@ -855,6 +1137,22 @@ export class VoiceConversationService {
         // Set the current audio
         this.currentAudio = audio;
         
+        // Apply volume control
+        if (this.speakerOutputNode && this.audioContext) {
+          try {
+            // Create media element source
+            const source = this.audioContext.createMediaElementSource(audio);
+            
+            // Connect through gain node for volume control
+            source.connect(this.speakerOutputNode);
+            this.speakerOutputNode.connect(this.audioContext.destination);
+          } catch (error) {
+            console.warn('Failed to connect audio to volume control:', error);
+            // Fall back to direct volume control
+            audio.volume = this.speakerOutputNode.gain.value;
+          }
+        }
+        
         // Play the audio
         audio.play().catch((playError) => {
           URL.revokeObjectURL(audioUrl);
@@ -953,17 +1251,21 @@ export class VoiceConversationService {
     console.log(`Noise detection ${enabled ? 'enabled' : 'disabled'}`);
   }
   
-  // Enable/disable feedback prevention
-  setFeedbackPrevention(enabled: boolean): void {
-    this.feedbackPreventionEnabled = enabled;
-    console.log(`Feedback prevention ${enabled ? 'enabled' : 'disabled'}`);
-  }
-  
   // Reset browser speech synthesis fallback
   resetBrowserSpeechSynthesisFallback(): void {
     this.useBrowserSpeechSynthesis = false;
     this.consecutiveApiFailures = 0;
     console.log('Reset browser speech synthesis fallback');
+  }
+  
+  // Set feedback detection threshold
+  setFeedbackDetectionThreshold(threshold: number): void {
+    if (threshold >= 0.5 && threshold <= 0.95) {
+      this.feedbackDetectionThreshold = threshold;
+      console.log(`Feedback detection threshold set to ${threshold}`);
+    } else {
+      console.error('Feedback detection threshold must be between 0.5 and 0.95');
+    }
   }
   
   // Clean up resources
@@ -972,15 +1274,9 @@ export class VoiceConversationService {
     this.stopSpeaking();
     
     // Clean up audio context
+    this.disconnectAudioNodes();
+    
     if (this.audioContext) {
-      if (this.noiseDetector) {
-        this.noiseDetector.disconnect();
-      }
-      
-      if (this.analyser) {
-        this.analyser.disconnect();
-      }
-      
       this.audioContext.close().catch(err => {
         console.error('Error closing audio context:', err);
       });

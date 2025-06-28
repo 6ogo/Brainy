@@ -13,7 +13,8 @@ import {
   Pause,
   Play,
   Sliders,
-  Shield
+  Shield,
+  Headphones
 } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -86,6 +87,7 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [lastSpeechTimestamp, setLastSpeechTimestamp] = useState(0);
   const [noiseThreshold, setNoiseThreshold] = useState(0.05);
+  const [isUsingHeadphones, setIsUsingHeadphones] = useState(false);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
 
   // Check browser support for speech recognition
@@ -239,6 +241,16 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
     }
   };
 
+  const toggleHeadphonesMode = () => {
+    setIsUsingHeadphones(!isUsingHeadphones);
+    toast.success(`Headphones mode ${!isUsingHeadphones ? 'enabled' : 'disabled'}`);
+    
+    // If enabling headphones mode, we can disable feedback prevention
+    if (!isUsingHeadphones && feedbackPreventionEnabled) {
+      toggleFeedbackPrevention();
+    }
+  };
+
   return (
     <div className={cn("p-6 bg-white border-t border-gray-200 rounded-b-lg", className)}>
       {/* Browser Support Warning */}
@@ -300,6 +312,18 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
           </div>
         </div>
       )}
+
+      {/* Headphones Mode Toggle */}
+      <div className="flex justify-center mb-4">
+        <Button
+          variant={isUsingHeadphones ? "primary" : "outline"}
+          size="sm"
+          onClick={toggleHeadphonesMode}
+          leftIcon={<Headphones className="h-4 w-4" />}
+        >
+          {isUsingHeadphones ? "Using Headphones" : "Not Using Headphones"}
+        </Button>
+      </div>
 
       {/* Voice Status Indicator */}
       <div className="flex justify-center mb-4">
@@ -476,7 +500,12 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
                 step="100"
                 value={pauseThreshold}
                 onChange={handlePauseThresholdChange}
-                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: 'linear-gradient(to right, #F59E0B 0%, #F59E0B ' + 
+                    ((pauseThreshold - 300) / 17) + '%, #E5E7EB ' + 
+                    ((pauseThreshold - 300) / 17) + '%, #E5E7EB 100%)'
+                }}
                 aria-label="Pause Threshold"
               />
               <Zap className="h-5 w-5 text-amber-700" />
@@ -514,7 +543,12 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
                 step="0.1"
                 value={volume}
                 onChange={handleVolumeChange}
-                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: 'linear-gradient(to right, #3B82F6 0%, #3B82F6 ' + 
+                    (volume * 100) + '%, #E5E7EB ' + 
+                    (volume * 100) + '%, #E5E7EB 100%)'
+                }}
                 aria-label="Volume"
               />
               
@@ -560,7 +594,12 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
                   step="0.01"
                   value={noiseThreshold}
                   onChange={handleNoiseThresholdChange}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-500"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                  style={{
+                    background: 'linear-gradient(to right, #6B7280 0%, #6B7280 ' + 
+                      (noiseThreshold * 500) + '%, #E5E7EB ' + 
+                      (noiseThreshold * 500) + '%, #E5E7EB 100%)'
+                  }}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Adjust sensitivity to background noise. Higher values filter out more noise.
@@ -684,6 +723,13 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
             <span className="flex items-center text-green-600">
               <Shield className="h-4 w-4 mr-1" />
               Feedback Prevention
+            </span>
+          )}
+          
+          {isUsingHeadphones && (
+            <span className="flex items-center text-blue-600">
+              <Headphones className="h-4 w-4 mr-1" />
+              Headphones Mode
             </span>
           )}
         </div>

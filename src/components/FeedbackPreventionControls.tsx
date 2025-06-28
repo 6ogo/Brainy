@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Sliders, Shield, Clock, Volume2, VolumeX, Info, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Sliders, Shield, Clock, Volume2, VolumeX, Info, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
 import { ElevenLabsService } from '../services/elevenlabsService';
@@ -22,6 +22,81 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
 }) => {
   const [showInfo, setShowInfo] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isTestingAudio, setIsTestingAudio] = useState(false);
+  const [audioFeedbackRisk, setAudioFeedbackRisk] = useState<'low' | 'medium' | 'high'>('medium');
+  
+  // Test for audio feedback risk on component mount
+  useEffect(() => {
+    testAudioFeedbackRisk();
+  }, []);
+  
+  const testAudioFeedbackRisk = async () => {
+    setIsTestingAudio(true);
+    try {
+      // Create audio context for testing
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Try to get microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      // Create analyzer to measure audio levels
+      const analyzer = audioContext.createAnalyser();
+      analyzer.fftSize = 256;
+      
+      // Connect microphone to analyzer
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyzer);
+      
+      // Create data array for frequency data
+      const dataArray = new Uint8Array(analyzer.frequencyBinCount);
+      
+      // Play a test tone
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      gainNode.gain.value = 0.1; // Low volume to avoid actual feedback
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      oscillator.frequency.value = 440; // A4 note
+      oscillator.start();
+      
+      // Measure microphone input after playing tone
+      setTimeout(() => {
+        // Get frequency data
+        analyzer.getByteFrequencyData(dataArray);
+        
+        // Calculate average volume
+        const average = Array.from(dataArray).reduce((sum, value) => sum + value, 0) / dataArray.length;
+        
+        // Determine feedback risk based on volume
+        if (average > 100) {
+          setAudioFeedbackRisk('high');
+        } else if (average > 50) {
+          setAudioFeedbackRisk('medium');
+        } else {
+          setAudioFeedbackRisk('low');
+        }
+        
+        // Stop test tone
+        oscillator.stop();
+        
+        // Clean up
+        stream.getTracks().forEach(track => track.stop());
+        audioContext.close();
+        
+        setIsTestingAudio(false);
+      }, 500);
+    } catch (error) {
+      console.error('Error testing audio feedback risk:', error);
+      setAudioFeedbackRisk('medium'); // Default to medium if test fails
+      setIsTestingAudio(false);
+    }
+  };
   
   const handleResetElevenLabsQuota = async () => {
     setIsResetting(true);
@@ -67,6 +142,69 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
         </Button>
       </div>
       
+      {/* Audio Feedback Risk Indicator */}
+      <div className="mb-4 p-3 rounded-lg border flex items-start space-x-3"
+        style={{
+          backgroundColor: audioFeedbackRisk === 'high' ? 'rgba(254, 226, 226, 0.5)' : 
+                          audioFeedbackRisk === 'medium' ? 'rgba(254, 243, 199, 0.5)' : 
+                          'rgba(236, 253, 245, 0.5)',
+          borderColor: audioFeedbackRisk === 'high' ? 'rgb(248, 113, 113)' : 
+                      audioFeedbackRisk === 'medium' ? 'rgb(251, 191, 36)' : 
+                      'rgb(52, 211, 153)'
+        }}
+      >
+        <div className="mt-0.5">
+          {audioFeedbackRisk === 'high' ? (
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+          ) : audioFeedbackRisk === 'medium' ? (
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+          ) : (
+            <Shield className="h-4 w-4 text-green-500" />
+          )}
+        </div>
+        <div>
+          <p className="text-sm font-medium" 
+            style={{ 
+              color: audioFeedbackRisk === 'high' ? 'rgb(185, 28, 28)' : 
+                    audioFeedbackRisk === 'medium' ? 'rgb(180, 83, 9)' : 
+                    'rgb(6, 95, 70)' 
+            }}
+          >
+            {audioFeedbackRisk === 'high' ? 'High feedback risk detected' : 
+             audioFeedbackRisk === 'medium' ? 'Moderate feedback risk' : 
+             'Low feedback risk'}
+          </p>
+          <p className="text-xs" 
+            style={{ 
+              color: audioFeedbackRisk === 'high' ? 'rgb(220, 38, 38)' : 
+                    audioFeedbackRisk === 'medium' ? 'rgb(217, 119, 6)' : 
+                    'rgb(16, 185, 129)' 
+            }}
+          >
+            {audioFeedbackRisk === 'high' ? 
+              'We strongly recommend keeping feedback prevention enabled and using headphones.' : 
+             audioFeedbackRisk === 'medium' ? 
+              'Feedback prevention is recommended for your audio setup.' : 
+              'Your audio setup has low feedback risk, but prevention is still recommended.'}
+          </p>
+          {audioFeedbackRisk === 'high' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => {
+                if (!feedbackPreventionEnabled) {
+                  toggleFeedbackPrevention();
+                }
+                toast.success('Feedback prevention enabled');
+              }}
+            >
+              Enable Protection
+            </Button>
+          )}
+        </div>
+      </div>
+      
       {showInfo && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700">
           <p className="font-medium mb-1">What is feedback prevention?</p>
@@ -99,7 +237,12 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
                 step="50"
                 value={delayAfterSpeaking}
                 onChange={(e) => setDelayAfterSpeaking(parseInt(e.target.value, 10))}
-                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: 'linear-gradient(to right, #3B82F6 0%, #3B82F6 ' + 
+                    ((delayAfterSpeaking - 200) / 8) + '%, #E5E7EB ' + 
+                    ((delayAfterSpeaking - 200) / 8) + '%, #E5E7EB 100%)'
+                }}
                 aria-label="Delay After Speaking"
               />
               <Clock className="h-4 w-4 text-gray-700" />

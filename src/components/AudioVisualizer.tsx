@@ -25,23 +25,35 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
     
+    // Set canvas dimensions with device pixel ratio for high-resolution rendering
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = height * dpr;
+    
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
+    // Scale all drawing operations by dpr for high-resolution
+    ctx.scale(dpr, dpr);
+    
     // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, rect.width, height);
     
     // If no data or inactive, draw placeholder bars
     if (!isActive || audioData.length === 0) {
-      const totalBars = Math.floor(canvas.width / (barWidth + gap));
+      const totalBars = Math.floor(rect.width / (barWidth + gap));
       const color = inactiveColor;
       
       for (let i = 0; i < totalBars; i++) {
         const x = i * (barWidth + gap);
         const barHeight = Math.random() * 5 + 3; // Random height between 3-8px
         
+        // Use rounded rectangles for smoother appearance
         ctx.fillStyle = color;
-        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+        ctx.beginPath();
+        ctx.roundRect(x, height - barHeight, barWidth, barHeight, [1, 1, 0, 0]);
+        ctx.fill();
       }
       return;
     }
@@ -49,7 +61,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
     // Draw visualization based on audio data
     const color = barColor;
     const dataLength = audioData.length;
-    const step = Math.ceil(dataLength / Math.floor(canvas.width / (barWidth + gap)));
+    const step = Math.ceil(dataLength / Math.floor(rect.width / (barWidth + gap)));
     
     let barIndex = 0;
     for (let i = 0; i < dataLength; i += step) {
@@ -66,8 +78,16 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
       const barHeight = Math.max(3, (average / 255) * height);
       const x = barIndex * (barWidth + gap);
       
+      // Use rounded rectangles and add shadow for depth
       ctx.fillStyle = color;
-      ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+      ctx.shadowColor = 'rgba(59, 130, 246, 0.3)';
+      ctx.shadowBlur = 4;
+      ctx.beginPath();
+      ctx.roundRect(x, height - barHeight, barWidth, barHeight, [1, 1, 0, 0]);
+      ctx.fill();
+      
+      // Reset shadow for next bar
+      ctx.shadowBlur = 0;
       
       barIndex++;
     }
@@ -79,6 +99,7 @@ export const AudioVisualizer: React.FC<AudioVisualizerProps> = ({
       width={300}
       height={height}
       className="w-full"
+      style={{ height: `${height}px` }}
     />
   );
 };
