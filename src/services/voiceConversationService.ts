@@ -24,22 +24,24 @@ export class VoiceConversationService {
   private currentTranscript = '';
   private recognitionLanguage = 'en-US';
   private stream: MediaStream | null = null;
-  private processingTimeout: number | null = null;
-  private silenceThreshold = 600; // Default 600ms of silence before processing
-  private lastSpeechTimestamp = 0;
-  private silenceTimer: number | null = null;
-  private noiseThreshold = 3; // Minimum characters to consider as valid speech
-  private feedbackPrevention = true; // Default to enabled
-  private delayAfterSpeaking = 500; // 500ms delay after AI stops speaking before unmuting
+  
+  // Simplified timing variables
+  private speechEndTimer: number | null = null;
+  private speechEndDelay = 1500; // Wait 1.5 seconds after user stops speaking
+  private minTranscriptLength = 3;
+  private lastProcessedTranscript = '';
+  
+  // Audio context for visualization
   private audioContext: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
-  private audioVisualizationCallback: ((data: Uint8Array) => void) | null = null;
   private audioDataArray: Uint8Array | null = null;
   private animationFrameId: number | null = null;
-  private microphoneGainNode: GainNode | null = null;
-  private isMicrophoneMuted = false;
-  private lastProcessedTranscript = '';
-  private recognitionPaused = false;
+  private audioVisualizationCallback: ((data: Uint8Array) => void) | null = null;
+  
+  // Feedback prevention
+  private feedbackPrevention = true;
+  private delayAfterSpeaking = 500;
+  private isAISpeaking = false;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -47,29 +49,25 @@ export class VoiceConversationService {
     this.initializeAudioContext();
   }
 
-  /**
-   * Cleans up resources when the service is no longer needed
-   */
   dispose(): void {
     this.stopListening();
     this.stopSpeaking();
     
-    // Stop visualization loop
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
+    if (this.speechEndTimer) {
+      clearTimeout(this.speechEndTimer);
     }
     
-    // Close audio context
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+    
     if (this.audioContext) {
       this.audioContext.close().catch(err => {
         console.error('Error closing audio context:', err);
       });
     }
     
-    // Clear callbacks
     this.audioVisualizationCallback = null;
-    
     console.log('Voice conversation service disposed');
   }
 
@@ -86,68 +84,72 @@ export class VoiceConversationService {
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.lang = this.recognitionLanguage;
+      this.recognition.maxAlternatives = 1;
 
       this.recognition.onresult = (event) => {
-        // Skip processing if microphone is muted to prevent feedback
-        if (this.isMicrophoneMuted) {
-          console.log('Skipping recognition result because microphone is muted');
+        // Skip if AI is currently speaking to prevent feedback
+        if (this.isAISpeaking) {
           return;
         }
         
-        const lastResult = event.results[event.results.length - 1];
-        const transcript = lastResult[0].transcript.trim();
+        let finalTranscript = '';
+        let interimTranscript = '';
         
-        // Only process if transcript is longer than noise threshold
-        if (transcript.length > this.noiseThreshold) {
-          // Update current transcript
-          this.currentTranscript = transcript;
+        // Process all results
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          const transcript = result[0].transcript;
           
-          // Update last speech timestamp
-          this.lastSpeechTimestamp = Date.now();
-          
-          // Notify about interim results for UI feedback
-          this.config.onTranscript?.(transcript, lastResult.isFinal);
-          
-          // Clear any existing timeout
-          if (this.processingTimeout) {
-            clearTimeout(this.processingTimeout);
-            this.processingTimeout = null;
-          }
-          
-          // Clear any existing silence timer
-          if (this.silenceTimer) {
-            clearTimeout(this.silenceTimer);
-            this.silenceTimer = null;
-          }
-
-          if (lastResult.isFinal && transcript) {
-            // Set a shorter delay for final results
-            this.processingTimeout = window.setTimeout(() => {
-              if (!this.isProcessing && transcript !== '' && transcript !== this.lastProcessedTranscript) {
-                this.lastProcessedTranscript = transcript;
-                this.handleUserSpeech(transcript);
-              }
-              this.processingTimeout = null;
-            }, 500); // Reduced from 2000ms to 500ms for faster response
+          if (result.isFinal) {
+            finalTranscript += transcript;
           } else {
-            // Start silence detection timer
-            this.silenceTimer = window.setTimeout(() => {
-              const silenceDuration = Date.now() - this.lastSpeechTimestamp;
-              if (silenceDuration >= this.silenceThreshold && transcript && !this.isProcessing && transcript !== this.lastProcessedTranscript) {
-                console.log('Processing after silence detection:', transcript);
-                this.lastProcessedTranscript = transcript;
-                this.handleUserSpeech(transcript);
-              }
-            }, this.silenceThreshold);
+            interimTranscript += transcript;
           }
+        }
+        
+        // Update current transcript with either final or interim
+        const currentText = finalTranscript || interimTranscript;
+        this.currentTranscript = currentText.trim();
+        
+        // Notify UI about transcript updates
+        this.config.onTranscript?.(this.currentTranscript, !!finalTranscript);
+        
+        // Clear any existing timer
+        if (this.speechEndTimer) {
+          clearTimeout(this.speechEndTimer);
+          this.speechEndTimer = null;
+        }
+        
+        // If we have a final result, process it immediately
+        if (finalTranscript && finalTranscript.trim().length >= this.minTranscriptLength) {
+          console.log('Processing final transcript:', finalTranscript.trim());
+          this.processTranscript(finalTranscript.trim());
+          return;
+        }
+        
+        // If we have interim results, set a timer to process after user stops speaking
+        if (this.currentTranscript.length >= this.minTranscriptLength) {
+          this.speechEndTimer = window.setTimeout(() => {
+            if (this.currentTranscript && 
+                this.currentTranscript.length >= this.minTranscriptLength && 
+                !this.isProcessing &&
+                this.currentTranscript !== this.lastProcessedTranscript) {
+              console.log('Processing transcript after speech end delay:', this.currentTranscript);
+              this.processTranscript(this.currentTranscript);
+            }
+          }, this.speechEndDelay);
         }
       };
 
       this.recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         
-        // Don't show error for aborted recognition as it's often part of normal operation
-        if (event.error !== 'aborted') {
+        if (event.error === 'not-allowed') {
+          this.config.onError?.('Microphone permission denied. Please allow microphone access.');
+        } else if (event.error === 'no-speech') {
+          console.log('No speech detected, continuing...');
+          // Don't show error for no-speech as it's normal
+        } else if (event.error !== 'aborted') {
           this.config.onError?.(`Speech recognition error: ${event.error}`);
         }
         
@@ -158,33 +160,37 @@ export class VoiceConversationService {
         console.log('Speech recognition ended');
         this.isListening = false;
         
-        // If we have a transcript but haven't processed it yet, process it now
+        // Process any remaining transcript
         if (this.currentTranscript && 
-            this.currentTranscript.length > this.noiseThreshold && 
+            this.currentTranscript.length >= this.minTranscriptLength && 
             !this.isProcessing && 
-            !this.isPaused && 
-            !this.isMicrophoneMuted &&
+            !this.isPaused &&
+            !this.isAISpeaking &&
             this.currentTranscript !== this.lastProcessedTranscript) {
-          console.log('Processing transcript on recognition end:', this.currentTranscript);
-          this.lastProcessedTranscript = this.currentTranscript;
-          this.handleUserSpeech(this.currentTranscript);
+          console.log('Processing remaining transcript on recognition end:', this.currentTranscript);
+          this.processTranscript(this.currentTranscript);
           return;
         }
         
-        // Restart if we're supposed to be listening continuously
-        if (!this.isPaused && !this.recognitionPaused && this.recognition && !this.isProcessing && !this.isMicrophoneMuted) {
-          try {
-            setTimeout(() => {
-              if (!this.isPaused && !this.recognitionPaused && !this.isListening && this.recognition && !this.isProcessing && !this.isMicrophoneMuted) {
+        // Auto-restart if we should still be listening
+        if (!this.isPaused && !this.isAISpeaking && !this.isProcessing) {
+          setTimeout(() => {
+            if (!this.isPaused && !this.isAISpeaking && !this.isListening && this.recognition) {
+              try {
                 this.recognition.start();
                 this.isListening = true;
-                console.log('Restarted speech recognition');
+                console.log('Auto-restarted speech recognition');
+              } catch (error) {
+                console.error('Failed to restart speech recognition:', error);
               }
-            }, 300); // Small delay to prevent rapid restarts
-          } catch (error) {
-            console.error('Failed to restart speech recognition:', error);
-          }
+            }
+          }, 100);
         }
+      };
+
+      this.recognition.onstart = () => {
+        console.log('Speech recognition started');
+        this.isListening = true;
       };
     }
   }
@@ -196,13 +202,7 @@ export class VoiceConversationService {
       this.analyser.fftSize = 256;
       this.audioDataArray = new Uint8Array(this.analyser.frequencyBinCount);
       
-      // Create a gain node for microphone control
-      this.microphoneGainNode = this.audioContext.createGain();
-      this.microphoneGainNode.gain.value = 1.0; // Default gain
-      
       console.log('Audio context initialized successfully');
-      
-      // Start visualization loop
       this.startVisualization();
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
@@ -216,12 +216,10 @@ export class VoiceConversationService {
       if (this.analyser && this.audioDataArray) {
         this.analyser.getByteFrequencyData(this.audioDataArray);
         
-        // Call the visualization callback if set
         if (this.audioVisualizationCallback) {
           this.audioVisualizationCallback(this.audioDataArray);
         }
         
-        // Continue the loop
         this.animationFrameId = requestAnimationFrame(updateVisualization);
       }
     };
@@ -244,22 +242,17 @@ export class VoiceConversationService {
         } 
       });
       
-      // Save the stream reference to stop it later
       this.stream = stream;
       
-      // Connect microphone to audio context for visualization
-      if (this.audioContext && this.analyser && this.microphoneGainNode) {
+      // Connect to audio context for visualization
+      if (this.audioContext && this.analyser) {
         const source = this.audioContext.createMediaStreamSource(stream);
-        source.connect(this.microphoneGainNode);
-        this.microphoneGainNode.connect(this.analyser);
+        source.connect(this.analyser);
         console.log('Audio recording started');
       }
       
       this.isPaused = false;
-      this.recognitionPaused = false;
-      this.isMicrophoneMuted = false;
-      this.isListening = true;
-      this.lastSpeechTimestamp = Date.now();
+      this.isAISpeaking = false;
       this.recognition.start();
       console.log('Speech recognition started');
     } catch (error) {
@@ -269,20 +262,13 @@ export class VoiceConversationService {
   }
 
   stopListening(): void {
+    if (this.speechEndTimer) {
+      clearTimeout(this.speechEndTimer);
+      this.speechEndTimer = null;
+    }
+    
     if (this.recognition && this.isListening) {
       try {
-        // If we have a transcript but haven't processed it yet, process it now
-        if (this.currentTranscript && 
-            this.currentTranscript.length > this.noiseThreshold && 
-            !this.isProcessing && 
-            !this.isPaused && 
-            !this.isMicrophoneMuted &&
-            this.currentTranscript !== this.lastProcessedTranscript) {
-          console.log('Processing transcript before stopping:', this.currentTranscript);
-          this.lastProcessedTranscript = this.currentTranscript;
-          this.handleUserSpeech(this.currentTranscript);
-        }
-        
         this.recognition.stop();
         this.isListening = false;
         console.log('Speech recognition stopped');
@@ -291,22 +277,9 @@ export class VoiceConversationService {
       }
     }
     
-    // Stop the media stream if it exists
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
-    }
-    
-    // Clear any pending processing timeout
-    if (this.processingTimeout) {
-      clearTimeout(this.processingTimeout);
-      this.processingTimeout = null;
-    }
-    
-    // Clear any silence timer
-    if (this.silenceTimer) {
-      clearTimeout(this.silenceTimer);
-      this.silenceTimer = null;
     }
   }
 
@@ -314,19 +287,6 @@ export class VoiceConversationService {
     this.isPaused = true;
     this.stopListening();
     this.stopSpeaking();
-    
-    // Clear any pending processing timeout
-    if (this.processingTimeout) {
-      clearTimeout(this.processingTimeout);
-      this.processingTimeout = null;
-    }
-    
-    // Clear any silence timer
-    if (this.silenceTimer) {
-      clearTimeout(this.silenceTimer);
-      this.silenceTimer = null;
-    }
-    
     console.log('Conversation paused');
   }
 
@@ -341,76 +301,47 @@ export class VoiceConversationService {
       this.currentAudio.pause();
       this.currentAudio.currentTime = 0;
       this.currentAudio = null;
-      this.config.onAudioEnd?.();
     }
     
-    // Also stop any browser speech synthesis
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-  }
-
-  setLanguage(languageCode: string): void {
-    this.recognitionLanguage = languageCode;
-    if (this.recognition) {
-      this.recognition.lang = languageCode;
-      console.log(`Speech recognition language set to: ${languageCode}`);
-    }
-  }
-
-  setSilenceThreshold(milliseconds: number): void {
-    if (milliseconds >= 300 && milliseconds <= 2000) {
-      this.silenceThreshold = milliseconds;
-      console.log(`Silence threshold set to: ${milliseconds}ms`);
-    }
-  }
-
-  setFeedbackPrevention(enabled: boolean): void {
-    this.feedbackPrevention = enabled;
-    console.log(`Feedback prevention ${enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  setDelayAfterSpeaking(milliseconds: number): void {
-    if (milliseconds >= 200 && milliseconds <= 1000) {
-      this.delayAfterSpeaking = milliseconds;
-      console.log(`Delay after speaking set to: ${milliseconds}ms`);
-    }
-  }
-
-  setAudioVisualizationCallback(callback: (data: Uint8Array) => void): void {
-    this.audioVisualizationCallback = callback;
+    
+    this.isAISpeaking = false;
+    this.config.onAudioEnd?.();
   }
 
   forceSubmitTranscript(): void {
     if (this.currentTranscript && 
-        this.currentTranscript.length > this.noiseThreshold && 
+        this.currentTranscript.length >= this.minTranscriptLength && 
         !this.isProcessing &&
         this.currentTranscript !== this.lastProcessedTranscript) {
-      console.log('Forcing transcript submission:', this.currentTranscript);
-      this.lastProcessedTranscript = this.currentTranscript;
-      this.handleUserSpeech(this.currentTranscript);
+      console.log('Force submitting transcript:', this.currentTranscript);
+      this.processTranscript(this.currentTranscript);
     }
   }
 
-  /**
-   * Handles the user's speech input by processing the transcript, generating an AI response,
-   * and converting it to speech.
-   * 
-   * @param transcript - The user's speech input as a string.
-   */  
-  private async handleUserSpeech(transcript: string): Promise<void> {
-    if (this.isProcessing || this.isPaused || transcript.length <= this.noiseThreshold) {
+  private async processTranscript(transcript: string): Promise<void> {
+    if (this.isProcessing || this.isPaused || transcript.length < this.minTranscriptLength) {
       return;
     }
 
     try {
       this.isProcessing = true;
+      this.lastProcessedTranscript = transcript;
+      this.currentTranscript = '';
+      
+      // Clear any pending timer
+      if (this.speechEndTimer) {
+        clearTimeout(this.speechEndTimer);
+        this.speechEndTimer = null;
+      }
+      
       console.log('Processing speech input:', transcript);
       
-      // Mute microphone to prevent feedback
+      // Stop listening while processing if feedback prevention is enabled
       if (this.feedbackPrevention) {
-        console.log('Feedback prevention enabled');
-        this.muteRecognition();
+        this.pauseRecognition();
       }
       
       // Sanitize input
@@ -422,7 +353,7 @@ export class VoiceConversationService {
       // Generate AI response
       let aiResponse;
       if (!import.meta.env.VITE_GROQ_API_KEY) {
-        aiResponse = `I heard you say: "${sanitizedTranscript}". However, I'm currently operating in fallback mode because the AI service is not fully configured. Please check your API keys in the .env file.`;
+        aiResponse = `I heard you say: "${sanitizedTranscript}". However, I'm currently operating in fallback mode because the AI service is not fully configured.`;
       } else {
         aiResponse = await GroqService.generateResponse(
           sanitizedTranscript,
@@ -430,7 +361,7 @@ export class VoiceConversationService {
           this.config.avatarPersonality,
           this.config.difficultyLevel,
           this.config.userId,
-          true // Use study mode for deeper educational insights
+          true
         );
       }
 
@@ -438,286 +369,141 @@ export class VoiceConversationService {
       this.config.onResponse?.(aiResponse);
 
       // Generate and play speech
-      this.config.onAudioStart?.();
+      await this.playAIResponse(aiResponse);
+
+    } catch (error) {
+      console.error('Error processing transcript:', error);
+      this.config.onError?.(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      this.isProcessing = false;
       
-      let audioBlob;
-      try {
-        console.log('Generating speech with ElevenLabs for:', this.config.avatarPersonality);
-        
-        if (!import.meta.env.VITE_ELEVENLABS_API_KEY) {
-          // Use fallback if ElevenLabs API key is not configured
-          audioBlob = await ElevenLabsService.createFallbackAudio(aiResponse);
-          console.log('Using fallback speech generation');
-        } else {
-          audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
-          console.log('Speech generated successfully, blob size:', audioBlob?.size);
-        }
-        
-        if (audioBlob) {
-          await this.playAudio(audioBlob);
-        }
-      } catch (audioError) {
-        console.error('Audio generation or playback error:', audioError);
-        
-        // Use browser's speech synthesis as fallback
+      // Resume listening after a short delay
+      if (!this.isPaused) {
+        setTimeout(() => {
+          this.resumeRecognition();
+        }, this.delayAfterSpeaking);
+      }
+    }
+  }
+
+  private async playAIResponse(text: string): Promise<void> {
+    this.isAISpeaking = true;
+    this.config.onAudioStart?.();
+    
+    try {
+      if (!import.meta.env.VITE_ELEVENLABS_API_KEY) {
+        // Use browser speech synthesis as fallback
+        await this.useBrowserSpeech(text);
+      } else {
+        // Try ElevenLabs first, fall back to browser speech
         try {
-          const utterance = new SpeechSynthesisUtterance(aiResponse);
-          utterance.rate = 1;
-          utterance.pitch = 1;
-          utterance.volume = 1;
-          
-          utterance.onstart = () => {
-            console.log('Browser speech synthesis started');
-          };
-          
-          utterance.onend = () => {
-            console.log('Browser speech synthesis ended');
-            this.config.onAudioEnd?.();
-            
-            // Keep microphone muted for a short delay after AI stops speaking
-            if (this.feedbackPrevention) {
-              setTimeout(() => {
-                this.unmuteRecognition();
-              }, this.delayAfterSpeaking);
-            }
-          };
-          
-          utterance.onerror = (event) => {
-            console.error('Browser speech synthesis error:', event.error);
-            this.config.onAudioEnd?.();
-            
-            // Keep microphone muted for a short delay after AI stops speaking
-            if (this.feedbackPrevention) {
-              setTimeout(() => {
-                this.unmuteRecognition();
-              }, this.delayAfterSpeaking);
-            }
-          };
-          
-          window.speechSynthesis.speak(utterance);
-          
-          // Wait for speech to complete
-          return new Promise<void>((resolve) => {
-            utterance.onend = () => {
-              this.config.onAudioEnd?.();
-              
-              // Keep microphone muted for a short delay after AI stops speaking
-              if (this.feedbackPrevention) {
-                setTimeout(() => {
-                  this.unmuteRecognition();
-                }, this.delayAfterSpeaking);
-              }
-              resolve();
-            };
-            
-            // Fallback timeout in case onend doesn't fire
-            setTimeout(() => {
-              this.config.onAudioEnd?.();
-              
-              // Keep microphone muted for a short delay after AI stops speaking
-              if (this.feedbackPrevention) {
-                setTimeout(() => {
-                  this.unmuteRecognition();
-                }, this.delayAfterSpeaking);
-              }
-              resolve();
-            }, aiResponse.length * 50); // Rough estimate of speech duration
-          });
-        } catch (synthError) {
-          console.error('Speech synthesis fallback failed:', synthError);
-          this.config.onError?.('Voice output failed. Please check your audio settings.');
-          this.config.onAudioEnd?.();
-          
-          // Keep microphone muted for a short delay after AI stops speaking
-          if (this.feedbackPrevention) {
-            setTimeout(() => {
-              this.unmuteRecognition();
-            }, this.delayAfterSpeaking);
+          const audioBlob = await ElevenLabsService.generateSpeech(text, this.config.avatarPersonality);
+          if (audioBlob && audioBlob.size > 1000) {
+            await this.playAudioBlob(audioBlob);
+          } else {
+            await this.useBrowserSpeech(text);
           }
-        }
-      } finally {
-        this.config.onAudioEnd?.();
-        
-        // Keep microphone muted for a short delay after AI stops speaking
-        if (this.feedbackPrevention) {
-          setTimeout(() => {
-            this.unmuteRecognition();
-          }, this.delayAfterSpeaking);
+        } catch (elevenLabsError) {
+          console.error('ElevenLabs failed, using browser speech:', elevenLabsError);
+          await this.useBrowserSpeech(text);
         }
       }
     } catch (error) {
-      console.error('Error in voice conversation:', error);
-      this.config.onError?.(error instanceof Error ? error.message : 'An error occurred');
-      this.config.onAudioEnd?.();
-      
-      // Keep microphone muted for a short delay after AI stops speaking
-      if (this.feedbackPrevention) {
-        setTimeout(() => {
-          this.unmuteRecognition();
-        }, this.delayAfterSpeaking);
-      }
+      console.error('Audio playback failed:', error);
+      this.config.onError?.('Voice output failed. Please check your audio settings.');
     } finally {
-      this.isProcessing = false;
-      this.currentTranscript = '';
-      
-      // Restart listening if in continuous mode and not paused
-      if (!this.isPaused && !this.isListening && this.recognition && !this.isMicrophoneMuted) {
-        setTimeout(() => {
-          this.startListening();
-        }, 500);
-      }
+      this.isAISpeaking = false;
+      this.config.onAudioEnd?.();
     }
   }
 
-  private async playAudio(audioBlob: Blob): Promise<void> {
+  private async playAudioBlob(audioBlob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
-      try {
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio();
-        
-        // Set up event handlers before setting the source
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          this.currentAudio = null;
-          this.config.onAudioEnd?.();
-          
-          // Keep microphone muted for a short delay after AI stops speaking
-          if (this.feedbackPrevention) {
-            setTimeout(() => {
-              this.unmuteRecognition();
-            }, this.delayAfterSpeaking);
-          }
-          
-          resolve();
-        };
-        
-        audio.onerror = (event) => {
-          URL.revokeObjectURL(audioUrl);
-          this.currentAudio = null;
-          const errorEvent = event as Event;
-          const errorTarget = errorEvent.currentTarget as HTMLAudioElement;
-          const errorMessage = errorTarget && errorTarget.error 
-            ? `Audio error: ${errorTarget.error?.message || 'Unknown audio error'}`
-            : 'Failed to play audio: Unknown error';
-          
-          this.config.onAudioEnd?.();
-          
-          // Keep microphone muted for a short delay after AI stops speaking
-          if (this.feedbackPrevention) {
-            setTimeout(() => {
-              this.unmuteRecognition();
-            }, this.delayAfterSpeaking);
-          }
-          
-          reject(new Error(errorMessage));
-        };
-        
-        // Set the source and load the audio
-        audio.src = audioUrl;
-        this.currentAudio = audio;
-        
-        // Play the audio
-        audio.play().catch((playError) => {
-          URL.revokeObjectURL(audioUrl);
-          this.currentAudio = null;
-          const errorMessage = playError instanceof Error 
-            ? `Audio playback failed: ${playError.message}`
-            : 'Audio playback failed: Unknown error';
-          
-          this.config.onAudioEnd?.();
-          
-          // Keep microphone muted for a short delay after AI stops speaking
-          if (this.feedbackPrevention) {
-            setTimeout(() => {
-              this.unmuteRecognition();
-            }, this.delayAfterSpeaking);
-          }
-          
-          reject(new Error(errorMessage));
-        });
-      } catch (error) {
-        const errorMessage = error instanceof Error 
-          ? `Audio setup failed: ${error.message}`
-          : 'Audio setup failed: Unknown error';
-        
-        this.config.onAudioEnd?.();
-        
-        // Keep microphone muted for a short delay after AI stops speaking
-        if (this.feedbackPrevention) {
-          setTimeout(() => {
-            this.unmuteRecognition();
-          }, this.delayAfterSpeaking);
-        }
-        
-        reject(new Error(errorMessage));
-      }
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        this.currentAudio = null;
+        resolve();
+      };
+      
+      audio.onerror = (event) => {
+        URL.revokeObjectURL(audioUrl);
+        this.currentAudio = null;
+        reject(new Error('Audio playback failed'));
+      };
+      
+      this.currentAudio = audio;
+      audio.play().catch(reject);
     });
   }
 
-  private muteRecognition(): void {
-    // Stop recognition to prevent feedback
+  private async useBrowserSpeech(text: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      
+      utterance.onend = () => resolve();
+      utterance.onerror = (event) => reject(new Error(`Speech synthesis error: ${event.error}`));
+      
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+
+  private pauseRecognition(): void {
     if (this.recognition && this.isListening) {
       try {
         this.recognition.stop();
-        this.isListening = false;
-        this.recognitionPaused = true;
-        this.isMicrophoneMuted = true;
-        console.log('Microphone muted to prevent feedback');
+        console.log('Paused recognition for AI speaking');
       } catch (error) {
-        console.error('Error muting recognition:', error);
-      }
-    }
-    
-    // Also mute the microphone gain if available
-    if (this.microphoneGainNode && this.audioContext) {
-      // Gradually reduce gain to avoid clicks
-      const currentTime = this.audioContext.currentTime;
-      this.microphoneGainNode.gain.setValueAtTime(this.microphoneGainNode.gain.value, currentTime);
-      this.microphoneGainNode.gain.exponentialRampToValueAtTime(0.001, currentTime + 0.1);
-    }
-    
-    // Mute the actual microphone tracks if available
-    if (this.stream) {
-      this.stream.getAudioTracks().forEach(track => {
-        track.enabled = false;
-      });
-    }
-  }
-
-  private unmuteRecognition(): void {
-    // Only unmute if we're not paused
-    if (!this.isPaused) {
-      this.isMicrophoneMuted = false;
-      this.recognitionPaused = false;
-      
-      // Restart recognition if it was stopped
-      if (this.recognition && !this.isListening) {
-        try {
-          this.recognition.start();
-          this.isListening = true;
-          console.log('Microphone unmuted after AI finished speaking');
-        } catch (error) {
-          console.error('Error unmuting recognition:', error);
-        }
-      }
-      
-      // Also restore microphone gain if available
-      if (this.microphoneGainNode && this.audioContext) {
-        // Gradually increase gain to avoid clicks
-        const currentTime = this.audioContext.currentTime;
-        this.microphoneGainNode.gain.setValueAtTime(0.001, currentTime);
-        this.microphoneGainNode.gain.exponentialRampToValueAtTime(1.0, currentTime + 0.1);
-      }
-      
-      // Unmute the actual microphone tracks if available
-      if (this.stream) {
-        this.stream.getAudioTracks().forEach(track => {
-          track.enabled = true;
-        });
+        console.error('Error pausing recognition:', error);
       }
     }
   }
 
+  private resumeRecognition(): void {
+    if (!this.isPaused && !this.isListening && this.recognition && !this.isAISpeaking) {
+      try {
+        this.recognition.start();
+        console.log('Resumed recognition after AI finished');
+      } catch (error) {
+        console.error('Error resuming recognition:', error);
+      }
+    }
+  }
+
+  // Configuration methods
+  setSilenceThreshold(milliseconds: number): void {
+    this.speechEndDelay = Math.max(500, Math.min(3000, milliseconds));
+    console.log(`Speech end delay set to: ${this.speechEndDelay}ms`);
+  }
+
+  setFeedbackPrevention(enabled: boolean): void {
+    this.feedbackPrevention = enabled;
+    console.log(`Feedback prevention ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  setDelayAfterSpeaking(milliseconds: number): void {
+    this.delayAfterSpeaking = Math.max(200, Math.min(1000, milliseconds));
+    console.log(`Delay after speaking set to: ${this.delayAfterSpeaking}ms`);
+  }
+
+  setAudioVisualizationCallback(callback: (data: Uint8Array) => void): void {
+    this.audioVisualizationCallback = callback;
+  }
+
+  setLanguage(languageCode: string): void {
+    this.recognitionLanguage = languageCode;
+    if (this.recognition) {
+      this.recognition.lang = languageCode;
+      console.log(`Speech recognition language set to: ${languageCode}`);
+    }
+  }
+
+  // Status methods
   isActive(): boolean {
     return this.isListening || this.isProcessing;
   }
