@@ -11,6 +11,7 @@ import { LearningAnalytics } from './pages/LearningAnalytics';
 import { Onboarding } from './pages/Onboarding';
 import { StudyAdvisorPage } from './pages/StudyAdvisorPage';
 import { ConvaiTutorPage } from './pages/ConvaiTutorPage';
+import { PersonalizedLearningPage } from './pages/PersonalizedLearningPage';
 import HomePage from './pages/HomePage';
 import PricingPage from './pages/PricingPage';
 import SuccessPage from './pages/SuccessPage';
@@ -59,6 +60,7 @@ function App() {
             <Route path="/study-advisor" element={<PrivateRoute><StudyAdvisorPage /></PrivateRoute>} />
             <Route path="/analytics" element={<PrivateRoute><LearningAnalytics /></PrivateRoute>} />
             <Route path="/tutor/:tutorId" element={<PrivateRoute><ConvaiTutorPage /></PrivateRoute>} />
+            <Route path="/personalized-learning" element={<PrivateRoute><PersonalizedLearningPage /></PrivateRoute>} />
             <Route path="/404" element={<NotFound />} />
             <Route path="*" element={<Navigate to="/404" replace />} />
           </Routes>

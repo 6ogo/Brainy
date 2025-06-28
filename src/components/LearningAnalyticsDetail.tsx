@@ -28,11 +28,13 @@ import {
   Zap,
   TrendingUp,
   Download,
-  Filter
+  Filter,
+  ArrowRight
 } from 'lucide-react';
 import { Button } from './Button';
 import { exportAnalyticsData } from '../services/analytics-service';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 interface LearningAnalyticsDetailProps {
   analyticsData: any;
@@ -45,6 +47,7 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'progress' | 'topics' | 'patterns'>('overview');
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'all'>('week');
+  const navigate = useNavigate();
   
   const handleExportData = async () => {
     try {
@@ -53,6 +56,10 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
     } catch (error) {
       toast.error('Failed to export analytics data');
     }
+  };
+  
+  const handleViewPersonalizedLearning = () => {
+    navigate('/personalized-learning');
   };
   
   // Format data for charts
@@ -326,6 +333,27 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
               </div>
             </Card>
           </div>
+          
+          {/* Personalized Learning CTA */}
+          <Card className="p-6 bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-100">
+            <div className="flex flex-col md:flex-row items-center justify-between">
+              <div className="mb-4 md:mb-0 md:mr-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  Personalized Learning Paths
+                </h3>
+                <p className="text-gray-600 max-w-xl">
+                  Get customized learning paths based on your learning style, progress, and goals. Our AI analyzes your performance to create the perfect curriculum for you.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                onClick={handleViewPersonalizedLearning}
+                rightIcon={<ArrowRight className="h-5 w-5" />}
+              >
+                View Personalized Learning
+              </Button>
+            </div>
+          </Card>
           
           {/* Learning Insights */}
           <Card className="p-6">
@@ -653,7 +681,18 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
           
           {/* Recommended Topics */}
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Recommended Next Topics</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Recommended Next Topics</h3>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleViewPersonalizedLearning}
+                rightIcon={<ArrowRight className="h-4 w-4" />}
+              >
+                View Learning Paths
+              </Button>
+            </div>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {analyticsData.topicsAnalysis.recommended.length > 0 ? (
                 analyticsData.topicsAnalysis.recommended.map((topic: string, index: number) => (
