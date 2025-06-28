@@ -12,7 +12,8 @@ import {
   AlertCircle,
   Pause,
   Play,
-  Sliders
+  Sliders,
+  Shield
 } from 'lucide-react';
 import { useStore } from '../store/store';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
@@ -25,6 +26,7 @@ import { useNavigate } from 'react-router-dom';
 import { AudioVisualizer } from './AudioVisualizer';
 import { PauseDetectionIndicator } from './PauseDetectionIndicator';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
+import { FeedbackPreventionControls } from './FeedbackPreventionControls';
 
 interface EnhancedVoiceControlsProps {
   onSwitchToText?: () => void;
@@ -69,7 +71,11 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
     setPauseThreshold,
     pauseThreshold,
     visualizationData,
-    noiseLevel
+    noiseLevel,
+    feedbackPreventionEnabled,
+    toggleFeedbackPrevention,
+    delayAfterSpeaking,
+    setDelayAfterSpeaking
   } = useVoiceChat();
   
   const [volume, setVolume] = useState(0.8);
@@ -447,6 +453,14 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
             </div>
           </div>
           
+          {/* Feedback Prevention Controls */}
+          <FeedbackPreventionControls
+            feedbackPreventionEnabled={feedbackPreventionEnabled}
+            toggleFeedbackPrevention={toggleFeedbackPrevention}
+            delayAfterSpeaking={delayAfterSpeaking}
+            setDelayAfterSpeaking={setDelayAfterSpeaking}
+          />
+          
           {/* Pause threshold control */}
           <div className="p-4 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between mb-3">
@@ -663,6 +677,13 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
             <span className="flex items-center text-amber-600">
               <div className="w-2 h-2 rounded-full mr-2 bg-amber-500"></div>
               Conversation Paused
+            </span>
+          )}
+          
+          {feedbackPreventionEnabled && (
+            <span className="flex items-center text-green-600">
+              <Shield className="h-4 w-4 mr-1" />
+              Feedback Prevention
             </span>
           )}
         </div>

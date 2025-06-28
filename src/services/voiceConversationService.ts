@@ -40,6 +40,11 @@ export class VoiceConversationService {
   private maxRetries = 3;
   private audioQueue: Blob[] = [];
   private isPlayingQueue = false;
+  private feedbackPreventionEnabled = true;
+  private microphoneTrack: MediaStreamTrack | null = null;
+  private aiFrequencyPattern: number[] = [];
+  private speakingEndTime = 0;
+  private delayAfterSpeaking = 500; // 500ms delay after AI stops speaking
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -81,6 +86,35 @@ export class VoiceConversationService {
     // If sound level is above threshold, update last speech timestamp
     if (db > -50) { // Adjust threshold as needed
       this.lastSpeechTimestamp = Date.now();
+    }
+    
+    // If AI is speaking, record the frequency pattern
+    if (this.config.onAudioStart && this.analyser && this.audioDataArray) {
+      this.analyser.getByteFrequencyData(this.audioDataArray);
+      
+      // Check for potential feedback
+      if (this.feedbackPreventionEnabled && this.aiFrequencyPattern.length > 0) {
+        const similarityScore = this.calculateFrequencySimilarity(
+          Array.from(this.audioDataArray),
+          this.aiFrequencyPattern
+        );
+        
+        // If similarity is high, it might be feedback
+        if (similarityScore > 0.7 && db > -40) {
+          console.log('Potential feedback detected, muting microphone');
+          this.muteUserMicrophone();
+          
+          // Unmute after a short delay
+          setTimeout(() => {
+            this.unmuteUserMicrophone();
+          }, 1000);
+        }
+      }
+      
+      // Send visualization data
+      if (this.audioVisualizationCallback) {
+        this.audioVisualizationCallback(this.audioDataArray);
+      }
     }
   }
 
@@ -253,6 +287,7 @@ export class VoiceConversationService {
       
       // Save the stream reference to stop it later
       this.stream = stream;
+      this.microphoneTrack = stream.getAudioTracks()[0];
       
       // Connect to audio context for visualization if available
       if (this.audioContext && this.analyser && this.noiseDetector) {
@@ -379,6 +414,12 @@ export class VoiceConversationService {
     
     // Notify that audio has ended
     this.config.onAudioEnd?.();
+    
+    // Reset AI frequency pattern
+    this.aiFrequencyPattern = [];
+    
+    // Reset speaking end time
+    this.speakingEndTime = 0;
   }
 
   setLanguage(languageCode: string): void {
@@ -396,6 +437,16 @@ export class VoiceConversationService {
       console.log(`Silence threshold set to ${milliseconds}ms`);
     } else {
       console.error('Silence threshold must be between 300ms and 2000ms');
+    }
+  }
+  
+  // Set the delay after AI stops speaking
+  setDelayAfterSpeaking(milliseconds: number): void {
+    if (milliseconds >= 200 && milliseconds <= 1000) {
+      this.delayAfterSpeaking = milliseconds;
+      console.log(`Delay after speaking set to ${milliseconds}ms`);
+    } else {
+      console.error('Delay after speaking must be between 200ms and 1000ms');
     }
   }
 
@@ -424,6 +475,38 @@ export class VoiceConversationService {
   private stopAudioVisualization(): void {
     // Nothing to do here, the loop will stop when isListening is false
   }
+  
+  // Mute the user's microphone
+  private muteUserMicrophone(): void {
+    if (this.microphoneTrack) {
+      this.microphoneTrack.enabled = false;
+      console.log('Microphone muted to prevent feedback');
+    }
+  }
+  
+  // Unmute the user's microphone
+  private unmuteUserMicrophone(): void {
+    if (this.microphoneTrack) {
+      this.microphoneTrack.enabled = true;
+      console.log('Microphone unmuted');
+    }
+  }
+  
+  // Calculate similarity between current audio and AI voice pattern
+  private calculateFrequencySimilarity(current: number[], pattern: number[]): number {
+    if (pattern.length === 0) return 0;
+    
+    let matchCount = 0;
+    const threshold = 20; // Tolerance for frequency matching
+    
+    for (let i = 0; i < Math.min(current.length, pattern.length); i++) {
+      if (Math.abs(current[i] - pattern[i]) < threshold) {
+        matchCount++;
+      }
+    }
+    
+    return matchCount / Math.min(current.length, pattern.length);
+  }
 
   /**
    * Handles the user's speech input by processing the transcript, generating an AI response,
@@ -439,6 +522,9 @@ export class VoiceConversationService {
     try {
       this.isProcessing = true;
       console.log('Processing speech input:', transcript);
+      
+      // Mute microphone during processing to prevent feedback
+      this.muteUserMicrophone();
       
       // Sanitize input
       const sanitizedTranscript = SecurityUtils.sanitizeInput(transcript);
@@ -466,6 +552,12 @@ export class VoiceConversationService {
 
       // Generate and play speech
       this.config.onAudioStart?.();
+      
+      // Record AI frequency pattern for feedback detection
+      if (this.analyser && this.audioDataArray) {
+        this.analyser.getByteFrequencyData(this.audioDataArray);
+        this.aiFrequencyPattern = Array.from(this.audioDataArray);
+      }
       
       try {
         // Test audio output before generating speech
@@ -564,12 +656,19 @@ export class VoiceConversationService {
       // Reset retry count
       this.retryCount = 0;
       
-      // Restart listening if in continuous mode and not paused
-      if (!this.isPaused && !this.isListening && this.recognition) {
-        setTimeout(() => {
-          this.startListening();
-        }, 500);
-      }
+      // Keep microphone muted for a short delay after processing
+      // to prevent immediate feedback
+      setTimeout(() => {
+        // Restart listening if in continuous mode and not paused
+        if (!this.isPaused && !this.isListening && this.recognition) {
+          this.unmuteUserMicrophone();
+          setTimeout(() => {
+            this.startListening();
+          }, 300);
+        } else {
+          this.unmuteUserMicrophone();
+        }
+      }, this.delayAfterSpeaking);
     }
   }
 
@@ -615,6 +714,10 @@ export class VoiceConversationService {
     if (this.audioQueue.length === 0) {
       this.isPlayingQueue = false;
       this.config.onAudioEnd?.();
+      
+      // Set speaking end time for delayed unmuting
+      this.speakingEndTime = Date.now();
+      
       return;
     }
     
@@ -827,6 +930,12 @@ export class VoiceConversationService {
   setNoiseDetection(enabled: boolean): void {
     this.noiseDetectionEnabled = enabled;
     console.log(`Noise detection ${enabled ? 'enabled' : 'disabled'}`);
+  }
+  
+  // Enable/disable feedback prevention
+  setFeedbackPrevention(enabled: boolean): void {
+    this.feedbackPreventionEnabled = enabled;
+    console.log(`Feedback prevention ${enabled ? 'enabled' : 'disabled'}`);
   }
   
   // Clean up resources

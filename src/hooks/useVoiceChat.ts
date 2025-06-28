@@ -42,6 +42,8 @@ export const useVoiceChat = () => {
   const [visualizationData, setVisualizationData] = useState<Uint8Array | null>(null);
   const [noiseLevel, setNoiseLevel] = useState<number>(0);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
+  const [feedbackPreventionEnabled, setFeedbackPreventionEnabled] = useState(true);
+  const [delayAfterSpeaking, setDelayAfterSpeaking] = useState(500); // 500ms delay
 
   // Cleanup on unmount
   useEffect(() => {
@@ -81,6 +83,11 @@ export const useVoiceChat = () => {
           if (isMounted.current) {
             setIsSpeaking(true);
             setAvatarEmotion('neutral');
+            
+            // Mute microphone when AI starts speaking to prevent feedback
+            if (voiceServiceRef.current && feedbackPreventionEnabled) {
+              voiceServiceRef.current.setFeedbackPrevention(true);
+            }
           }
         },
         onAudioEnd: () => {
@@ -88,6 +95,14 @@ export const useVoiceChat = () => {
             setIsSpeaking(false);
             setAvatarEmotion('neutral');
             processingRef.current = false;
+            
+            // Keep microphone muted for a short delay after AI stops speaking
+            setTimeout(() => {
+              // Then unmute if we're still mounted
+              if (isMounted.current && voiceServiceRef.current) {
+                // Voice service will handle unmuting after the delay
+              }
+            }, delayAfterSpeaking);
           }
         },
         onError: (errorMessage) => {
@@ -135,16 +150,22 @@ export const useVoiceChat = () => {
           
           // Calculate noise level (average of frequency data)
           if (data.length > 0) {
-            const sum = data.reduce((acc, val) => acc + val, 0);
+            const sum = Array.from(data).reduce((acc, val) => acc + val, 0);
             setNoiseLevel(sum / data.length);
           }
         });
+        
+        // Set feedback prevention
+        voiceServiceRef.current.setFeedbackPrevention(feedbackPreventionEnabled);
+        
+        // Set delay after speaking
+        voiceServiceRef.current.setDelayAfterSpeaking(delayAfterSpeaking);
       }
     } catch (error) {
       console.error('Failed to initialize voice service:', error);
       setError('Failed to initialize voice service');
     }
-  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode]);
+  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode, feedbackPreventionEnabled, delayAfterSpeaking]);
 
   // Update voice service when difficulty level changes
   useEffect(() => {
@@ -171,6 +192,11 @@ export const useVoiceChat = () => {
           if (isMounted.current) {
             setIsSpeaking(true);
             setAvatarEmotion('neutral');
+            
+            // Mute microphone when AI starts speaking to prevent feedback
+            if (voiceServiceRef.current && feedbackPreventionEnabled) {
+              voiceServiceRef.current.setFeedbackPrevention(true);
+            }
           }
         },
         onAudioEnd: () => {
@@ -178,6 +204,14 @@ export const useVoiceChat = () => {
             setIsSpeaking(false);
             setAvatarEmotion('neutral');
             processingRef.current = false;
+            
+            // Keep microphone muted for a short delay after AI stops speaking
+            setTimeout(() => {
+              // Then unmute if we're still mounted
+              if (isMounted.current && voiceServiceRef.current) {
+                // Voice service will handle unmuting after the delay
+              }
+            }, delayAfterSpeaking);
           }
         },
         onError: (errorMessage) => {
@@ -217,12 +251,24 @@ export const useVoiceChat = () => {
       if (voiceServiceRef.current) {
         voiceServiceRef.current.setAudioVisualizationCallback((data) => {
           setVisualizationData(data);
+          
+          // Calculate noise level
+          if (data.length > 0) {
+            const sum = Array.from(data).reduce((acc, val) => acc + val, 0);
+            setNoiseLevel(sum / data.length);
+          }
         });
+        
+        // Set feedback prevention
+        voiceServiceRef.current.setFeedbackPrevention(feedbackPreventionEnabled);
+        
+        // Set delay after speaking
+        voiceServiceRef.current.setDelayAfterSpeaking(delayAfterSpeaking);
       }
       
       console.log(`Voice service updated with difficulty level: ${difficultyLevel}`);
     }
-  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode]);
+  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode, feedbackPreventionEnabled, delayAfterSpeaking]);
 
   // Initialize audio context for noise detection
   useEffect(() => {
@@ -361,6 +407,35 @@ export const useVoiceChat = () => {
     }
   }, []);
   
+  // Set delay after speaking
+  const setDelayAfterSpeaking = useCallback((milliseconds: number) => {
+    if (milliseconds >= 200 && milliseconds <= 1000) {
+      setDelayAfterSpeaking(milliseconds);
+      
+      // Also update the voice service if available
+      if (voiceServiceRef.current) {
+        voiceServiceRef.current.setDelayAfterSpeaking(milliseconds);
+      }
+      
+      toast.success(`Delay after speaking set to ${milliseconds}ms`);
+    } else {
+      toast.error('Delay after speaking must be between 200ms and 1000ms');
+    }
+  }, []);
+  
+  // Toggle feedback prevention
+  const toggleFeedbackPrevention = useCallback(() => {
+    const newValue = !feedbackPreventionEnabled;
+    setFeedbackPreventionEnabled(newValue);
+    
+    // Update the voice service
+    if (voiceServiceRef.current) {
+      voiceServiceRef.current.setFeedbackPrevention(newValue);
+    }
+    
+    toast.success(`Feedback prevention ${newValue ? 'enabled' : 'disabled'}`);
+  }, [feedbackPreventionEnabled]);
+  
   // Helper function to simplify and shorten responses for study mode
   const simplifyResponse = (text: string): string => {
     // Split into sentences
@@ -411,7 +486,11 @@ export const useVoiceChat = () => {
     toggleVoiceChat,
     forceSubmitTranscript,
     setPauseThreshold,
+    setDelayAfterSpeaking,
+    toggleFeedbackPrevention,
     pauseThreshold: pauseThresholdRef.current,
+    delayAfterSpeaking,
+    feedbackPreventionEnabled,
     visualizationData,
     noiseLevel
   };

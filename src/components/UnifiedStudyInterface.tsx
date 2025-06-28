@@ -21,7 +21,8 @@ import {
   VolumeX,
   Image as ImageIcon,
   Zap,
-  BookOpen
+  BookOpen,
+  Shield
 } from 'lucide-react';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -30,6 +31,8 @@ import { StudyModeToggle } from './StudyModeToggle';
 import { StudyModePrompt } from './StudyModePrompt';
 import { StudySessionEndModal } from './StudySessionEndModal';
 import { AudioVisualizer } from './AudioVisualizer';
+import { VoiceInputProcessor } from './VoiceInputProcessor';
+import { EnhancedVoiceControls } from './EnhancedVoiceControls';
 import toast from 'react-hot-toast';
 
 export const UnifiedStudyInterface: React.FC = () => {
@@ -44,7 +47,8 @@ export const UnifiedStudyInterface: React.FC = () => {
     isStudyMode,
     learningMode,
     setLearningMode,
-    isSpeaking
+    isSpeaking,
+    voiceMode
   } = useStore();
   
   const { user } = useAuth();
@@ -60,9 +64,10 @@ export const UnifiedStudyInterface: React.FC = () => {
   const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [isImageUploadMode, setIsImageUploadMode] = useState(false);
+  const [showFeedbackControls, setShowFeedbackControls] = useState(false);
   
   // Voice chat state and hooks
-  const { 
+  const {
     isActive,
     isPaused,
     currentTranscript,
@@ -71,7 +76,9 @@ export const UnifiedStudyInterface: React.FC = () => {
     pauseVoiceChat,
     resumeVoiceChat,
     forceSubmitTranscript,
-    visualizationData
+    visualizationData,
+    feedbackPreventionEnabled,
+    toggleFeedbackPrevention
   } = useVoiceChat();
   
   // Refs
@@ -345,6 +352,19 @@ export const UnifiedStudyInterface: React.FC = () => {
             
             {/* Right Controls */}
             <div className="flex items-center space-x-2">
+              {/* Feedback Prevention Toggle */}
+              {learningMode === 'videocall' && (
+                <Button
+                  variant={feedbackPreventionEnabled ? "primary" : "outline"}
+                  size="sm"
+                  leftIcon={<Shield className="h-3 w-3" />}
+                  onClick={toggleFeedbackPrevention}
+                  className="text-xs"
+                >
+                  {feedbackPreventionEnabled ? "Feedback Prevention On" : "Feedback Prevention Off"}
+                </Button>
+              )}
+              
               <StudyModeToggle />
               
               <Button
@@ -461,6 +481,12 @@ export const UnifiedStudyInterface: React.FC = () => {
                         <p className="text-blue-600 text-xs mt-1">
                           Click the microphone button below to start speaking
                         </p>
+                        {feedbackPreventionEnabled && (
+                          <div className="flex items-center mt-2 text-green-600 text-xs">
+                            <Shield className="h-3 w-3 mr-1" />
+                            <span>Feedback prevention active</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -544,86 +570,74 @@ export const UnifiedStudyInterface: React.FC = () => {
               
               {/* Input Area */}
               <div className="border-t border-gray-200 p-3 bg-white">
-                <form onSubmit={handleTextSubmit} className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={textInput}
-                    onChange={(e) => setTextInput(e.target.value)}
-                    placeholder={isStudyMode 
-                      ? "Ask a specific question about your subject..." 
-                      : "Type your message..."}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
-                    disabled={isProcessing}
-                  />
-                  
-                  {learningMode === 'videocall' && (
-                    <Button
-                      type="button"
-                      variant={isActive ? "secondary" : "primary"}
-                      onClick={toggleVoiceMode}
+                {learningMode === 'conversational' ? (
+                  <form onSubmit={handleTextSubmit} className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={textInput}
+                      onChange={(e) => setTextInput(e.target.value)}
+                      placeholder={isStudyMode 
+                        ? "Ask a specific question about your subject..." 
+                        : "Type your message..."}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
                       disabled={isProcessing}
+                    />
+                    
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={!textInput.trim() || isProcessing}
+                      isLoading={isProcessing}
                       className="px-3"
                     >
-                      {isActive ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                      <Send className="h-5 w-5" />
                     </Button>
-                  )}
-                  
-                  <Button
-                    type="submit"
-                    variant="primary"
-                    disabled={(!textInput.trim() && learningMode !== 'videocall') || isProcessing}
-                    isLoading={isProcessing}
-                    className="px-3"
-                  >
-                    <Send className="h-5 w-5" />
-                  </Button>
-                </form>
-                
-                {/* Voice Controls */}
-                {learningMode === 'videocall' && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <div className="flex flex-col space-y-3">
-                      {/* Audio Visualization */}
-                      <AudioVisualizer 
-                        audioData={visualizationData || []}
-                        isActive={isActive}
-                        height={40}
-                      />
+                  </form>
+                ) : (
+                  <div className="flex flex-col space-y-3">
+                    {/* Voice Input Processor */}
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        type="button"
+                        variant={isActive ? "secondary" : "primary"}
+                        onClick={toggleVoiceMode}
+                        disabled={isProcessing}
+                        className="px-3"
+                      >
+                        {isActive ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                      </Button>
                       
-                      {/* Voice Control Buttons */}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            variant={isPaused ? "primary" : "outline"}
-                            size="sm"
-                            onClick={togglePauseResume}
-                            disabled={!isActive}
-                          >
-                            {isPaused ? "Resume" : "Pause"}
-                          </Button>
-                          
-                          {currentTranscript && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={forceSubmitTranscript}
-                            >
-                              Submit Now
-                            </Button>
-                          )}
-                        </div>
-                        
-                        <div className="text-xs text-gray-500">
-                          {isActive ? (
-                            <span className="text-green-600 font-medium">Voice Active</span>
-                          ) : isPaused ? (
-                            <span className="text-amber-600 font-medium">Paused</span>
-                          ) : (
-                            <span>Click mic to start</span>
-                          )}
-                        </div>
+                      <div className="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-sm text-gray-500">
+                        {currentTranscript || "Click the microphone to start speaking..."}
                       </div>
+                      
+                      {currentTranscript && (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          onClick={forceSubmitTranscript}
+                          disabled={isProcessing}
+                          className="px-3"
+                        >
+                          <Send className="h-5 w-5" />
+                        </Button>
+                      )}
                     </div>
+                    
+                    {/* Audio Visualization */}
+                    <AudioVisualizer 
+                      audioData={visualizationData || []}
+                      isActive={isActive}
+                      height={40}
+                    />
+                    
+                    {/* Feedback Prevention Status */}
+                    {feedbackPreventionEnabled && (
+                      <div className="flex items-center justify-center space-x-2 text-xs text-green-600 bg-green-50 py-1 px-2 rounded-md border border-green-200">
+                        <Shield className="h-3 w-3" />
+                        <span>Feedback prevention active - microphone will automatically mute while AI is speaking</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -661,6 +675,15 @@ export const UnifiedStudyInterface: React.FC = () => {
           </div>
         </Card>
         
+        {/* Voice Controls Panel (only shown in voice mode) */}
+        {learningMode === 'videocall' && (
+          <div className="mt-4">
+            <EnhancedVoiceControls 
+              onSwitchToText={() => switchLearningMode('conversational')}
+            />
+          </div>
+        )}
+        
         {/* Status Bar */}
         <div className="mt-2 flex items-center justify-between text-xs text-gray-500 px-2">
           <div className="flex items-center space-x-4">
@@ -687,6 +710,13 @@ export const UnifiedStudyInterface: React.FC = () => {
               <div className="flex items-center space-x-1 text-purple-600">
                 <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse"></div>
                 <span>AI Speaking</span>
+              </div>
+            )}
+            
+            {feedbackPreventionEnabled && learningMode === 'videocall' && (
+              <div className="flex items-center space-x-1 text-green-600">
+                <Shield className="h-3 w-3" />
+                <span>Feedback Prevention</span>
               </div>
             )}
           </div>
