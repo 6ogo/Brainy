@@ -25,11 +25,8 @@ export const PauseDetectionIndicator: React.FC<PauseDetectionIndicatorProps> = (
     }
     
     let animationFrameId: number;
-    let startTime = performance.now();
     
     const updateProgress = () => {
-      const now = performance.now();
-      const elapsed = now - startTime;
       const timeSinceLastSpeech = Date.now() - lastSpeechTimestamp;
       
       if (timeSinceLastSpeech > 100) {

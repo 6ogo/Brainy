@@ -15,14 +15,10 @@ import {
   MessageSquare,
   Video,
   BarChart,
-  Upload,
   Download,
+  Shield,
   Volume2,
-  VolumeX,
-  Image as ImageIcon,
-  Zap,
-  BookOpen,
-  Shield
+  VolumeX
 } from 'lucide-react';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -31,8 +27,6 @@ import { StudyModeToggle } from './StudyModeToggle';
 import { StudyModePrompt } from './StudyModePrompt';
 import { StudySessionEndModal } from './StudySessionEndModal';
 import { AudioVisualizer } from './AudioVisualizer';
-import { VoiceInputProcessor } from './VoiceInputProcessor';
-import { EnhancedVoiceControls } from './EnhancedVoiceControls';
 import toast from 'react-hot-toast';
 
 export const UnifiedStudyInterface: React.FC = () => {
@@ -48,7 +42,8 @@ export const UnifiedStudyInterface: React.FC = () => {
     learningMode,
     setLearningMode,
     isSpeaking,
-    voiceMode
+    voiceMode,
+    setVoiceMode
   } = useStore();
   
   const { user } = useAuth();
@@ -58,13 +53,9 @@ export const UnifiedStudyInterface: React.FC = () => {
   // Core state
   const [textInput, setTextInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState<any[]>([]);
-  const [showStudyModePrompt, setShowStudyModePrompt] = useState(false);
   const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   const [volume, setVolume] = useState(0.8);
-  const [isImageUploadMode, setIsImageUploadMode] = useState(false);
-  const [showFeedbackControls, setShowFeedbackControls] = useState(false);
+  const [feedbackPreventionEnabled, setFeedbackPreventionEnabled] = useState(true);
   
   // Voice chat state and hooks
   const {
@@ -77,14 +68,12 @@ export const UnifiedStudyInterface: React.FC = () => {
     resumeVoiceChat,
     forceSubmitTranscript,
     visualizationData,
-    feedbackPreventionEnabled,
     toggleFeedbackPrevention
   } = useVoiceChat();
   
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom with smooth behavior
   useEffect(() => {
@@ -111,9 +100,6 @@ export const UnifiedStudyInterface: React.FC = () => {
       topicsDiscussed: [],
       xpEarned: 0
     });
-    
-    // Load conversation history
-    loadConversationHistory();
   }, [currentSubject, currentAvatar, user, navigate, updateSessionStats]);
 
   // Show study mode prompt when study mode is activated
@@ -123,23 +109,7 @@ export const UnifiedStudyInterface: React.FC = () => {
     }
   }, [isStudyMode]);
 
-  const loadConversationHistory = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('timestamp', { ascending: false })
-        .limit(10);
-      
-      if (error) throw error;
-      setConversationHistory(data || []);
-    } catch (error) {
-      console.error('Error loading conversation history:', error);
-    }
-  };
+  const [showStudyModePrompt, setShowStudyModePrompt] = useState(false);
 
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,14 +124,6 @@ export const UnifiedStudyInterface: React.FC = () => {
       stopVoiceChat();
     } else {
       startVoiceChat();
-    }
-  };
-
-  const togglePauseResume = () => {
-    if (isPaused) {
-      resumeVoiceChat();
-    } else {
-      pauseVoiceChat();
     }
   };
 
@@ -180,6 +142,7 @@ export const UnifiedStudyInterface: React.FC = () => {
     setLearningMode(mode);
     
     if (mode === 'videocall') {
+      setVoiceMode('continuous');
       startVoiceChat();
     } else {
       stopVoiceChat();
@@ -190,45 +153,6 @@ export const UnifiedStudyInterface: React.FC = () => {
 
   const endSession = () => {
     setShowEndSessionModal(true);
-  };
-
-  const handleImageUpload = () => {
-    setIsImageUploadMode(!isImageUploadMode);
-    if (isImageUploadMode && fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    // Check file type
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
-      return;
-    }
-    
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size should be less than 5MB');
-      return;
-    }
-    
-    // Create a message about the image
-    const imageMessage = `I'm uploading an image about ${currentSubject}. Please analyze it and provide feedback.`;
-    
-    // In a real implementation, you would upload the image to a server
-    // For now, we'll just simulate the image analysis
-    sendMessage(imageMessage, false);
-    
-    // Reset the file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-    
-    setIsImageUploadMode(false);
-    toast.success('Image uploaded for analysis');
   };
 
   const handleDownloadTranscript = () => {
@@ -358,7 +282,10 @@ export const UnifiedStudyInterface: React.FC = () => {
                   variant={feedbackPreventionEnabled ? "primary" : "outline"}
                   size="sm"
                   leftIcon={<Shield className="h-3 w-3" />}
-                  onClick={toggleFeedbackPrevention}
+                  onClick={() => {
+                    setFeedbackPreventionEnabled(!feedbackPreventionEnabled);
+                    toggleFeedbackPrevention();
+                  }}
                   className="text-xs"
                 >
                   {feedbackPreventionEnabled ? "Feedback Prevention On" : "Feedback Prevention Off"}
@@ -398,24 +325,6 @@ export const UnifiedStudyInterface: React.FC = () => {
                     <Volume2 className="h-4 w-4 text-gray-500" />
                   </div>
                   
-                  {/* Image Upload */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<ImageIcon className="h-3 w-3" />}
-                    onClick={handleImageUpload}
-                    className={isImageUploadMode ? "bg-primary-50 border-primary-200" : ""}
-                  >
-                    Upload Image
-                  </Button>
-                  <input 
-                    type="file" 
-                    ref={fileInputRef}
-                    className="hidden" 
-                    accept="image/*"
-                    onChange={handleFileChange}
-                  />
-                  
                   {/* Download Transcript */}
                   <Button
                     variant="outline"
@@ -427,29 +336,20 @@ export const UnifiedStudyInterface: React.FC = () => {
                   </Button>
                 </div>
                 
-                <div className="flex items-center space-x-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowHistory(!showHistory)}
-                  >
-                    {showHistory ? 'Hide' : 'Show'} History
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    leftIcon={<X className="h-4 w-4" />}
-                    onClick={() => setShowSettings(false)}
-                  >
-                    Close
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  leftIcon={<X className="h-4 w-4" />}
+                  onClick={() => setShowSettings(false)}
+                >
+                  Close
+                </Button>
               </div>
             </div>
           )}
           
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-hidden">
             {/* Chat Area */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
               {/* Messages */}
@@ -461,7 +361,7 @@ export const UnifiedStudyInterface: React.FC = () => {
                   <div className="h-full flex flex-col items-center justify-center text-center p-6">
                     <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center mb-4">
                       {isStudyMode ? (
-                        <BookOpen className="h-8 w-8 text-primary-600" />
+                        <MessageSquare className="h-8 w-8 text-primary-600" />
                       ) : (
                         <MessageSquare className="h-8 w-8 text-primary-600" />
                       )}
@@ -595,7 +495,7 @@ export const UnifiedStudyInterface: React.FC = () => {
                   </form>
                 ) : (
                   <div className="flex flex-col space-y-3">
-                    {/* Voice Input Processor */}
+                    {/* Voice Input Controls */}
                     <div className="flex items-center space-x-2">
                       <Button
                         type="button"
@@ -629,6 +529,7 @@ export const UnifiedStudyInterface: React.FC = () => {
                       audioData={visualizationData || []}
                       isActive={isActive}
                       height={40}
+                      showAIFilter={isSpeaking && feedbackPreventionEnabled}
                     />
                     
                     {/* Feedback Prevention Status */}
@@ -642,47 +543,8 @@ export const UnifiedStudyInterface: React.FC = () => {
                 )}
               </div>
             </div>
-            
-            {/* History Sidebar */}
-            {showHistory && (
-              <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-gray-200 bg-gray-50 overflow-y-auto">
-                <div className="p-4">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Previous Conversations</h3>
-                  {conversationHistory.length > 0 ? (
-                    <div className="space-y-3">
-                      {conversationHistory.map((conv, index) => (
-                        <div key={conv.id || index} className="p-3 bg-white rounded-lg shadow-sm">
-                          <div className="text-xs text-gray-500 mb-1">
-                            {new Date(conv.timestamp).toLocaleDateString()}
-                          </div>
-                          <div className="text-sm">
-                            <strong>You:</strong> {conv.user_message?.substring(0, 60)}
-                            {conv.user_message?.length > 60 && '...'}
-                          </div>
-                          <div className="text-sm mt-1">
-                            <strong>AI:</strong> {conv.ai_response?.substring(0, 60)}
-                            {conv.ai_response?.length > 60 && '...'}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-center py-4">No previous conversations found.</p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </Card>
-        
-        {/* Voice Controls Panel (only shown in voice mode) */}
-        {learningMode === 'videocall' && (
-          <div className="mt-4">
-            <EnhancedVoiceControls 
-              onSwitchToText={() => switchLearningMode('conversational')}
-            />
-          </div>
-        )}
         
         {/* Status Bar */}
         <div className="mt-2 flex items-center justify-between text-xs text-gray-500 px-2">

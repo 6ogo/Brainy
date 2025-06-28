@@ -26,7 +26,7 @@ export class VoiceConversationService {
   private recognitionLanguage = 'en-US';
   private stream: MediaStream | null = null;
   private processingTimeout: number | null = null;
-  private maxSilenceTime = 1500; // 1.5 seconds of silence before processing
+  private maxSilenceTime = 600; // Default 600ms of silence before processing
   private lastSpeechTimestamp = 0;
   private silenceTimer: number | null = null;
   private noiseThreshold = 3; // Minimum characters to consider as valid speech
@@ -38,6 +38,8 @@ export class VoiceConversationService {
   private audioDataArray: Uint8Array | null = null;
   private animationFrameId: number | null = null;
   private aiAudioFingerprint: Float32Array | null = null; // For AI audio detection
+  private aiSpeakingDetector: AnalyserNode | null = null;
+  private microphoneGainNode: GainNode | null = null;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -74,7 +76,7 @@ export class VoiceConversationService {
           // Notify about interim results for UI feedback
           this.config.onTranscript?.(transcript, lastResult.isFinal);
           
-          // Clear any pending transcript timeout
+          // Clear any pending timeout
           if (this.processingTimeout) {
             clearTimeout(this.processingTimeout);
             this.processingTimeout = null;
@@ -154,6 +156,14 @@ export class VoiceConversationService {
       this.analyser.fftSize = 256;
       this.audioDataArray = new Uint8Array(this.analyser.frequencyBinCount);
       
+      // Create a gain node for microphone control
+      this.microphoneGainNode = this.audioContext.createGain();
+      this.microphoneGainNode.gain.value = 1.0; // Default gain
+      
+      // Create an analyzer specifically for detecting AI audio
+      this.aiSpeakingDetector = this.audioContext.createAnalyser();
+      this.aiSpeakingDetector.fftSize = 1024;
+      
       console.log('Audio context initialized successfully');
       
       // Start visualization loop
@@ -201,10 +211,11 @@ export class VoiceConversationService {
       // Save the stream reference to stop it later
       this.stream = stream;
       
-      // Connect to audio context for visualization
-      if (this.audioContext && this.analyser) {
+      // Connect microphone to audio context for visualization
+      if (this.audioContext && this.analyser && this.microphoneGainNode) {
         const source = this.audioContext.createMediaStreamSource(stream);
-        source.connect(this.analyser);
+        source.connect(this.microphoneGainNode);
+        this.microphoneGainNode.connect(this.analyser);
         console.log('Audio recording started');
         
         // Detect if there's sound
@@ -334,6 +345,12 @@ export class VoiceConversationService {
   setFeedbackPrevention(enabled: boolean): void {
     this.feedbackPrevention = enabled;
     console.log(`Feedback prevention ${enabled ? 'enabled' : 'disabled'}`);
+    
+    // If enabled, set up audio fingerprinting for AI voice
+    if (enabled && this.audioContext && this.aiSpeakingDetector) {
+      // This would be where we'd set up more sophisticated AI voice detection
+      // For now, we'll just use the simple muting approach
+    }
   }
 
   setDelayAfterSpeaking(milliseconds: number): void {
@@ -538,6 +555,14 @@ export class VoiceConversationService {
         console.error('Error muting recognition:', error);
       }
     }
+    
+    // Also mute the microphone gain if available
+    if (this.microphoneGainNode) {
+      // Gradually reduce gain to avoid clicks
+      const currentTime = this.audioContext?.currentTime || 0;
+      this.microphoneGainNode.gain.setValueAtTime(this.microphoneGainNode.gain.value, currentTime);
+      this.microphoneGainNode.gain.exponentialRampToValueAtTime(0.001, currentTime + 0.1);
+    }
   }
 
   private unmuteRecognition(): void {
@@ -549,6 +574,14 @@ export class VoiceConversationService {
       } catch (error) {
         console.error('Error unmuting recognition:', error);
       }
+    }
+    
+    // Also restore microphone gain if available
+    if (this.microphoneGainNode && this.audioContext) {
+      // Gradually increase gain to avoid clicks
+      const currentTime = this.audioContext.currentTime;
+      this.microphoneGainNode.gain.setValueAtTime(0.001, currentTime);
+      this.microphoneGainNode.gain.exponentialRampToValueAtTime(1.0, currentTime + 0.1);
     }
   }
 
