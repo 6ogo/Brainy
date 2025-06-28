@@ -6,6 +6,9 @@ export class ElevenLabsService {
   private static requestQueue: Array<() => Promise<any>> = [];
   private static cache: Map<string, Blob> = new Map();
   private static cacheSize = 20; // Maximum number of cached responses
+  private static quotaExceeded = false;
+  private static lastQuotaCheckTime = 0;
+  private static quotaCheckInterval = 5 * 60 * 1000; // 5 minutes
   
   static async generateSpeech(text: string, persona: string): Promise<Blob> {
     try {
@@ -26,6 +29,13 @@ export class ElevenLabsService {
       // Check if ElevenLabs is configured
       if (!isElevenLabsConfigured()) {
         console.log('ElevenLabs not configured, using fallback speech synthesis');
+        return await createFallbackResponse('elevenlabs', text, persona) as Blob;
+      }
+      
+      // If quota was exceeded recently, use fallback directly without trying API
+      const now = Date.now();
+      if (this.quotaExceeded && (now - this.lastQuotaCheckTime) < this.quotaCheckInterval) {
+        console.log('Quota exceeded recently, using fallback directly');
         return await createFallbackResponse('elevenlabs', text, persona) as Blob;
       }
 
@@ -49,6 +59,12 @@ export class ElevenLabsService {
         this.apiCallsInProgress++;
         const audioBlob = await this.callElevenLabsAPI(text, persona);
         
+        // Reset quota exceeded flag if successful
+        if (this.quotaExceeded) {
+          this.quotaExceeded = false;
+          console.log('ElevenLabs API quota appears to be restored');
+        }
+        
         // Cache the result
         if (audioBlob && audioBlob.size > 0) {
           this.addToCache(cacheKey, audioBlob);
@@ -56,7 +72,19 @@ export class ElevenLabsService {
         
         return audioBlob;
       } catch (elevenLabsError) {
-        console.warn('ElevenLabs API failed, falling back to browser speech:', elevenLabsError);
+        console.warn('ElevenLabs API failed:', elevenLabsError);
+        
+        // Check if error is due to quota exceeded
+        if (elevenLabsError instanceof Error && 
+            (elevenLabsError.message.includes('quota_exceeded') || 
+             elevenLabsError.message.includes('rate limit'))) {
+          // Mark quota as exceeded and record time
+          this.quotaExceeded = true;
+          this.lastQuotaCheckTime = now;
+          console.log('ElevenLabs quota exceeded, will use fallback for next 5 minutes');
+        }
+        
+        // Use browser's speech synthesis as fallback
         return await createFallbackResponse('elevenlabs', text, persona) as Blob;
       } finally {
         this.apiCallsInProgress--;
@@ -118,6 +146,11 @@ export class ElevenLabsService {
             const errorText = await response.text();
             console.error('ElevenLabs API error:', response.status, response.statusText, errorText);
             
+            // Check for quota exceeded error
+            if (response.status === 401 && errorText.includes('quota_exceeded')) {
+              throw new Error('quota_exceeded: ElevenLabs API quota exceeded');
+            }
+            
             // Provide specific error messages
             if (response.status === 401) {
               throw new Error('ElevenLabs API key is invalid or expired');
@@ -143,6 +176,11 @@ export class ElevenLabsService {
         } catch (error) {
           if (error instanceof Error && error.name === 'AbortError') {
             throw new Error('ElevenLabs API request timed out');
+          }
+          
+          // If quota exceeded, don't retry
+          if (error instanceof Error && error.message.includes('quota_exceeded')) {
+            throw error;
           }
           
           // If we've reached max retries, throw the error
@@ -366,9 +404,19 @@ export class ElevenLabsService {
 
       if (response.ok) {
         console.log('✅ ElevenLabs API is working');
+        // Reset quota exceeded flag
+        this.quotaExceeded = false;
         return true;
       } else {
-        console.warn(`❌ ElevenLabs API check failed: ${response.status}`);
+        // Check if error is due to quota
+        const errorText = await response.text();
+        if (response.status === 401 && errorText.includes('quota_exceeded')) {
+          this.quotaExceeded = true;
+          this.lastQuotaCheckTime = Date.now();
+          console.warn('❌ ElevenLabs API quota exceeded');
+        } else {
+          console.warn(`❌ ElevenLabs API check failed: ${response.status}`);
+        }
         return false;
       }
     } catch (error) {
@@ -381,5 +429,16 @@ export class ElevenLabsService {
   static clearCache(): void {
     this.cache.clear();
     console.log('ElevenLabs audio cache cleared');
+  }
+  
+  // Reset quota exceeded status
+  static resetQuotaStatus(): void {
+    this.quotaExceeded = false;
+    console.log('ElevenLabs quota status reset');
+  }
+  
+  // Get quota status
+  static isQuotaExceeded(): boolean {
+    return this.quotaExceeded;
   }
 }

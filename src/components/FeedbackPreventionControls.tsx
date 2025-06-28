@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Sliders, Shield, Clock, Volume2, VolumeX, Info } from 'lucide-react';
+import { Sliders, Shield, Clock, Volume2, VolumeX, Info, RefreshCw } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
+import { ElevenLabsService } from '../services/elevenlabsService';
+import toast from 'react-hot-toast';
 
 interface FeedbackPreventionControlsProps {
   feedbackPreventionEnabled: boolean;
@@ -19,6 +21,29 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
   className
 }) => {
   const [showInfo, setShowInfo] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  
+  const handleResetElevenLabsQuota = async () => {
+    setIsResetting(true);
+    try {
+      // Reset quota status
+      ElevenLabsService.resetQuotaStatus();
+      
+      // Check if API is working
+      const isWorking = await ElevenLabsService.checkApiStatus();
+      
+      if (isWorking) {
+        toast.success('ElevenLabs API connection restored');
+      } else {
+        toast.error('ElevenLabs API still unavailable. Using browser speech synthesis.');
+      }
+    } catch (error) {
+      console.error('Error resetting ElevenLabs quota:', error);
+      toast.error('Failed to reset ElevenLabs connection');
+    } finally {
+      setIsResetting(false);
+    }
+  };
   
   return (
     <div className={cn("p-4 bg-gray-50 rounded-lg border border-gray-200", className)}>
@@ -87,6 +112,35 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
           <div className="flex items-center space-x-2 text-xs text-gray-600">
             <div className="w-2 h-2 rounded-full bg-green-500"></div>
             <span>Active feedback prevention</span>
+          </div>
+        </div>
+      )}
+      
+      {/* ElevenLabs API Status */}
+      {ElevenLabsService.isQuotaExceeded() && (
+        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="flex items-start space-x-3">
+            <div className="text-amber-600 mt-0.5">
+              <Volume2 className="h-4 w-4" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium text-amber-800">
+                ElevenLabs Quota Exceeded
+              </h4>
+              <p className="text-xs text-amber-700 mt-1">
+                Your ElevenLabs API quota has been exceeded. The system is currently using browser speech synthesis as a fallback.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetElevenLabsQuota}
+                className="mt-2"
+                leftIcon={<RefreshCw className="h-3 w-3" />}
+                isLoading={isResetting}
+              >
+                Reset Connection
+              </Button>
+            </div>
           </div>
         </div>
       )}

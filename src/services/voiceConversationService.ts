@@ -45,11 +45,20 @@ export class VoiceConversationService {
   private aiFrequencyPattern: number[] = [];
   private speakingEndTime = 0;
   private delayAfterSpeaking = 500; // 500ms delay after AI stops speaking
+  private useBrowserSpeechSynthesis = false;
+  private consecutiveApiFailures = 0;
+  private maxConsecutiveFailures = 3;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
     this.initializeSpeechRecognition();
     this.initializeAudioContext();
+    
+    // Check if ElevenLabs is already in quota exceeded state
+    if (ElevenLabsService.isQuotaExceeded()) {
+      this.useBrowserSpeechSynthesis = true;
+      console.log('ElevenLabs quota already exceeded, using browser speech synthesis');
+    }
   }
 
   private initializeAudioContext(): void {
@@ -563,70 +572,61 @@ export class VoiceConversationService {
         // Test audio output before generating speech
         await this.testAudioOutput();
         
-        if (!API_CONFIG.ELEVENLABS_API_KEY) {
-          // Use fallback if ElevenLabs API key is not configured
-          const audioBlob = await this.createFallbackAudio(aiResponse);
-          console.log('Using fallback speech generation');
-          
-          // Add to queue and play
-          this.queueAudio(audioBlob);
+        // If we've had multiple consecutive API failures or quota is exceeded, use browser speech synthesis directly
+        if (this.useBrowserSpeechSynthesis || this.consecutiveApiFailures >= this.maxConsecutiveFailures) {
+          await this.useBrowserSpeech(aiResponse);
         } else {
           // Split long responses into chunks for better streaming
           const chunks = this.splitResponseIntoChunks(aiResponse);
+          
+          let apiFailedForAllChunks = true;
           
           for (const chunk of chunks) {
             try {
               const audioBlob = await ElevenLabsService.generateSpeech(chunk, this.config.avatarPersonality);
               console.log(`Speech generated successfully for chunk, blob size: ${audioBlob?.size}`);
               
+              // If we get a successful response, reset the consecutive failures counter
+              this.consecutiveApiFailures = 0;
+              apiFailedForAllChunks = false;
+              
               // Add to queue and play
               this.queueAudio(audioBlob);
             } catch (chunkError) {
               console.error('Error generating speech for chunk:', chunkError);
+              
+              // If this is a quota error, use browser speech for this and future chunks
+              if (chunkError instanceof Error && 
+                  (chunkError.message.includes('quota_exceeded') || 
+                   chunkError.message.includes('rate limit'))) {
+                this.useBrowserSpeechSynthesis = true;
+                await this.useBrowserSpeech(chunk);
+                apiFailedForAllChunks = false;
+                break;
+              }
+              
               // Continue with next chunk
             }
+          }
+          
+          // If all chunks failed with API, increment failure counter and use browser speech
+          if (apiFailedForAllChunks) {
+            this.consecutiveApiFailures++;
+            console.log(`All chunks failed with API, consecutive failures: ${this.consecutiveApiFailures}`);
+            
+            if (this.consecutiveApiFailures >= this.maxConsecutiveFailures) {
+              console.log(`Switching to browser speech synthesis after ${this.maxConsecutiveFailures} consecutive failures`);
+              this.useBrowserSpeechSynthesis = true;
+            }
+            
+            await this.useBrowserSpeech(aiResponse);
           }
         }
       } catch (audioError) {
         console.error('Audio generation or playback error:', audioError);
         
-        // Retry with fallback
-        if (this.retryCount < this.maxRetries) {
-          this.retryCount++;
-          console.log(`Retrying with fallback (attempt ${this.retryCount}/${this.maxRetries})`);
-          
-          try {
-            const fallbackBlob = await this.createFallbackAudio(aiResponse);
-            this.queueAudio(fallbackBlob);
-          } catch (fallbackError) {
-            console.error('Fallback audio generation failed:', fallbackError);
-            this.config.onError?.('Voice generation failed. Falling back to text-only mode.');
-          }
-        } else {
-          // Use browser's speech synthesis as last resort
-          if ('speechSynthesis' in window) {
-            const utterance = new SpeechSynthesisUtterance(aiResponse);
-            utterance.rate = 1;
-            utterance.pitch = 1;
-            utterance.volume = 1;
-            
-            window.speechSynthesis.speak(utterance);
-            
-            // Wait for speech to complete
-            return new Promise<void>((resolve) => {
-              utterance.onend = () => {
-                this.config.onAudioEnd?.();
-                resolve();
-              };
-              
-              // Fallback timeout in case onend doesn't fire
-              setTimeout(() => {
-                this.config.onAudioEnd?.();
-                resolve();
-              }, aiResponse.length * 50); // Rough estimate of speech duration
-            });
-          }
-        }
+        // Use browser's speech synthesis as fallback
+        await this.useBrowserSpeech(aiResponse);
       }
     } catch (error) {
       console.error('Error in voice conversation:', error);
@@ -670,6 +670,68 @@ export class VoiceConversationService {
         }
       }, this.delayAfterSpeaking);
     }
+  }
+
+  // Use browser speech synthesis
+  private async useBrowserSpeech(text: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      if (!('speechSynthesis' in window)) {
+        console.error('Speech synthesis not supported in this browser');
+        reject(new Error('Speech synthesis not supported in this browser'));
+        return;
+      }
+      
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // Get voice settings for persona
+      const settings = API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.PERSONA_SETTINGS[this.config.avatarPersonality as keyof typeof API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.PERSONA_SETTINGS] || 
+                       API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.PERSONA_SETTINGS['encouraging-emma'];
+      
+      utterance.rate = settings.rate;
+      utterance.pitch = settings.pitch;
+      utterance.volume = settings.volume;
+      
+      // Try to find a good voice
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        // Find a suitable voice
+        const englishVoice = voices.find(voice => 
+          voice.lang.startsWith('en-') && voice.localService
+        ) || voices.find(voice => 
+          voice.lang.startsWith('en-')
+        ) || voices[0];
+        
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+      }
+      
+      // Set up event handlers
+      utterance.onstart = () => {
+        console.log('Browser speech synthesis started');
+      };
+      
+      utterance.onend = () => {
+        console.log('Browser speech synthesis ended');
+        resolve();
+      };
+      
+      utterance.onerror = (event) => {
+        console.error('Browser speech synthesis error:', event.error);
+        reject(new Error(`Speech synthesis error: ${event.error}`));
+      };
+      
+      // Speak the text
+      window.speechSynthesis.speak(utterance);
+      
+      // Create a silent audio blob for compatibility
+      this.createFallbackAudio().then(blob => {
+        this.queueAudio(blob);
+      });
+    });
   }
 
   // Split long responses into chunks for better streaming
@@ -812,76 +874,35 @@ export class VoiceConversationService {
   }
 
   // Create fallback audio for when ElevenLabs is not available
-  private async createFallbackAudio(text: string): Promise<Blob> {
+  private async createFallbackAudio(text?: string): Promise<Blob> {
     return new Promise((resolve) => {
-      if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        
-        // Try to find a good voice
-        const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(voice => 
-          voice.lang.startsWith('en-') && voice.localService
-        ) || voices.find(voice => 
-          voice.lang.startsWith('en-')
-        ) || voices[0];
-        
-        if (englishVoice) {
-          utterance.voice = englishVoice;
+      // Create a minimal WAV header for silent audio
+      const arrayBuffer = new ArrayBuffer(44);
+      const view = new DataView(arrayBuffer);
+      
+      const writeString = (offset: number, string: string) => {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i));
         }
-        
-        // Customize based on personality
-        switch (this.config.avatarPersonality) {
-          case 'encouraging-emma':
-            utterance.rate = 0.9;
-            utterance.pitch = 1.1;
-            break;
-          case 'challenge-charlie':
-            utterance.rate = 1.1;
-            utterance.pitch = 0.9;
-            break;
-          case 'fun-freddy':
-            utterance.rate = 1.2;
-            utterance.pitch = 1.2;
-            break;
-          default:
-            utterance.rate = 1.0;
-            utterance.pitch = 1.0;
-        }
-        
-        // Create a minimal WAV header for silent audio
-        const arrayBuffer = new ArrayBuffer(44);
-        const view = new DataView(arrayBuffer);
-        
-        const writeString = (offset: number, string: string) => {
-          for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-          }
-        };
-        
-        // WAV file header
-        writeString(0, 'RIFF');
-        view.setUint32(4, 36, true);
-        writeString(8, 'WAVE');
-        writeString(12, 'fmt ');
-        view.setUint32(16, 16, true);
-        view.setUint16(20, 1, true);
-        view.setUint16(22, 1, true);
-        view.setUint32(24, 22050, true);
-        view.setUint32(28, 44100, true);
-        view.setUint16(32, 2, true);
-        view.setUint16(34, 16, true);
-        writeString(36, 'data');
-        view.setUint32(40, 0, true);
-        
-        // Speak the text
-        window.speechSynthesis.speak(utterance);
-        
-        // Return the silent audio blob
-        resolve(new Blob([arrayBuffer], { type: 'audio/wav' }));
-      } else {
-        // If speech synthesis is not available, return an empty blob
-        resolve(new Blob([], { type: 'audio/wav' }));
-      }
+      };
+      
+      // WAV file header
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, 22050, true);
+      view.setUint32(28, 44100, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, 0, true);
+      
+      // Return the silent audio blob
+      resolve(new Blob([arrayBuffer], { type: 'audio/wav' }));
     });
   }
 
@@ -936,6 +957,13 @@ export class VoiceConversationService {
   setFeedbackPrevention(enabled: boolean): void {
     this.feedbackPreventionEnabled = enabled;
     console.log(`Feedback prevention ${enabled ? 'enabled' : 'disabled'}`);
+  }
+  
+  // Reset browser speech synthesis fallback
+  resetBrowserSpeechSynthesisFallback(): void {
+    this.useBrowserSpeechSynthesis = false;
+    this.consecutiveApiFailures = 0;
+    console.log('Reset browser speech synthesis fallback');
   }
   
   // Clean up resources

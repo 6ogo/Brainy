@@ -43,6 +43,20 @@ export const API_CONFIG = {
     similarity_boost: 0.8,    // High similarity to original voice
     style: 0.6,              // Moderate style amplification
     use_speaker_boost: true   // Enhanced clarity for voice chat
+  },
+  
+  // Speech synthesis fallback settings
+  SPEECH_SYNTHESIS_SETTINGS: {
+    DEFAULT_RATE: 1.0,
+    DEFAULT_PITCH: 1.0,
+    DEFAULT_VOLUME: 0.8,
+    PERSONA_SETTINGS: {
+      'encouraging-emma': { rate: 0.9, pitch: 1.1, volume: 0.8 },
+      'challenge-charlie': { rate: 1.1, pitch: 0.9, volume: 0.9 },
+      'fun-freddy': { rate: 1.2, pitch: 1.2, volume: 0.85 },
+      'professor-patricia': { rate: 0.85, pitch: 1.0, volume: 0.8 },
+      'buddy-ben': { rate: 1.0, pitch: 0.95, volume: 0.8 }
+    }
   }
 };
 
@@ -179,43 +193,23 @@ export const createFallbackResponse = (service: string, text: string, persona?: 
   
   if (service === 'elevenlabs') {
     return new Promise<Blob>((resolve) => {
-      if ('speechSynthesis' in window) {
+      if ('speechSynthesis' in window && text) {
         // Cancel any ongoing speech
         window.speechSynthesis.cancel();
         
         const utterance = new SpeechSynthesisUtterance(text);
         
         // Customize voice settings based on persona
-        switch (persona) {
-          case 'encouraging-emma':
-            utterance.rate = 0.9;
-            utterance.pitch = 1.1;
-            utterance.volume = 0.8;
-            break;
-          case 'challenge-charlie':
-            utterance.rate = 1.1;
-            utterance.pitch = 0.9;
-            utterance.volume = 0.9;
-            break;
-          case 'fun-freddy':
-            utterance.rate = 1.2;
-            utterance.pitch = 1.2;
-            utterance.volume = 0.85;
-            break;
-          case 'professor-patricia':
-            utterance.rate = 0.85;
-            utterance.pitch = 1.0;
-            utterance.volume = 0.8;
-            break;
-          case 'buddy-ben':
-            utterance.rate = 1.0;
-            utterance.pitch = 0.95;
-            utterance.volume = 0.8;
-            break;
-          default:
-            utterance.rate = 0.9;
-            utterance.pitch = 1.0;
-            utterance.volume = 0.8;
+        if (persona && API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.PERSONA_SETTINGS[persona as keyof typeof API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.PERSONA_SETTINGS]) {
+          const settings = API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.PERSONA_SETTINGS[persona as keyof typeof API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.PERSONA_SETTINGS];
+          utterance.rate = settings.rate;
+          utterance.pitch = settings.pitch;
+          utterance.volume = settings.volume;
+        } else {
+          // Default settings
+          utterance.rate = API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.DEFAULT_RATE;
+          utterance.pitch = API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.DEFAULT_PITCH;
+          utterance.volume = API_CONFIG.SPEECH_SYNTHESIS_SETTINGS.DEFAULT_VOLUME;
         }
         
         // Find the best voice for the persona
@@ -229,6 +223,8 @@ export const createFallbackResponse = (service: string, text: string, persona?: 
             if (selectedVoice) {
               utterance.voice = selectedVoice;
             }
+            
+            console.log(`Browser speech synthesis started for ${persona || 'default'} voice`);
             window.speechSynthesis.speak(utterance);
           };
         } else {
@@ -236,15 +232,17 @@ export const createFallbackResponse = (service: string, text: string, persona?: 
           if (selectedVoice) {
             utterance.voice = selectedVoice;
           }
+          
+          console.log(`Browser speech synthesis started for ${persona || 'default'} voice`);
           window.speechSynthesis.speak(utterance);
         }
 
         utterance.onstart = () => {
-          console.log(`Browser speech synthesis started for ${persona}`);
+          console.log(`Browser speech synthesis started for ${persona || 'default'}`);
         };
 
         utterance.onend = () => {
-          console.log(`Browser speech synthesis ended for ${persona}`);
+          console.log(`Browser speech synthesis ended for ${persona || 'default'}`);
         };
 
         utterance.onerror = (event) => {
@@ -264,31 +262,31 @@ export const createFallbackResponse = (service: string, text: string, persona?: 
 // Helper function to select the best voice for each persona
 function selectVoiceForPersona(voices: SpeechSynthesisVoice[], persona?: string): SpeechSynthesisVoice | null {
   // Persona-specific voice preferences
-  const voicePreferences = {
-    'encouraging-emma': (voice: SpeechSynthesisVoice) => 
+  const voicePreferences: Record<string, (voice: SpeechSynthesisVoice) => boolean> = {
+    'encouraging-emma': (voice) => 
       voice.lang.startsWith('en') && 
       (voice.name.toLowerCase().includes('female') || voice.name.toLowerCase().includes('samantha') || voice.name.toLowerCase().includes('victoria')),
     
-    'challenge-charlie': (voice: SpeechSynthesisVoice) => 
+    'challenge-charlie': (voice) => 
       voice.lang.startsWith('en') && 
       (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('alex') || voice.name.toLowerCase().includes('daniel')),
     
-    'fun-freddy': (voice: SpeechSynthesisVoice) => 
+    'fun-freddy': (voice) => 
       voice.lang.startsWith('en') && 
       (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('fred') || voice.name.toLowerCase().includes('tom')),
     
-    'professor-patricia': (voice: SpeechSynthesisVoice) => 
+    'professor-patricia': (voice) => 
       voice.lang.startsWith('en') && 
       (voice.name.toLowerCase().includes('female') || voice.name.toLowerCase().includes('karen') || voice.name.toLowerCase().includes('susan')),
     
-    'buddy-ben': (voice: SpeechSynthesisVoice) => 
+    'buddy-ben': (voice) => 
       voice.lang.startsWith('en') && 
       (voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('david') || voice.name.toLowerCase().includes('mark'))
   };
 
   // Try persona-specific voice first
-  if (persona && voicePreferences[persona as keyof typeof voicePreferences]) {
-    const preferredVoice = voices.find(voicePreferences[persona as keyof typeof voicePreferences]);
+  if (persona && voicePreferences[persona]) {
+    const preferredVoice = voices.find(voicePreferences[persona]);
     if (preferredVoice) return preferredVoice;
   }
 
