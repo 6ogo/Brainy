@@ -2,18 +2,6 @@ import { createSilentAudioBlob, generateSpeech } from '../utils/speechSynthesisF
 import { VOICE_IDS, VOICE_SETTINGS, API_TIMEOUTS, RETRY_CONFIG, ERROR_MESSAGES } from '../constants/ai';
 import { AvatarPersonality } from '../types';
 
-interface VoiceConfig {
-  voiceId: string;
-  model: string;
-  settings: {
-    stability: number;
-    similarity_boost: number;
-    style: number;
-    use_speaker_boost: boolean;
-  };
-  description: string;
-}
-
 export class ElevenLabsService {
   private static apiCallsInProgress = 0;
   private static maxConcurrentCalls = 3;
@@ -346,7 +334,17 @@ export class ElevenLabsService {
   }
 
   // Get voice configuration for a persona
-  private static getVoiceConfig(persona: string): VoiceConfig {
+  private static getVoiceConfig(persona: string): {
+    voiceId: string;
+    model: string;
+    settings: {
+      stability: number;
+      similarity_boost: number;
+      style: number;
+      use_speaker_boost: boolean;
+    };
+    description: string;
+  } {
     const voiceId = VOICE_IDS[persona as keyof typeof VOICE_IDS] || VOICE_IDS['encouraging-emma'];
     
     return {
