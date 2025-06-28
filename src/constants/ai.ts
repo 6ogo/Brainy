@@ -28,11 +28,36 @@ export const VOICE_SETTINGS = {
   DEFAULT_PITCH: 1.0,
   DEFAULT_VOLUME: 0.8,
   PERSONA_SETTINGS: {
-    'encouraging-emma': { rate: 0.9, pitch: 1.1, volume: 0.8 },
-    'challenge-charlie': { rate: 1.1, pitch: 0.9, volume: 0.9 },
-    'fun-freddy': { rate: 1.2, pitch: 1.2, volume: 0.85 },
-    'professor-patricia': { rate: 0.85, pitch: 1.0, volume: 0.8 },
-    'buddy-ben': { rate: 1.0, pitch: 0.95, volume: 0.8 }
+    'encouraging-emma': { 
+      rate: 0.9, 
+      pitch: 1.1, 
+      volume: 0.8,
+      model: 'eleven_monolingual_v1'
+    },
+    'challenge-charlie': { 
+      rate: 1.1, 
+      pitch: 0.9, 
+      volume: 0.9,
+      model: 'eleven_monolingual_v1'
+    },
+    'fun-freddy': { 
+      rate: 1.2, 
+      pitch: 1.2, 
+      volume: 0.85,
+      model: 'eleven_monolingual_v1'
+    },
+    'professor-patricia': { 
+      rate: 0.85, 
+      pitch: 1.0, 
+      volume: 0.8,
+      model: 'eleven_monolingual_v1'
+    },
+    'buddy-ben': { 
+      rate: 1.0, 
+      pitch: 0.95, 
+      volume: 0.8,
+      model: 'eleven_monolingual_v1'
+    }
   }
 };
 
@@ -88,61 +113,3 @@ export const ERROR_MESSAGES = {
   VOICE_SERVICE: 'Voice service is temporarily unavailable. Please try text mode instead.',
   GENERAL: 'Something went wrong. Please try again later.'
 };
-
-// Difficulty Levels
-export enum DIFFICULTY_LEVEL {
-  ELEMENTARY = 'Elementary',
-  HIGH_SCHOOL = 'High School',
-  COLLEGE = 'College',
-  ADVANCED = 'Advanced'
-}
-
-// Learning Modes
-export enum LEARNING_MODE {
-  CONVERSATIONAL = 'conversational',
-  VIDEOCALL = 'videocall'
-}
-
-// Voice Modes
-export enum VOICE_MODE {
-  MUTED = 'muted',
-  PUSH_TO_TALK = 'push-to-talk',
-  CONTINUOUS = 'continuous'
-}
-
-// Avatar Personalities
-export enum AVATAR_PERSONALITY {
-  ENCOURAGING_EMMA = 'encouraging-emma',
-  CHALLENGE_CHARLIE = 'challenge-charlie',
-  FUN_FREDDY = 'fun-freddy',
-  PROFESSOR_PATRICIA = 'professor-patricia',
-  BUDDY_BEN = 'buddy-ben'
-}
-
-// Avatar Backgrounds
-export enum AVATAR_BACKGROUND {
-  CLASSROOM = 'classroom',
-  LIBRARY = 'library',
-  HOME_OFFICE = 'home-office',
-  FUTURISTIC = 'futuristic'
-}
-
-// Avatar Emotions
-export enum AVATAR_EMOTION {
-  NEUTRAL = 'neutral',
-  HAPPY = 'happy',
-  THINKING = 'thinking',
-  EXCITED = 'excited',
-  CONCERNED = 'concerned'
-}
-
-// Subjects
-export enum SUBJECT {
-  MATH = 'Math',
-  SCIENCE = 'Science',
-  ENGLISH = 'English',
-  HISTORY = 'History',
-  LANGUAGES = 'Languages',
-  TEST_PREP = 'Test Prep',
-  ALL = 'All'
-}

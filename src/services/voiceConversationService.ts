@@ -1,9 +1,6 @@
-import { generateSpeech } from '../utils/speechSynthesisFallback';
 import { ElevenLabsService } from './elevenlabsService';
 import { GroqService } from './groqService';
 import { SecurityUtils } from '../utils/security';
-import { ERROR_MESSAGES, VOICE_SETTINGS } from '../constants/ai';
-import { useLocation } from 'react-router-dom';
 
 interface VoiceConversationConfig {
   userId: string;
@@ -39,8 +36,6 @@ export class VoiceConversationService {
   private audioVisualizationCallback: ((data: Uint8Array) => void) | null = null;
   private audioDataArray: Uint8Array | null = null;
   private animationFrameId: number | null = null;
-  private aiAudioFingerprint: Float32Array | null = null; // For AI audio detection
-  private aiSpeakingDetector: AnalyserNode | null = null;
   private microphoneGainNode: GainNode | null = null;
   private isMicrophoneMuted = false;
   private lastProcessedTranscript = '';
@@ -50,15 +45,6 @@ export class VoiceConversationService {
     this.config = config;
     this.initializeSpeechRecognition();
     this.initializeAudioContext();
-  }
-
-  /**
-   * Updates the configuration of the voice conversation service
-   * @param newConfig Updated configuration parameters
-   */
-  updateConfiguration(newConfig: Partial<VoiceConversationConfig>): void {
-    this.config = { ...this.config, ...newConfig };
-    console.log('Voice conversation service configuration updated:', newConfig);
   }
 
   /**
@@ -214,10 +200,6 @@ export class VoiceConversationService {
       this.microphoneGainNode = this.audioContext.createGain();
       this.microphoneGainNode.gain.value = 1.0; // Default gain
       
-      // Create an analyzer specifically for detecting AI audio
-      this.aiSpeakingDetector = this.audioContext.createAnalyser();
-      this.aiSpeakingDetector.fftSize = 1024;
-      
       console.log('Audio context initialized successfully');
       
       // Start visualization loop
@@ -271,27 +253,6 @@ export class VoiceConversationService {
         source.connect(this.microphoneGainNode);
         this.microphoneGainNode.connect(this.analyser);
         console.log('Audio recording started');
-        
-        // Detect if there's sound
-        const checkForSound = () => {
-          if (this.audioDataArray) {
-            this.analyser?.getByteFrequencyData(this.audioDataArray);
-            const average = Array.from(this.audioDataArray).reduce((sum, value) => sum + value, 0) / this.audioDataArray.length;
-            
-            if (average > 10) {
-              console.log('Sound detected');
-              return true;
-            }
-          }
-          return false;
-        };
-        
-        // Check for sound after a short delay
-        setTimeout(() => {
-          if (checkForSound()) {
-            console.log('Speech started');
-          }
-        }, 500);
       }
       
       this.isPaused = false;
@@ -303,7 +264,7 @@ export class VoiceConversationService {
       console.log('Speech recognition started');
     } catch (error) {
       console.error('Failed to start listening:', error);
-      this.config.onError?.(ERROR_MESSAGES.MICROPHONE_ACCESS);
+      this.config.onError?.('Failed to access microphone. Please check your browser permissions.');
     }
   }
 
@@ -407,12 +368,6 @@ export class VoiceConversationService {
   setFeedbackPrevention(enabled: boolean): void {
     this.feedbackPrevention = enabled;
     console.log(`Feedback prevention ${enabled ? 'enabled' : 'disabled'}`);
-    
-    // If enabled, set up audio fingerprinting for AI voice
-    if (enabled && this.audioContext && this.aiSpeakingDetector) {
-      // This would be where we'd set up more sophisticated AI voice detection
-      // For now, we'll just use the simple muting approach
-    }
   }
 
   setDelayAfterSpeaking(milliseconds: number): void {
@@ -504,40 +459,64 @@ export class VoiceConversationService {
         
         // Use browser's speech synthesis as fallback
         try {
-          await generateSpeech({
-            text: aiResponse,
-            persona: this.config.avatarPersonality as any,
-            onStart: () => console.log('Browser speech synthesis started'),
-            onEnd: () => {
-              this.config.onAudioEnd?.();
-              
-              // Keep microphone muted for a short delay after AI stops speaking
-              if (this.feedbackPrevention) {
-                setTimeout(() => {
-                  this.unmuteRecognition();
-                }, this.delayAfterSpeaking);
-              }
-            },
-            onError: (error) => console.error('Browser speech synthesis error:', error)
-          });
+          const utterance = new SpeechSynthesisUtterance(aiResponse);
+          utterance.rate = 1;
+          utterance.pitch = 1;
+          utterance.volume = 1;
+          
+          utterance.onstart = () => {
+            console.log('Browser speech synthesis started');
+          };
+          
+          utterance.onend = () => {
+            console.log('Browser speech synthesis ended');
+            this.config.onAudioEnd?.();
+            
+            // Keep microphone muted for a short delay after AI stops speaking
+            if (this.feedbackPrevention) {
+              setTimeout(() => {
+                this.unmuteRecognition();
+              }, this.delayAfterSpeaking);
+            }
+          };
+          
+          utterance.onerror = (event) => {
+            console.error('Browser speech synthesis error:', event.error);
+            this.config.onAudioEnd?.();
+            
+            // Keep microphone muted for a short delay after AI stops speaking
+            if (this.feedbackPrevention) {
+              setTimeout(() => {
+                this.unmuteRecognition();
+              }, this.delayAfterSpeaking);
+            }
+          };
+          
+          window.speechSynthesis.speak(utterance);
         } catch (synthError) {
           console.error('Speech synthesis fallback failed:', synthError);
           this.config.onError?.('Voice output failed. Please check your audio settings.');
-        }
-      } finally {
-        this.config.onAudioEnd?.();
-        
-        // Keep microphone muted for a short delay after AI stops speaking
-        if (this.feedbackPrevention) {
-          setTimeout(() => {
-            this.unmuteRecognition();
-            console.log('Microphone unmuted after AI finished speaking');
-          }, this.delayAfterSpeaking);
+          this.config.onAudioEnd?.();
+          
+          // Keep microphone muted for a short delay after AI stops speaking
+          if (this.feedbackPrevention) {
+            setTimeout(() => {
+              this.unmuteRecognition();
+            }, this.delayAfterSpeaking);
+          }
         }
       }
     } catch (error) {
       console.error('Error in voice conversation:', error);
       this.config.onError?.(error instanceof Error ? error.message : 'An error occurred');
+      this.config.onAudioEnd?.();
+      
+      // Keep microphone muted for a short delay after AI stops speaking
+      if (this.feedbackPrevention) {
+        setTimeout(() => {
+          this.unmuteRecognition();
+        }, this.delayAfterSpeaking);
+      }
     } finally {
       this.isProcessing = false;
       this.currentTranscript = '';
@@ -561,6 +540,15 @@ export class VoiceConversationService {
         audio.onended = () => {
           URL.revokeObjectURL(audioUrl);
           this.currentAudio = null;
+          this.config.onAudioEnd?.();
+          
+          // Keep microphone muted for a short delay after AI stops speaking
+          if (this.feedbackPrevention) {
+            setTimeout(() => {
+              this.unmuteRecognition();
+            }, this.delayAfterSpeaking);
+          }
+          
           resolve();
         };
         
@@ -572,6 +560,16 @@ export class VoiceConversationService {
           const errorMessage = errorTarget && errorTarget.error 
             ? `Audio error: ${errorTarget.error?.message || 'Unknown audio error'}`
             : 'Failed to play audio: Unknown error';
+          
+          this.config.onAudioEnd?.();
+          
+          // Keep microphone muted for a short delay after AI stops speaking
+          if (this.feedbackPrevention) {
+            setTimeout(() => {
+              this.unmuteRecognition();
+            }, this.delayAfterSpeaking);
+          }
+          
           reject(new Error(errorMessage));
         };
         
@@ -586,12 +584,32 @@ export class VoiceConversationService {
           const errorMessage = playError instanceof Error 
             ? `Audio playback failed: ${playError.message}`
             : 'Audio playback failed: Unknown error';
+          
+          this.config.onAudioEnd?.();
+          
+          // Keep microphone muted for a short delay after AI stops speaking
+          if (this.feedbackPrevention) {
+            setTimeout(() => {
+              this.unmuteRecognition();
+            }, this.delayAfterSpeaking);
+          }
+          
           reject(new Error(errorMessage));
         });
       } catch (error) {
         const errorMessage = error instanceof Error 
           ? `Audio setup failed: ${error.message}`
           : 'Audio setup failed: Unknown error';
+        
+        this.config.onAudioEnd?.();
+        
+        // Keep microphone muted for a short delay after AI stops speaking
+        if (this.feedbackPrevention) {
+          setTimeout(() => {
+            this.unmuteRecognition();
+          }, this.delayAfterSpeaking);
+        }
+        
         reject(new Error(errorMessage));
       }
     });
@@ -618,6 +636,13 @@ export class VoiceConversationService {
       this.microphoneGainNode.gain.setValueAtTime(this.microphoneGainNode.gain.value, currentTime);
       this.microphoneGainNode.gain.exponentialRampToValueAtTime(0.001, currentTime + 0.1);
     }
+    
+    // Mute the actual microphone tracks if available
+    if (this.stream) {
+      this.stream.getAudioTracks().forEach(track => {
+        track.enabled = false;
+      });
+    }
   }
 
   private unmuteRecognition(): void {
@@ -643,6 +668,13 @@ export class VoiceConversationService {
         const currentTime = this.audioContext.currentTime;
         this.microphoneGainNode.gain.setValueAtTime(0.001, currentTime);
         this.microphoneGainNode.gain.exponentialRampToValueAtTime(1.0, currentTime + 0.1);
+      }
+      
+      // Unmute the actual microphone tracks if available
+      if (this.stream) {
+        this.stream.getAudioTracks().forEach(track => {
+          track.enabled = true;
+        });
       }
     }
   }

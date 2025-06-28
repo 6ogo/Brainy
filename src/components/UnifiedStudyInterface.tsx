@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useStore } from '../store/store';
 import { useAuth } from '../contexts/AuthContext';
 import { useConversation } from '../hooks/useConversation';
 import { useVoiceChat } from '../hooks/useVoiceChat';
-import { supabase } from '../lib/supabase';
 import { 
   ArrowLeft, 
   Mic, 
@@ -25,7 +24,6 @@ import { Card } from './Card';
 import { cn } from '../styles/utils';
 import { StudyModeToggle } from './StudyModeToggle';
 import { StudyModePrompt } from './StudyModePrompt';
-import { StudySessionEndModal } from './StudySessionEndModal';
 import { AudioVisualizer } from './AudioVisualizer';
 import { DifficultyLevelSelector } from './DifficultyLevelSelector';
 import toast from 'react-hot-toast';
@@ -48,7 +46,6 @@ export const UnifiedStudyInterface: React.FC = () => {
   } = useStore();
   
   const { user } = useAuth();
-  const navigate = useNavigate();
   const { sendMessage, isProcessing } = useConversation();
   
   // Core state
@@ -90,7 +87,6 @@ export const UnifiedStudyInterface: React.FC = () => {
   // Session initialization
   useEffect(() => {
     if (!currentSubject || !currentAvatar || !user) {
-      navigate('/subjects');
       return;
     }
     
@@ -102,7 +98,7 @@ export const UnifiedStudyInterface: React.FC = () => {
       topicsDiscussed: [],
       xpEarned: 0
     });
-  }, [currentSubject, currentAvatar, user, navigate, updateSessionStats]);
+  }, [currentSubject, currentAvatar, user, updateSessionStats]);
 
   // Show study mode prompt when study mode is activated
   useEffect(() => {
@@ -198,16 +194,6 @@ export const UnifiedStudyInterface: React.FC = () => {
           <StudyModePrompt onClose={() => setShowStudyModePrompt(false)} />
         </div>
       )}
-
-      {/* End Session Modal */}
-      {showEndSessionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <StudySessionEndModal 
-            onClose={() => setShowEndSessionModal(false)} 
-            className="w-full max-w-md"
-          />
-        </div>
-      )}
       
       {/* Difficulty Level Selector */}
       {showDifficultySelector && (
@@ -241,7 +227,7 @@ export const UnifiedStudyInterface: React.FC = () => {
               variant="outline"
               size="sm"
               leftIcon={<BarChart className="h-3 w-3" />}
-              onClick={() => navigate('/analytics')}
+              onClick={() => window.location.href = '/analytics'}
             >
               Analytics
             </Button>
