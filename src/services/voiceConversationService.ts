@@ -26,14 +26,31 @@ export class VoiceConversationService {
   private recognitionLanguage = 'en-US';
   private stream: MediaStream | null = null;
   private processingTimeout: number | null = null;
-  private maxSilenceTime = 1500; // 1.5 seconds of silence before processing
+  private maxSilenceTime = 600; // 0.6 seconds of silence before processing
   private lastSpeechTimestamp = 0;
   private silenceTimer: number | null = null;
   private noiseThreshold = 3; // Minimum characters to consider as valid speech
+  private audioContext: AudioContext | null = null;
+  private analyser: AnalyserNode | null = null;
+  private audioDataArray: Uint8Array | null = null;
+  private audioVisualizationCallback: ((data: Uint8Array) => void) | null = null;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
     this.initializeSpeechRecognition();
+    this.initializeAudioContext();
+  }
+
+  private initializeAudioContext(): void {
+    try {
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.audioDataArray = new Uint8Array(this.analyser.frequencyBinCount);
+      console.log('Audio context initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize audio context:', error);
+    }
   }
 
   private initializeSpeechRecognition(): void {
@@ -65,7 +82,7 @@ export class VoiceConversationService {
           // Notify about interim results for UI feedback
           this.config.onTranscript?.(transcript, lastResult.isFinal);
           
-          // Clear any existing timeout
+          // Clear any pending timeout
           if (this.processingTimeout) {
             clearTimeout(this.processingTimeout);
             this.processingTimeout = null;
@@ -84,13 +101,13 @@ export class VoiceConversationService {
                 this.handleUserSpeech(transcript);
               }
               this.processingTimeout = null;
-            }, 500); // Reduced from 2000ms to 500ms for faster response
+            }, 300); // Reduced from 2000ms to 300ms for faster response
           } else {
             // Start silence detection timer
             this.silenceTimer = window.setTimeout(() => {
               const silenceDuration = Date.now() - this.lastSpeechTimestamp;
               if (silenceDuration >= this.maxSilenceTime && transcript && !this.isProcessing) {
-                console.log('Processing after silence detection:', transcript);
+                console.log(`Processing after silence detection (${silenceDuration}ms):`, transcript);
                 this.handleUserSpeech(transcript);
               }
             }, this.maxSilenceTime);
@@ -156,6 +173,15 @@ export class VoiceConversationService {
       // Save the stream reference to stop it later
       this.stream = stream;
       
+      // Connect to audio context for visualization if available
+      if (this.audioContext && this.analyser) {
+        const source = this.audioContext.createMediaStreamSource(stream);
+        source.connect(this.analyser);
+        
+        // Start visualization loop
+        this.startAudioVisualization();
+      }
+      
       this.isPaused = false;
       this.isListening = true;
       this.lastSpeechTimestamp = Date.now();
@@ -189,6 +215,9 @@ export class VoiceConversationService {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
     }
+    
+    // Stop audio visualization
+    this.stopAudioVisualization();
     
     // Clear any pending processing timeout
     if (this.processingTimeout) {
@@ -251,6 +280,42 @@ export class VoiceConversationService {
     }
   }
 
+  // Set the silence threshold for pause detection
+  setSilenceThreshold(milliseconds: number): void {
+    if (milliseconds >= 300 && milliseconds <= 2000) {
+      this.maxSilenceTime = milliseconds;
+      console.log(`Silence threshold set to ${milliseconds}ms`);
+    } else {
+      console.error('Silence threshold must be between 300ms and 2000ms');
+    }
+  }
+
+  // Set callback for audio visualization data
+  setAudioVisualizationCallback(callback: (data: Uint8Array) => void): void {
+    this.audioVisualizationCallback = callback;
+  }
+
+  // Start audio visualization loop
+  private startAudioVisualization(): void {
+    if (!this.analyser || !this.audioDataArray || !this.audioVisualizationCallback) return;
+    
+    const updateVisualization = () => {
+      if (!this.isListening || !this.analyser || !this.audioDataArray) return;
+      
+      this.analyser.getByteFrequencyData(this.audioDataArray);
+      this.audioVisualizationCallback?.(this.audioDataArray);
+      
+      requestAnimationFrame(updateVisualization);
+    };
+    
+    updateVisualization();
+  }
+
+  // Stop audio visualization
+  private stopAudioVisualization(): void {
+    // Nothing to do here, the loop will stop when isListening is false
+  }
+
   /**
    * Handles the user's speech input by processing the transcript, generating an AI response,
    * and converting it to speech.
@@ -294,9 +359,12 @@ export class VoiceConversationService {
       
       let audioBlob;
       try {
+        // Test audio output before generating speech
+        await this.testAudioOutput();
+        
         if (!API_CONFIG.ELEVENLABS_API_KEY) {
           // Use fallback if ElevenLabs API key is not configured
-          audioBlob = await ElevenLabsService.createFallbackAudio(aiResponse);
+          audioBlob = await this.createFallbackAudio(aiResponse);
           console.log('Using fallback speech generation');
         } else {
           audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
@@ -350,6 +418,37 @@ export class VoiceConversationService {
     }
   }
 
+  // Test audio output before playing
+  private async testAudioOutput(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      try {
+        // Create a short silent audio for testing
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        // Set volume to near-silent
+        gainNode.gain.value = 0.01;
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 440; // A4 note
+        oscillator.start();
+        
+        // Stop after 50ms
+        setTimeout(() => {
+          oscillator.stop();
+          audioContext.close();
+          resolve();
+        }, 50);
+      } catch (error) {
+        console.error('Audio output test failed:', error);
+        reject(new Error('Audio output test failed. Please check your audio settings.'));
+      }
+    });
+  }
+
   private async playAudio(audioBlob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
@@ -396,6 +495,80 @@ export class VoiceConversationService {
     });
   }
 
+  // Create fallback audio for when ElevenLabs is not available
+  private async createFallbackAudio(text: string): Promise<Blob> {
+    return new Promise((resolve) => {
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        
+        // Try to find a good voice
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoice = voices.find(voice => 
+          voice.lang.startsWith('en-') && voice.localService
+        ) || voices.find(voice => 
+          voice.lang.startsWith('en-')
+        ) || voices[0];
+        
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+        }
+        
+        // Customize based on personality
+        switch (this.config.avatarPersonality) {
+          case 'encouraging-emma':
+            utterance.rate = 0.9;
+            utterance.pitch = 1.1;
+            break;
+          case 'challenge-charlie':
+            utterance.rate = 1.1;
+            utterance.pitch = 0.9;
+            break;
+          case 'fun-freddy':
+            utterance.rate = 1.2;
+            utterance.pitch = 1.2;
+            break;
+          default:
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+        }
+        
+        // Create a minimal WAV header for silent audio
+        const arrayBuffer = new ArrayBuffer(44);
+        const view = new DataView(arrayBuffer);
+        
+        const writeString = (offset: number, string: string) => {
+          for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+          }
+        };
+        
+        // WAV file header
+        writeString(0, 'RIFF');
+        view.setUint32(4, 36, true);
+        writeString(8, 'WAVE');
+        writeString(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, 22050, true);
+        view.setUint32(28, 44100, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeString(36, 'data');
+        view.setUint32(40, 0, true);
+        
+        // Speak the text
+        window.speechSynthesis.speak(utterance);
+        
+        // Return the silent audio blob
+        resolve(new Blob([arrayBuffer], { type: 'audio/wav' }));
+      } else {
+        // If speech synthesis is not available, return an empty blob
+        resolve(new Blob([], { type: 'audio/wav' }));
+      }
+    });
+  }
+
   isActive(): boolean {
     return this.isListening || this.isProcessing;
   }
@@ -406,5 +579,34 @@ export class VoiceConversationService {
 
   getCurrentTranscript(): string {
     return this.currentTranscript;
+  }
+
+  // Force submit current transcript
+  forceSubmitTranscript(): void {
+    if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing) {
+      // Clear any pending timeout
+      if (this.processingTimeout) {
+        clearTimeout(this.processingTimeout);
+        this.processingTimeout = null;
+      }
+      
+      // Clear any silence timer
+      if (this.silenceTimer) {
+        clearTimeout(this.silenceTimer);
+        this.silenceTimer = null;
+      }
+      
+      // Process the transcript
+      this.handleUserSpeech(this.currentTranscript);
+    }
+  }
+
+  // Get audio visualization data
+  getAudioVisualizationData(): Uint8Array | null {
+    if (this.analyser && this.audioDataArray) {
+      this.analyser.getByteFrequencyData(this.audioDataArray);
+      return this.audioDataArray;
+    }
+    return null;
   }
 }

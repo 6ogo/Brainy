@@ -38,6 +38,7 @@ export const useVoiceChat = () => {
   const transcriptTimeoutRef = useRef<number | null>(null);
   const lastProcessedTranscriptRef = useRef<string>('');
   const processingRef = useRef<boolean>(false);
+  const pauseThresholdRef = useRef<number>(600); // 0.6 seconds pause threshold
 
   // Cleanup on unmount
   useEffect(() => {
@@ -99,7 +100,7 @@ export const useVoiceChat = () => {
             if (isFinal) {
               if (text.trim().length > 3) {
                 if (isStudyMode) {
-                  // In study mode, wait 1 second after user stops speaking
+                  // In study mode, wait for pause threshold after user stops speaking
                   if (transcriptTimeoutRef.current) {
                     clearTimeout(transcriptTimeoutRef.current);
                   }
@@ -109,7 +110,7 @@ export const useVoiceChat = () => {
                       processingRef.current = true;
                       addMessage(text, 'user');
                     }
-                  }, 1000);
+                  }, pauseThresholdRef.current);
                 } else if (!processingRef.current) {
                   processingRef.current = true;
                   addMessage(text, 'user');
@@ -173,7 +174,7 @@ export const useVoiceChat = () => {
             setCurrentTranscript(text);
             if (isFinal && text.trim()) {
               if (isStudyMode) {
-                // In study mode, wait 1 second after user stops speaking
+                // In study mode, wait for pause threshold after user stops speaking
                 if (transcriptTimeoutRef.current) {
                   clearTimeout(transcriptTimeoutRef.current);
                 }
@@ -184,7 +185,7 @@ export const useVoiceChat = () => {
                     processingRef.current = true;
                     addMessage(text, 'user');
                   }
-                }, 1000);
+                }, pauseThresholdRef.current);
               } else if (!processingRef.current) {
                 processingRef.current = true;
                 addMessage(text, 'user');
@@ -268,6 +269,36 @@ export const useVoiceChat = () => {
     }
   }, [isPaused, pauseVoiceChat, resumeVoiceChat]);
   
+  // Force submit current transcript (manual override for pause detection)
+  const forceSubmitTranscript = useCallback(() => {
+    if (currentTranscript && currentTranscript.trim().length > 3 && !processingRef.current) {
+      // Clear any pending timeout
+      if (transcriptTimeoutRef.current) {
+        clearTimeout(transcriptTimeoutRef.current);
+        transcriptTimeoutRef.current = null;
+      }
+      
+      // Process the current transcript
+      lastProcessedTranscriptRef.current = currentTranscript;
+      processingRef.current = true;
+      addMessage(currentTranscript, 'user');
+      
+      toast.success('Manually submitted transcript');
+    } else {
+      toast.error('No transcript to submit');
+    }
+  }, [currentTranscript, addMessage]);
+  
+  // Set pause threshold
+  const setPauseThreshold = useCallback((milliseconds: number) => {
+    if (milliseconds >= 300 && milliseconds <= 2000) {
+      pauseThresholdRef.current = milliseconds;
+      toast.success(`Pause threshold set to ${milliseconds}ms`);
+    } else {
+      toast.error('Pause threshold must be between 300ms and 2000ms');
+    }
+  }, []);
+  
   // Helper function to simplify and shorten responses for study mode
   const simplifyResponse = (text: string): string => {
     // Split into sentences
@@ -315,6 +346,9 @@ export const useVoiceChat = () => {
     stopVoiceChat,
     pauseVoiceChat,
     resumeVoiceChat,
-    toggleVoiceChat
+    toggleVoiceChat,
+    forceSubmitTranscript,
+    setPauseThreshold,
+    pauseThreshold: pauseThresholdRef.current
   };
 };

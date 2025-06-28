@@ -2,7 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
-import { Mic, MicOff, Volume2, VolumeX, Pause, Play, MessageSquare } from 'lucide-react';
+import { useVoiceChat } from '../hooks/useVoiceChat';
+import { Mic, MicOff, Volume2, VolumeX, Pause, Play, MessageSquare, Send, Zap } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
 import toast from 'react-hot-toast';
@@ -24,6 +25,20 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
   } = useStore();
   
   const { sendMessage, isProcessing } = useConversation();
+  const { 
+    isActive,
+    isPaused,
+    error,
+    currentTranscript,
+    startVoiceChat,
+    stopVoiceChat,
+    pauseVoiceChat,
+    resumeVoiceChat,
+    forceSubmitTranscript,
+    setPauseThreshold,
+    pauseThreshold
+  } = useVoiceChat();
+  
   const [isPaused, setIsPaused] = useState(false);
   const [volume, setVolume] = useState(70);
   const [showTranscript, setShowTranscript] = useState(true);
@@ -31,6 +46,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
   const lastTranscriptRef = useRef<string>('');
   const processingTranscriptRef = useRef<boolean>(false);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
+  const [visualizationData, setVisualizationData] = useState<number[]>([]);
   
   const {
     transcript,
@@ -212,6 +228,41 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     }
   };
 
+  // Handle pause threshold change
+  const handlePauseThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value, 10);
+    setPauseThreshold(value);
+  };
+
+  // Audio visualization
+  const renderAudioVisualization = () => {
+    return (
+      <div className="audio-visualization flex items-end justify-center h-8 space-x-1 my-2">
+        {visualizationData.length > 0 ? (
+          visualizationData.map((value, index) => (
+            <div 
+              key={index}
+              className="w-1 bg-primary-500 rounded-t"
+              style={{ 
+                height: `${Math.max(3, value / 2)}px`,
+                opacity: listening ? 1 : 0.3
+              }}
+            ></div>
+          ))
+        ) : (
+          // Placeholder bars when no data
+          Array.from({ length: 20 }).map((_, index) => (
+            <div 
+              key={index}
+              className="w-1 bg-gray-300 rounded-t"
+              style={{ height: '3px' }}
+            ></div>
+          ))
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="p-6 bg-white border-t border-gray-200 rounded-b-lg">
       {/* Study Mode Indicator */}
@@ -333,6 +384,9 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
             </div>
           </div>
 
+          {/* Audio visualization */}
+          {renderAudioVisualization()}
+
           {/* Push to talk button */}
           <div className="flex flex-col items-center">
             <p className="text-sm text-gray-500 mb-2">Push to Talk</p>
@@ -357,6 +411,19 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
             <p className="text-xs text-gray-500 mt-2">
               {listening ? "Release to stop" : "Press and hold to speak"}
             </p>
+            
+            {/* Force submit button */}
+            {transcript && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={forceSubmitTranscript}
+                className="mt-3"
+                leftIcon={<Send className="h-3 w-3" />}
+              >
+                Submit Now
+              </Button>
+            )}
             
             {/* Live transcript */}
             {showTranscript && transcript && (
@@ -447,6 +514,42 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
             </div>
           </div>
           
+          {/* Pause threshold control */}
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700">Pause Threshold</h3>
+              <span className="text-sm text-gray-500">{pauseThreshold}ms</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <Zap className="h-4 w-4 text-amber-500" />
+              <input
+                type="range"
+                min="300"
+                max="2000"
+                step="100"
+                value={pauseThreshold}
+                onChange={handlePauseThresholdChange}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                aria-label="Pause Threshold"
+              />
+              <Zap className="h-5 w-5 text-amber-700" />
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Adjust how long to wait after you stop speaking before processing your input.
+              Lower values (left) are more responsive but may cut you off. Higher values (right) give you more time to think.
+            </p>
+          </div>
+          
+          {/* Switch to text chat button */}
+          <Button
+            variant="outline"
+            onClick={handleSwitchToTextChat}
+            leftIcon={<MessageSquare className="h-5 w-5" />}
+            className="w-full"
+          >
+            Switch to Text Chat
+          </Button>
+          
           {/* Transcript toggle */}
           <div className="flex justify-end">
             <button
@@ -460,11 +563,6 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
       </div>
 
       {/* Status indicators */}
-      {/* Visually hidden live region for screen reader announcements */}
-      <div aria-live="polite" aria-atomic="true" className="sr-only" id="voice-status-live-region">
-        {listening ? 'Listening' : isSpeaking ? 'AI Speaking' : isPaused ? 'Conversation Paused' : isMicrophoneAvailable ? 'Microphone Ready' : 'Microphone Access Needed'}
-      </div>
-
       <div className="mt-6 flex items-center justify-between text-sm text-gray-500 border-t border-gray-200 pt-4">
         <div className="flex flex-wrap items-center gap-4">
           {!browserSupportsSpeechRecognition ? (
@@ -516,6 +614,11 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
         <div className="text-xs font-medium px-2 py-1 bg-gray-100 rounded-full">
           Mode: {voiceMode === 'muted' ? 'Off' : voiceMode === 'push-to-talk' ? 'Push-to-Talk' : 'Continuous'}
         </div>
+      </div>
+
+      {/* Visually hidden live region for screen reader announcements */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only" id="voice-status-live-region">
+        {listening ? 'Listening' : isSpeaking ? 'AI Speaking' : isPaused ? 'Conversation Paused' : isMicrophoneAvailable ? 'Microphone Ready' : 'Microphone Access Needed'}
       </div>
     </div>
   );

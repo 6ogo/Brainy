@@ -121,19 +121,25 @@ export class ElevenLabsService {
           const audioUrl = URL.createObjectURL(audioBlob);
           const audio = new Audio(audioUrl);
           
-          audio.onended = () => {
-            URL.revokeObjectURL(audioUrl);
-            console.log('Audio playback completed');
-            resolve();
-          };
-          
-          audio.onerror = (e) => {
-            URL.revokeObjectURL(audioUrl);
-            console.error('Audio playback error:', e);
-            reject(new Error('Failed to play audio'));
-          };
-          
-          audio.play().catch(reject);
+          // Test audio output before playing
+          this.testAudioOutput().then(() => {
+            audio.onended = () => {
+              URL.revokeObjectURL(audioUrl);
+              console.log('Audio playback completed');
+              resolve();
+            };
+            
+            audio.onerror = (e) => {
+              URL.revokeObjectURL(audioUrl);
+              console.error('Audio playback error:', e);
+              reject(new Error('Failed to play audio'));
+            };
+            
+            audio.play().catch(reject);
+          }).catch(error => {
+            console.error('Audio output test failed:', error);
+            reject(new Error('Audio output test failed. Please check your audio settings.'));
+          });
         } else {
           // For silent compatibility blobs, just resolve immediately 
           // (browser speech synthesis is handling the actual audio)
@@ -142,6 +148,37 @@ export class ElevenLabsService {
         }
       } catch (error) {
         reject(error);
+      }
+    });
+  }
+
+  // Test audio output before playing
+  static async testAudioOutput(): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      try {
+        // Create a short silent audio for testing
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        // Set volume to near-silent
+        gainNode.gain.value = 0.01;
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = 440; // A4 note
+        oscillator.start();
+        
+        // Stop after 50ms
+        setTimeout(() => {
+          oscillator.stop();
+          audioContext.close();
+          resolve();
+        }, 50);
+      } catch (error) {
+        console.error('Audio output test failed:', error);
+        reject(new Error('Audio output test failed. Please check your audio settings.'));
       }
     });
   }
@@ -155,6 +192,48 @@ export class ElevenLabsService {
     } catch {
       return 'speechSynthesis' in window;
     }
+  }
+
+  // Create a silent audio blob for compatibility
+  static async createFallbackAudio(text?: string): Promise<Blob> {
+    return new Promise((resolve) => {
+      if (text && 'speechSynthesis' in window) {
+        // Use browser's speech synthesis
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        
+        window.speechSynthesis.speak(utterance);
+      }
+      
+      // Create minimal WAV header for silent audio
+      const arrayBuffer = new ArrayBuffer(44);
+      const view = new DataView(arrayBuffer);
+      
+      const writeString = (offset: number, string: string) => {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i));
+        }
+      };
+      
+      // WAV file header
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, 22050, true);
+      view.setUint32(28, 44100, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, 0, true);
+      
+      resolve(new Blob([arrayBuffer], { type: 'audio/wav' }));
+    });
   }
 
   // Utility method to get available voices for debugging
