@@ -1741,3 +1741,5 @@ const getTestPrepCurriculumAdvanced = () => [
     assessments: []
   }
 ];
+
+export { getLearningPreferences }
