@@ -18,6 +18,7 @@ export class ElevenLabsService {
     try {
       // Validate inputs
       if (!text || text.trim().length === 0) {
+        console.error('Text cannot be empty');
         throw new Error('Text cannot be empty');
       }
 
@@ -61,6 +62,7 @@ export class ElevenLabsService {
       // Try ElevenLabs API
       try {
         this.apiCallsInProgress++;
+        console.log(`Calling ElevenLabs API for ${persona} with text: "${text.substring(0, 50)}..."`);
         const audioBlob = await this.callElevenLabsAPI(text, persona);
         
         // Reset quota exceeded flag if successful
@@ -133,6 +135,9 @@ export class ElevenLabsService {
       
       while (retries <= maxRetries) {
         try {
+          console.log(`Making ElevenLabs API request to ${this.baseUrl}/text-to-speech/${voiceConfig.voiceId}`);
+          console.log(`API Key present: ${!!this.apiKey}`);
+          
           const response = await fetch(`${this.baseUrl}/text-to-speech/${voiceConfig.voiceId}`, {
             method: 'POST',
             headers: {

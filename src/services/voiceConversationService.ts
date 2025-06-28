@@ -163,7 +163,7 @@ export class VoiceConversationService {
             this.currentTranscript.length > this.noiseThreshold && 
             !this.isProcessing && 
             !this.isPaused && 
-            !this.isMicrophoneMuted && 
+            !this.isMicrophoneMuted &&
             this.currentTranscript !== this.lastProcessedTranscript) {
           console.log('Processing transcript on recognition end:', this.currentTranscript);
           this.lastProcessedTranscript = this.currentTranscript;
@@ -442,6 +442,8 @@ export class VoiceConversationService {
       
       let audioBlob;
       try {
+        console.log('Generating speech with ElevenLabs for:', this.config.avatarPersonality);
+        
         if (!import.meta.env.VITE_ELEVENLABS_API_KEY) {
           // Use fallback if ElevenLabs API key is not configured
           audioBlob = await ElevenLabsService.createFallbackAudio(aiResponse);
@@ -493,6 +495,34 @@ export class VoiceConversationService {
           };
           
           window.speechSynthesis.speak(utterance);
+          
+          // Wait for speech to complete
+          return new Promise<void>((resolve) => {
+            utterance.onend = () => {
+              this.config.onAudioEnd?.();
+              
+              // Keep microphone muted for a short delay after AI stops speaking
+              if (this.feedbackPrevention) {
+                setTimeout(() => {
+                  this.unmuteRecognition();
+                }, this.delayAfterSpeaking);
+              }
+              resolve();
+            };
+            
+            // Fallback timeout in case onend doesn't fire
+            setTimeout(() => {
+              this.config.onAudioEnd?.();
+              
+              // Keep microphone muted for a short delay after AI stops speaking
+              if (this.feedbackPrevention) {
+                setTimeout(() => {
+                  this.unmuteRecognition();
+                }, this.delayAfterSpeaking);
+              }
+              resolve();
+            }, aiResponse.length * 50); // Rough estimate of speech duration
+          });
         } catch (synthError) {
           console.error('Speech synthesis fallback failed:', synthError);
           this.config.onError?.('Voice output failed. Please check your audio settings.');
@@ -504,6 +534,15 @@ export class VoiceConversationService {
               this.unmuteRecognition();
             }, this.delayAfterSpeaking);
           }
+        }
+      } finally {
+        this.config.onAudioEnd?.();
+        
+        // Keep microphone muted for a short delay after AI stops speaking
+        if (this.feedbackPrevention) {
+          setTimeout(() => {
+            this.unmuteRecognition();
+          }, this.delayAfterSpeaking);
         }
       }
     } catch (error) {

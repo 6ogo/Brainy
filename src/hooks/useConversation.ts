@@ -89,6 +89,15 @@ export const useConversation = () => {
       addMessage(sanitizedMessage, 'user');
 
       // Get AI response with optional voice
+      console.log('Generating response with:', {
+        message: sanitizedMessage,
+        subject: currentSubject,
+        avatar: currentAvatar,
+        useVoice,
+        difficultyLevel,
+        isStudyMode
+      });
+      
       const response = await ConversationService.generateResponse(
         sanitizedMessage,
         currentSubject,
@@ -118,6 +127,7 @@ export const useConversation = () => {
             throw new Error('Audio playback not supported in this browser');
           }
           
+          console.log('Playing audio response, blob size:', response.audioBlob.size);
           await ElevenLabsService.playAudio(response.audioBlob);
         } catch (audioError) {
           console.error('Audio playback error:', audioError);

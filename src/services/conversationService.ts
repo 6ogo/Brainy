@@ -71,16 +71,21 @@ export class ConversationService {
           
           if (!API_CONFIG.ELEVENLABS_API_KEY) {
             // Use fallback if ElevenLabs API key is not configured
-            audioBlob = await createFallbackResponse('elevenlabs', sanitizedResponse) as Blob;
+            audioBlob = await createFallbackResponse('elevenlabs', sanitizedResponse, currentAvatar) as Blob;
             console.log('Using fallback speech generation');
           } else {
+            console.log('Calling ElevenLabsService.generateSpeech with:', {
+              text: sanitizedResponse.substring(0, 50) + '...',
+              persona: currentAvatar
+            });
+            
             audioBlob = await ElevenLabsService.generateSpeech(sanitizedResponse, currentAvatar);
             console.log('Speech generated successfully, blob size:', audioBlob?.size);
           }
         } catch (voiceError) {
           console.error('Voice generation error:', voiceError);
           // Create fallback audio
-          audioBlob = await ElevenLabsService.createFallbackAudio();
+          audioBlob = await ElevenLabsService.createFallbackAudio(sanitizedResponse);
         }
       }
 

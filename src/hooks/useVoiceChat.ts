@@ -67,6 +67,13 @@ export const useVoiceChat = () => {
     if (!user || !isStudyPage) return;
 
     try {
+      console.log('Initializing voice service with:', {
+        userId: user.id,
+        subject: currentSubject,
+        avatarPersonality: currentAvatar,
+        difficultyLevel: difficultyLevel
+      });
+      
       voiceServiceRef.current = new VoiceConversationService({
         userId: user.id,
         subject: currentSubject,
@@ -147,6 +154,8 @@ export const useVoiceChat = () => {
           }
         }
       });
+      
+      console.log('Voice service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize voice service:', error);
       setError('Failed to initialize voice service');
@@ -156,6 +165,8 @@ export const useVoiceChat = () => {
   // Update voice service when difficulty level changes
   useEffect(() => {
     if (voiceServiceRef.current && user && isMounted.current && isStudyPage) {
+      console.log('Voice service updated with difficulty level:', difficultyLevel);
+      
       // Reinitialize the service with the new difficulty level
       voiceServiceRef.current = new VoiceConversationService({
         userId: user.id,
@@ -219,8 +230,6 @@ export const useVoiceChat = () => {
           }
         }
       });
-      
-      console.log(`Voice service updated with difficulty level: ${difficultyLevel}`);
     }
   }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode, isStudyPage]);
 
