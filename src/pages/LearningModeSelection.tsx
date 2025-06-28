@@ -3,8 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useStore } from '../store/store';
 import { Card } from '../components/Card';
 import { cn, commonStyles } from '../styles/utils';
-import { Video, MessageCircle, ArrowLeft } from 'lucide-react';
 import { LearningMode } from '../types';
+import { ArrowLeft, MessageCircle, Mic } from 'lucide-react';
 
 const modes: Array<{
   id: LearningMode;
@@ -15,32 +15,32 @@ const modes: Array<{
 }> = [
   {
     id: 'conversational',
-    name: 'Conversational Learning',
+    name: 'Text Chat',
     description: 'Interactive text-based chat with your AI tutor. Great for deep discussions and detailed explanations.',
     icon: MessageCircle,
     color: 'bg-blue-500',
   },
   {
     id: 'videocall',
-    name: 'Video Call Learning',
-    description: 'Face-to-face learning with your AI tutor. Perfect for visual demonstrations and personalized interaction.',
-    icon: Video,
+    name: 'Voice Chat',
+    description: 'Talk with your AI tutor using your voice. Perfect for natural conversation and hands-free learning.',
+    icon: Mic,
     color: 'bg-purple-500',
   },
 ];
 
 export const LearningModeSelection: React.FC = () => {
-  const { currentSubject, currentAvatar, setLearningMode } = useStore();
+  const { currentSubject, setCurrentAvatar } = useStore();
   const navigate = useNavigate();
 
   const handleModeSelect = (mode: LearningMode) => {
-    setLearningMode(mode);
-    navigate('/study');
+    setCurrentAvatar(mode);
+    navigate('/study'); // Navigate directly to study page instead of learning mode
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 py-12 px-4">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Back to Teachers Button */}
         <div className="mb-8">
           <Link 
@@ -57,9 +57,7 @@ export const LearningModeSelection: React.FC = () => {
             Choose Your Learning Mode
           </h1>
           <p className={cn(commonStyles.text.lg, "max-w-2xl mx-auto")}>
-            How would you like to learn {currentSubject} with {currentAvatar.split('-').map(word => 
-              word.charAt(0).toUpperCase() + word.slice(1)
-            ).join(' ')} today?
+            How would you like to learn {currentSubject} today?
           </p>
         </div>
 

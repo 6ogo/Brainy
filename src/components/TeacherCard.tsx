@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card } from './Card';
 import { Button } from './Button';
 import { cn, commonStyles } from '../styles/utils';
-import { MessageSquare, Video } from 'lucide-react';
+import { MessageSquare, Mic } from 'lucide-react';
 import { useStore } from '../store/store';
 import { AvatarPersonality } from '../types';
 
@@ -31,13 +31,14 @@ export const TeacherCard: React.FC<TeacherCardProps> = ({
   const { setCurrentAvatar } = useStore();
   const navigate = useNavigate();
 
-  const handleTextVoiceChat = () => {
+  const handleTextChat = () => {
     setCurrentAvatar(id);
     navigate('/study');
   };
 
-  const handleVideoChat = () => {
-    navigate(`/tutor/${convaiId}`);
+  const handleVoiceChat = () => {
+    setCurrentAvatar(id);
+    navigate('/study');
   };
 
   return (
@@ -66,19 +67,19 @@ export const TeacherCard: React.FC<TeacherCardProps> = ({
         <div className="flex flex-col sm:flex-row gap-2 w-full">
           <Button
             variant="primary"
-            onClick={handleTextVoiceChat}
+            onClick={handleTextChat}
             leftIcon={<MessageSquare className="h-4 w-4" />}
             className="flex-1"
           >
-            Text/Voice Chat
+            Text Chat
           </Button>
           <Button
             variant="secondary"
-            onClick={handleVideoChat}
-            leftIcon={<Video className="h-4 w-4" />}
+            onClick={handleVoiceChat}
+            leftIcon={<Mic className="h-4 w-4" />}
             className="flex-1"
           >
-            Video Chat
+            Voice Chat
           </Button>
         </div>
       </div>

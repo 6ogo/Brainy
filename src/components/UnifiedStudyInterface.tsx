@@ -13,7 +13,6 @@ import {
   Settings, 
   X, 
   MessageSquare,
-  Video,
   BarChart,
   Download,
   Shield,
@@ -269,7 +268,7 @@ export const UnifiedStudyInterface: React.FC = () => {
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                 )}
               >
-                <Video className="h-3 w-3 mr-1" />
+                <Mic className="h-3 w-3 mr-1" />
                 Voice
               </button>
             </div>
