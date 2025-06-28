@@ -3,6 +3,7 @@ import { ElevenLabsService } from './elevenlabsService';
 import { GroqService } from './groqService';
 import { SecurityUtils } from '../utils/security';
 import { ERROR_MESSAGES, VOICE_SETTINGS } from '../constants/ai';
+import { useLocation } from 'react-router-dom';
 
 interface VoiceConversationConfig {
   userId: string;

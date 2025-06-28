@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Shield, Clock, Info, Headphones } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
+import { useLocation } from 'react-router-dom';
 
 interface FeedbackPreventionControlsProps {
   feedbackPreventionEnabled: boolean;
@@ -21,7 +22,13 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
   const [showInfo, setShowInfo] = useState(false);
   const [isUsingHeadphones, setIsUsingHeadphones] = useState(false);
   
+  // Get current location to check if we're on the study page
+  const location = useLocation();
+  const isStudyPage = location.pathname === '/study';
+  
   const toggleHeadphonesMode = () => {
+    if (!isStudyPage) return;
+    
     setIsUsingHeadphones(!isUsingHeadphones);
     
     // If enabling headphones mode, we can reduce feedback prevention measures
@@ -33,6 +40,11 @@ export const FeedbackPreventionControls: React.FC<FeedbackPreventionControlsProp
       setDelayAfterSpeaking(500);
     }
   };
+  
+  // If not on study page, don't render the component
+  if (!isStudyPage) {
+    return null;
+  }
   
   return (
     <div className={cn("p-4 bg-gray-50 rounded-lg border border-gray-200", className)}>

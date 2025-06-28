@@ -8,6 +8,7 @@ import { AudioVisualizer } from './AudioVisualizer';
 import { PauseDetectionIndicator } from './PauseDetectionIndicator';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 import toast from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
 
 interface VoiceInputProcessorProps {
   onSubmit?: (text: string) => void;
@@ -45,52 +46,14 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
   const [isUsingHeadphones, setIsUsingHeadphones] = useState(false);
   const [showAIFilterIndicator, setShowAIFilterIndicator] = useState(true);
   
+  // Get current location to check if we're on the study page
+  const location = useLocation();
+  const isStudyPage = location.pathname === '/study';
+  
   // Refs for audio processing
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  
-  // Initialize audio context and analyzer
-  useEffect(() => {
-    const initializeAudio = async () => {
-      try {
-        // Create audio context
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-        analyserRef.current = audioContextRef.current.createAnalyser();
-        analyserRef.current.fftSize = 256;
-        
-        // Request microphone access
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          audio: { 
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          } 
-        });
-        
-        microphoneStreamRef.current = stream;
-        
-        // Connect microphone to analyzer
-        const source = audioContextRef.current.createMediaStreamSource(stream);
-        source.connect(analyserRef.current);
-      } catch (error) {
-        console.error('Error initializing audio:', error);
-        setError('Failed to initialize audio. Please check your microphone permissions.');
-      }
-    };
-    
-    initializeAudio();
-    
-    return () => {
-      // Clean up
-      if (microphoneStreamRef.current) {
-        microphoneStreamRef.current.getTracks().forEach(track => track.stop());
-      }
-      if (audioContextRef.current) {
-        audioContextRef.current.close().catch(err => console.error('Error closing audio context:', err));
-      }
-    };
-  }, []);
   
   // Update last speech timestamp when transcript changes
   useEffect(() => {
@@ -105,6 +68,12 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
   }, [isSpeaking, feedbackPreventionEnabled]);
   
   const handleToggleMic = async () => {
+    // Only allow microphone access on the study page
+    if (!isStudyPage) {
+      console.warn('Attempted to toggle microphone outside of study page');
+      return;
+    }
+    
     try {
       if (isActive) {
         stopVoiceChat();
@@ -118,7 +87,7 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
   };
   
   const handleSubmit = () => {
-    if (!currentTranscript || isProcessing) return;
+    if (!currentTranscript || isProcessing || !isStudyPage) return;
     
     setIsProcessing(true);
     
@@ -139,6 +108,8 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
   };
   
   const toggleHeadphonesMode = () => {
+    if (!isStudyPage) return;
+    
     setIsUsingHeadphones(!isUsingHeadphones);
     
     // If enabling headphones mode, we can disable feedback prevention
@@ -149,6 +120,11 @@ export const VoiceInputProcessor: React.FC<VoiceInputProcessorProps> = ({
       toast.success(`Headphones mode ${isUsingHeadphones ? 'disabled' : 'enabled'}`);
     }
   };
+  
+  // If not on study page, don't render the component
+  if (!isStudyPage) {
+    return null;
+  }
   
   return (
     <div className={cn("flex flex-col", className)}>

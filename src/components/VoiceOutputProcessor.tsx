@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/store';
-import { Volume2, VolumeX, Pause, Play } from 'lucide-react';
+import { Volume2, VolumeX, Pause, Play, AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
 import { ElevenLabsService } from '../services/elevenlabsService';
 import toast from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
 
 interface VoiceOutputProcessorProps {
   text?: string;
@@ -30,6 +31,10 @@ export const VoiceOutputProcessor: React.FC<VoiceOutputProcessorProps> = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   
+  // Get current location to check if we're on the study page
+  const location = useLocation();
+  const isStudyPage = location.pathname === '/study';
+  
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -47,12 +52,18 @@ export const VoiceOutputProcessor: React.FC<VoiceOutputProcessorProps> = ({
   
   // Auto-play when text changes
   useEffect(() => {
-    if (text && autoPlay && !isPlaying && !isPaused) {
+    if (text && autoPlay && !isPlaying && !isPaused && isStudyPage) {
       handlePlay();
     }
-  }, [text, autoPlay]);
+  }, [text, autoPlay, isPlaying, isPaused, isStudyPage]);
   
   const handlePlay = async () => {
+    // Only allow voice output on the study page
+    if (!isStudyPage) {
+      console.warn('Attempted to play audio outside of study page');
+      return;
+    }
+    
     if (!text || isPlaying) return;
     
     try {
@@ -197,6 +208,11 @@ export const VoiceOutputProcessor: React.FC<VoiceOutputProcessorProps> = ({
       audioRef.current.volume = newVolume;
     }
   };
+  
+  // If not on study page, don't render the component
+  if (!isStudyPage) {
+    return null;
+  }
   
   return (
     <div className={cn("p-4 bg-gray-50 rounded-lg", className)}>

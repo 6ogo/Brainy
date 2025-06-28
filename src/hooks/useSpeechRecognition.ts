@@ -11,6 +11,7 @@ import SpeechRecognition, { useSpeechRecognition as useReactSpeechRecognition } 
 import { useStore } from '../store/store';
 import toast from 'react-hot-toast';
 import 'regenerator-runtime/runtime';
+import { useLocation } from 'react-router-dom';
 
 interface UseSpeechRecognitionReturn {
   transcript: string;
@@ -43,6 +44,10 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   
+  // Get current location to check if we're on the study page
+  const location = useLocation();
+  const isStudyPage = location.pathname === '/study';
+  
   const {
     transcript,
     listening,
@@ -67,10 +72,10 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     setIsMicrophoneAvailable(micAvailable);
   }, [micAvailable]);
 
-  // Check microphone permission on mount
+  // Check microphone permission on mount, but only on study page
   useEffect(() => {
     const checkMicrophonePermission = async () => {
-      if (hasCheckedPermission.current) return;
+      if (hasCheckedPermission.current || !isStudyPage) return;
       
       try {
         const permissionStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
@@ -90,7 +95,9 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           }
         } else if (permissionStatus.state === 'denied') {
           setIsMicrophoneAvailable(false);
-          toast.error('Microphone access denied. Please enable microphone permissions in your browser settings.');
+          if (isStudyPage) {
+            toast.error('Microphone access denied. Please enable microphone permissions in your browser settings.');
+          }
         }
         
         // Listen for permission changes
@@ -98,7 +105,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           setIsMicrophoneAvailable(permissionStatus.state === 'granted');
           
           // Debounce: Only show granted toast once per session
-          if (permissionStatus.state === 'granted' && !window.__mic_granted_toast_shown) {
+          if (permissionStatus.state === 'granted' && !window.__mic_granted_toast_shown && isStudyPage) {
             toast.success('Microphone access granted!');
             window.__mic_granted_toast_shown = true;
             
@@ -112,7 +119,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
                 console.error('Error initializing audio context:', audioError);
               }
             }
-          } else if (permissionStatus.state === 'denied' && !window.__mic_denied_toast_shown) {
+          } else if (permissionStatus.state === 'denied' && !window.__mic_denied_toast_shown && isStudyPage) {
             toast.error('Microphone access denied.');
             setVoiceMode('muted');
             window.__mic_denied_toast_shown = true;
@@ -125,18 +132,19 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       }
     };
     
-    if (browserSupportsSpeechRecognition) {
+    if (browserSupportsSpeechRecognition && isStudyPage) {
       checkMicrophonePermission();
     }
-  }, [browserSupportsSpeechRecognition, setVoiceMode]);
+  }, [browserSupportsSpeechRecognition, setVoiceMode, isStudyPage]);
 
   // Auto-send transcript after a short delay when speech ends
   useEffect(() => {
-    // Only process if we have a transcript that's not being processed
+    // Only process if we have a transcript and we're not being processed and we're on the study page
     if (transcript && 
         transcript.trim().length > noiseThreshold && 
         transcript !== lastTranscriptRef.current && 
-        !isStartingListening.current) {
+        !isStartingListening.current && 
+        isStudyPage) {
       
       // If we're not listening anymore and have a final transcript
       if (!listening) {
@@ -156,7 +164,7 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
             resetTranscript();
             
             // Restart listening if in continuous mode
-            if (voiceMode === 'continuous' && !listening) {
+            if (voiceMode === 'continuous' && !listening && isStudyPage) {
               startListening();
             }
           }, 500);
@@ -165,10 +173,57 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
         }, 1000); // Send after 1 second of silence
       }
     }
-  }, [transcript, listening, addMessage, resetTranscript, voiceMode]);
+  }, [
+    transcript, 
+    listening, 
+    addMessage, 
+    resetTranscript, 
+    voiceMode, 
+    isStudyPage
+  ]);
+
+  // Stop listening callback
+  const stopListening = useCallback((): void => {
+    if (!listening) return;
+    
+    // Clear any pending transcript timeout
+    if (transcriptTimeoutRef.current) {
+      clearTimeout(transcriptTimeoutRef.current);
+      transcriptTimeoutRef.current = null;
+    }
+    
+    // If we have a transcript, send it before stopping
+    if (transcript && transcript.trim().length > noiseThreshold && transcript !== lastTranscriptRef.current && isStudyPage) {
+      console.log('Sending transcript on stop:', transcript);
+      lastTranscriptRef.current = transcript;
+      addMessage(transcript, 'user');
+      
+      // Reset transcript after sending
+      setTimeout(() => {
+        resetTranscript();
+      }, 500);
+    }
+    
+    SpeechRecognition.stopListening();
+    
+    // Stop microphone stream
+    if (microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach(track => track.stop());
+      microphoneStreamRef.current = null;
+    }
+    
+    // Ensure the starting flag is reset
+    isStartingListening.current = false;
+  }, [listening, transcript, addMessage, resetTranscript, noiseThreshold, isStudyPage]);
 
   // Start listening with appropriate options
   const startListening = useCallback(async (): Promise<void> => {
+    // Only allow microphone access on the study page
+    if (!isStudyPage) {
+      console.warn('Attempted to start speech recognition outside of study page');
+      return;
+    }
+    
     // Prevent multiple simultaneous start attempts
     if (isStartingListening.current || listening) {
       return;
@@ -178,7 +233,9 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     
     try {
       if (!browserSupportsSpeechRecognition) {
-        toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
+        if (isStudyPage) {
+          toast.error('Your browser does not support speech recognition. Please try Chrome, Edge, or Safari.');
+        }
         return;
       }
       
@@ -205,7 +262,9 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           setIsMicrophoneAvailable(true);
         } catch (error) {
           console.error('Error requesting microphone access:', error);
-          toast.error('Microphone access is required for voice features.');
+          if (isStudyPage) {
+            toast.error('Microphone access is required for voice features.');
+          }
           return;
         }
       }
@@ -217,11 +276,13 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       
       // Use a timeout to prevent rapid start/stop cycles
       setTimeout(() => {
-        SpeechRecognition.startListening({ 
-          continuous: voiceMode === 'continuous',
-          language: 'en-US',
-          interimResults: true
-        });
+        if (isStudyPage) {
+          SpeechRecognition.startListening({ 
+            continuous: voiceMode === 'continuous',
+            language: 'en-US',
+            interimResults: true
+          });
+        }
         
         // Reset the flag after a delay to prevent rapid toggling
         setTimeout(() => {
@@ -234,16 +295,16 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       
       // Provide specific error messages
       if (error instanceof DOMException) {
-        if (error.name === 'NotAllowedError') {
+        if (error.name === 'NotAllowedError' && isStudyPage) {
           toast.error('Microphone access denied. Please enable microphone permissions in your browser settings.');
-        } else if (error.name === 'NotFoundError') {
+        } else if (error.name === 'NotFoundError' && isStudyPage) {
           toast.error('No microphone detected. Please connect a microphone and try again.');
-        } else if (error.name === 'NotReadableError') {
+        } else if (error.name === 'NotReadableError' && isStudyPage) {
           toast.error('Microphone is already in use by another application. Please close other applications using the microphone.');
-        } else {
+        } else if (isStudyPage) {
           toast.error(`Error starting speech recognition: ${error.message}`);
         }
-      } else {
+      } else if (isStudyPage) {
         toast.error('Failed to start speech recognition. Please try again.');
       }
     }
@@ -254,48 +315,15 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     clearTranscriptOnListen, 
     resetTranscript,
     listening,
-    setIsMicrophoneAvailable
+    setIsMicrophoneAvailable,
+    isStudyPage
   ]);
 
-  // Stop listening callback
-  const stopListening = useCallback((): void => {
-    if (!listening) return;
-    
-    // Clear any pending transcript timeout
-    if (transcriptTimeoutRef.current) {
-      clearTimeout(transcriptTimeoutRef.current);
-      transcriptTimeoutRef.current = null;
-    }
-    
-    // If we have a transcript, send it before stopping
-    if (transcript && transcript.trim().length > noiseThreshold && transcript !== lastTranscriptRef.current) {
-      console.log('Sending transcript on stop:', transcript);
-      lastTranscriptRef.current = transcript;
-      addMessage(transcript, 'user');
-      
-      // Reset transcript after sending
-      setTimeout(() => {
-        resetTranscript();
-      }, 500);
-    }
-    
-    SpeechRecognition.stopListening();
-    
-    // Stop microphone stream
-    if (microphoneStreamRef.current) {
-      microphoneStreamRef.current.getTracks().forEach(track => track.stop());
-      microphoneStreamRef.current = null;
-    }
-    
-    // Ensure the starting flag is reset
-    isStartingListening.current = false;
-  }, [listening, transcript, addMessage, resetTranscript, noiseThreshold]);
-
   return {
-    transcript,
-    listening,
-    browserSupportsSpeechRecognition,
-    isMicrophoneAvailable,
+    transcript: isStudyPage ? transcript : '',
+    listening: isStudyPage ? listening : false,
+    browserSupportsSpeechRecognition: isStudyPage ? browserSupportsSpeechRecognition : false,
+    isMicrophoneAvailable: isStudyPage ? isMicrophoneAvailable : false,
     startListening,
     stopListening,
     resetTranscript,

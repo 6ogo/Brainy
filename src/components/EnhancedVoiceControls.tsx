@@ -23,7 +23,7 @@ import { VoiceMode } from '../types';
 import toast from 'react-hot-toast';
 import { cn } from '../styles/utils';
 import { Button } from './Button';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AudioVisualizer } from './AudioVisualizer';
 import { PauseDetectionIndicator } from './PauseDetectionIndicator';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
@@ -51,6 +51,10 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
   } = useStore();
   
   const navigate = useNavigate();
+  
+  // Get current location to check if we're on the study page
+  const location = useLocation();
+  const isStudyPage = location.pathname === '/study';
   
   const { 
     transcript,
@@ -96,10 +100,10 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
     const isSupported = 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window;
     setIsBrowserSupported(isSupported);
     
-    if (!isSupported) {
+    if (!isSupported && isStudyPage) {
       toast.error('Your browser does not support voice recognition. Please try Chrome, Edge, or Safari.');
     }
-  }, []);
+  }, [isStudyPage]);
 
   // Ensure voice mode is appropriate for learning mode
   useEffect(() => {
@@ -128,6 +132,12 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
   }, [isSpeaking, feedbackPreventionEnabled]);
 
   const handleVoiceModeChange = async (mode: VoiceMode) => {
+    // Only allow voice mode changes on the study page
+    if (!isStudyPage) {
+      console.warn('Attempted to change voice mode outside of study page');
+      return;
+    }
+    
     if (!isBrowserSupported && mode !== 'muted') {
       toast.error('Voice features are not supported in this browser. Please try Chrome, Edge, or Safari.');
       return;
@@ -155,6 +165,12 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
   };
 
   const handlePushToTalk = async (pressed: boolean) => {
+    // Only allow push-to-talk on the study page
+    if (!isStudyPage) {
+      console.warn('Attempted to use push-to-talk outside of study page');
+      return;
+    }
+    
     if (!isBrowserSupported) {
       toast.error('Voice features are not supported in this browser. Please try Chrome, Edge, or Safari.');
       return;
@@ -248,6 +264,8 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
   };
 
   const toggleHeadphonesMode = () => {
+    if (!isStudyPage) return;
+    
     setIsUsingHeadphones(!isUsingHeadphones);
     
     // If enabling headphones mode, we can adjust feedback prevention settings
@@ -261,6 +279,11 @@ export const EnhancedVoiceControls: React.FC<EnhancedVoiceControlsProps> = ({
       toast.success('Headphones mode disabled - restored normal delay');
     }
   };
+
+  // If not on study page, don't render the component
+  if (!isStudyPage) {
+    return null;
+  }
 
   return (
     <div className={cn("p-6 bg-white border-t border-gray-200 rounded-b-lg", className)}>

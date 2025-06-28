@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSpeechRecognition } from './useSpeechRecognition';
 import { ERROR_MESSAGES } from '../constants/ai';
 import toast from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
 
 export const useVoiceChat = () => {
   const { 
@@ -44,6 +45,10 @@ export const useVoiceChat = () => {
   const [noiseLevel, setNoiseLevel] = useState<number>(0);
   const [feedbackPreventionEnabled, setFeedbackPreventionEnabled] = useState(true);
   const [delayAfterSpeaking, setDelayAfterSpeaking] = useState(500); // 500ms delay
+  
+  // Get current location to check if we're on the study page
+  const location = useLocation();
+  const isStudyPage = location.pathname === '/study';
 
   // Cleanup on unmount
   useEffect(() => {
@@ -57,130 +62,175 @@ export const useVoiceChat = () => {
     };
   }, []);
 
-  // Initialize voice service
+  // Initialize voice service only on study page
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isStudyPage) return;
 
     try {
-      // Create a new voice service instance if one doesn't exist
-      if (!voiceServiceRef.current) {
-        voiceServiceRef.current = new VoiceConversationService({
-          userId: user.id,
-          subject: currentSubject,
-          avatarPersonality: currentAvatar,
-          difficultyLevel: difficultyLevel,
-          onResponse: (text) => {
-            if (isMounted.current) {
-              // If in study mode, make responses more concise
-              if (isStudyMode) {
-                // Simplify and shorten the response
-                const simplifiedText = simplifyResponse(text);
-                addMessage(simplifiedText, 'ai');
-              } else {
-                addMessage(text, 'ai');
+      voiceServiceRef.current = new VoiceConversationService({
+        userId: user.id,
+        subject: currentSubject,
+        avatarPersonality: currentAvatar,
+        difficultyLevel: difficultyLevel,
+        onResponse: (text) => {
+          if (isMounted.current) {
+            // If in study mode, make responses more concise
+            if (isStudyMode) {
+              // Simplify and shorten the response
+              const simplifiedText = simplifyResponse(text);
+              addMessage(simplifiedText, 'ai');
+            } else {
+              addMessage(text, 'ai');
+            }
+          }
+        },
+        onAudioStart: () => {
+          if (isMounted.current) {
+            setIsSpeaking(true);
+            setAvatarEmotion('neutral');
+            
+            // Mute microphone when AI starts speaking to prevent feedback
+            if (voiceServiceRef.current && feedbackPreventionEnabled) {
+              voiceServiceRef.current.setFeedbackPrevention(true);
+            }
+          }
+        },
+        onAudioEnd: () => {
+          if (isMounted.current) {
+            setIsSpeaking(false);
+            setAvatarEmotion('neutral');
+            processingRef.current = false;
+            
+            // Keep microphone muted for a short delay after AI stops speaking
+            setTimeout(() => {
+              // Then unmute if we're still mounted
+              if (isMounted.current && voiceServiceRef.current) {
+                // Voice service will handle unmuting after the delay
               }
-            }
-          },
-          onAudioStart: () => {
-            if (isMounted.current) {
-              setIsSpeaking(true);
-              setAvatarEmotion('neutral');
-              
-              // Mute microphone when AI starts speaking to prevent feedback
-              if (voiceServiceRef.current && feedbackPreventionEnabled) {
-                voiceServiceRef.current.setFeedbackPrevention(true);
-              }
-            }
-          },
-          onAudioEnd: () => {
-            if (isMounted.current) {
-              setIsSpeaking(false);
-              setAvatarEmotion('neutral');
-              processingRef.current = false;
-              
-              // Keep microphone muted for a short delay after AI stops speaking
-              setTimeout(() => {
-                // Then unmute if we're still mounted
-                if (isMounted.current && voiceServiceRef.current) {
-                  // Voice service will handle unmuting after the delay
-                }
-              }, delayAfterSpeaking);
-            }
-          },
-          onError: (errorMessage) => {
-            if (isMounted.current) {
-              setError(errorMessage);
-              toast.error(errorMessage);
-              processingRef.current = false;
-            }
-          },
-          onTranscript: (text, isFinal) => {
-            if (isMounted.current) {
-              setCurrentTranscript(text);
-              
-              if (isFinal) {
-                if (text.trim().length > 3) {
-                  if (isStudyMode) {
-                    // In study mode, wait for pause threshold after user stops speaking
-                    if (transcriptTimeoutRef.current) {
-                      clearTimeout(transcriptTimeoutRef.current);
-                    }
-                    
-                    transcriptTimeoutRef.current = window.setTimeout(() => {
-                      if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
-                        lastProcessedTranscriptRef.current = text;
-                        processingRef.current = true;
-                        addMessage(text, 'user');
-                      }
-                    }, pauseThresholdRef.current);
-                  } else if (!processingRef.current) {
-                    processingRef.current = true;
-                    addMessage(text, 'user');
+            }, delayAfterSpeaking);
+          }
+        },
+        onError: (errorMessage) => {
+          if (isMounted.current) {
+            setError(errorMessage);
+            toast.error(errorMessage);
+            processingRef.current = false;
+          }
+        },
+        onTranscript: (text, isFinal) => {
+          if (isMounted.current) {
+            setCurrentTranscript(text);
+            
+            if (isFinal) {
+              if (text.trim().length > 3) {
+                if (isStudyMode) {
+                  // In study mode, wait for pause threshold after user stops speaking
+                  if (transcriptTimeoutRef.current) {
+                    clearTimeout(transcriptTimeoutRef.current);
                   }
-                } else if (text.trim().length > 0) {
-                  toast('Speech too short. Please try again.', { icon: '🗣️' });
+                  
+                  transcriptTimeoutRef.current = window.setTimeout(() => {
+                    if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
+                      lastProcessedTranscriptRef.current = text;
+                      processingRef.current = true;
+                      addMessage(text, 'user');
+                    }
+                  }, pauseThresholdRef.current);
+                } else if (!processingRef.current) {
+                  processingRef.current = true;
+                  addMessage(text, 'user');
                 }
+              } else if (text.trim().length > 0) {
+                toast('Speech too short. Please try again.', { icon: '🗣️' });
               }
             }
           }
-        });
-      } else {
-        // Update the configuration of the existing service
-        voiceServiceRef.current.updateConfiguration({
-          subject: currentSubject,
-          avatarPersonality: currentAvatar,
-          difficultyLevel: difficultyLevel
-        });
-      }
-
-      // Set up audio visualization callback
-      if (voiceServiceRef.current) {
-        voiceServiceRef.current.setAudioVisualizationCallback((data) => {
-          setVisualizationData(data);
-          
-          // Calculate noise level (average of frequency data)
-          if (data.length > 0) {
-            const sum = Array.from(data).reduce((acc, val) => acc + val, 0);
-            setNoiseLevel(sum / data.length);
-          }
-        });
-        
-        // Set feedback prevention
-        voiceServiceRef.current.setFeedbackPrevention(feedbackPreventionEnabled);
-        
-        // Set delay after speaking
-        voiceServiceRef.current.setDelayAfterSpeaking(delayAfterSpeaking);
-        
-        // Set silence threshold
-        voiceServiceRef.current.setSilenceThreshold(pauseThresholdRef.current);
-      }
+        }
+      });
     } catch (error) {
       console.error('Failed to initialize voice service:', error);
       setError('Failed to initialize voice service');
     }
-  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode, feedbackPreventionEnabled, delayAfterSpeaking]);
+  }, [user, currentSubject, currentAvatar, difficultyLevel, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode, isStudyPage]);
+
+  // Update voice service when difficulty level changes
+  useEffect(() => {
+    if (voiceServiceRef.current && user && isMounted.current && isStudyPage) {
+      // Reinitialize the service with the new difficulty level
+      voiceServiceRef.current = new VoiceConversationService({
+        userId: user.id,
+        subject: currentSubject,
+        avatarPersonality: currentAvatar,
+        difficultyLevel: difficultyLevel,
+        onResponse: (text) => {
+          if (isMounted.current) {
+            // If in study mode, make responses more concise
+            if (isStudyMode) {
+              // Simplify and shorten the response
+              const simplifiedText = simplifyResponse(text);
+              addMessage(simplifiedText, 'ai');
+            } else {
+              addMessage(text, 'ai');
+            }
+          }
+        },
+        onAudioStart: () => {
+          if (isMounted.current) {
+            setIsSpeaking(true);
+            setAvatarEmotion('neutral');
+          }
+        },
+        onAudioEnd: () => {
+          if (isMounted.current) {
+            setIsSpeaking(false);
+            setAvatarEmotion('neutral');
+            processingRef.current = false;
+          }
+        },
+        onError: (errorMessage) => {
+          if (isMounted.current) {
+            setError(errorMessage);
+            toast.error(errorMessage);
+            processingRef.current = false;
+          }
+        },
+        onTranscript: (text, isFinal) => {
+          if (isMounted.current) {
+            setCurrentTranscript(text);
+            if (isFinal && text.trim()) {
+              if (isStudyMode) {
+                // In study mode, wait 1 second after user stops speaking
+                if (transcriptTimeoutRef.current) {
+                  clearTimeout(transcriptTimeoutRef.current);
+                }
+                
+                transcriptTimeoutRef.current = window.setTimeout(() => {
+                  if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
+                    lastProcessedTranscriptRef.current = text;
+                    processingRef.current = true;
+                    addMessage(text, 'user');
+                  }
+                }, pauseThresholdRef.current);
+              } else if (!processingRef.current) {
+                processingRef.current = true;
+                addMessage(text, 'user');
+              }
+            }
+          }
+        }
+      });
+      
+      console.log(`Voice service updated with difficulty level: ${difficultyLevel}`);
+    }
+  }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode, isStudyPage]);
 
   const startVoiceChat = useCallback(async () => {
+    // Only allow voice chat on the study page
+    if (!isStudyPage) {
+      console.warn('Attempted to start voice chat outside of study page');
+      return;
+    }
+    
     if (!browserSupportsSpeechRecognition) {
       setError(ERROR_MESSAGES.BROWSER_SUPPORT);
       toast.error(ERROR_MESSAGES.BROWSER_SUPPORT);
@@ -188,10 +238,8 @@ export const useVoiceChat = () => {
     }
     
     try {
-      if (voiceServiceRef.current) {
-        await voiceServiceRef.current.startListening();
-      } else {
-        throw new Error('Voice service not initialized');
+      if (!listening) {
+        await startListening();
       }
       
       if (isMounted.current) {
@@ -209,13 +257,10 @@ export const useVoiceChat = () => {
         toast.error(ERROR_MESSAGES.MICROPHONE_ACCESS);
       }
     }
-  }, [setAvatarEmotion, browserSupportsSpeechRecognition]);
+  }, [setAvatarEmotion, browserSupportsSpeechRecognition, listening, startListening, isStudyPage]);
 
   const stopVoiceChat = useCallback(() => {
-    if (voiceServiceRef.current) {
-      voiceServiceRef.current.stopListening();
-      voiceServiceRef.current.stopSpeaking();
-    }
+    stopListening();
     
     if (isMounted.current) {
       setIsActive(false);
@@ -225,12 +270,10 @@ export const useVoiceChat = () => {
       setCurrentTranscript('');
       processingRef.current = false;
     }
-  }, [setIsSpeaking, setAvatarEmotion]);
+  }, [setIsSpeaking, setAvatarEmotion, stopListening]);
 
   const pauseVoiceChat = useCallback(() => {
-    if (voiceServiceRef.current) {
-      voiceServiceRef.current.pauseConversation();
-    }
+    stopListening();
     
     if (isMounted.current) {
       setIsPaused(true);
@@ -238,19 +281,16 @@ export const useVoiceChat = () => {
       processingRef.current = false;
       toast.success('Conversation paused');
     }
-  }, [setIsSpeaking]);
+  }, [setIsSpeaking, stopListening]);
 
   const resumeVoiceChat = useCallback(() => {
-    if (voiceServiceRef.current) {
-      voiceServiceRef.current.resumeConversation();
-    }
-    
-    if (isMounted.current) {
+    if (isMounted.current && isStudyPage) {
       setIsPaused(false);
+      startListening();
       processingRef.current = false;
       toast.success('Conversation resumed');
     }
-  }, []);
+  }, [startListening, isStudyPage]);
 
   const toggleVoiceChat = useCallback(() => {
     if (isPaused) {
@@ -262,7 +302,7 @@ export const useVoiceChat = () => {
   
   // Force submit current transcript (manual override for pause detection)
   const forceSubmitTranscript = useCallback(() => {
-    if (currentTranscript && currentTranscript.trim().length > 3 && !processingRef.current) {
+    if (currentTranscript && currentTranscript.trim().length > 3 && !processingRef.current && isStudyPage) {
       // Clear any pending timeout
       if (transcriptTimeoutRef.current) {
         clearTimeout(transcriptTimeoutRef.current);
@@ -283,7 +323,7 @@ export const useVoiceChat = () => {
     } else {
       toast.error('No transcript to submit');
     }
-  }, [currentTranscript, addMessage]);
+  }, [currentTranscript, addMessage, isStudyPage]);
   
   // Set pause threshold
   const setPauseThreshold = useCallback((milliseconds: number) => {
@@ -367,6 +407,30 @@ export const useVoiceChat = () => {
     
     return uniqueSentences.join(' ');
   };
+
+  // Return empty or disabled values when not on study page
+  if (!isStudyPage) {
+    return {
+      isActive: false,
+      isPaused: false,
+      error: null,
+      currentTranscript: '',
+      startVoiceChat: async () => {},
+      stopVoiceChat: () => {},
+      pauseVoiceChat: () => {},
+      resumeVoiceChat: () => {},
+      toggleVoiceChat: () => {},
+      forceSubmitTranscript: () => {},
+      setPauseThreshold: () => {},
+      setDelayAfterSpeaking: () => {},
+      pauseThreshold: 600,
+      delayAfterSpeaking: 500,
+      feedbackPreventionEnabled: true,
+      toggleFeedbackPrevention: () => {},
+      visualizationData: null,
+      noiseLevel: 0
+    };
+  }
 
   return { 
     isActive,
