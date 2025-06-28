@@ -29,7 +29,8 @@ import {
   TrendingUp,
   Download,
   Filter,
-  ArrowRight
+  ArrowRight,
+  Layers
 } from 'lucide-react';
 import { Button } from './Button';
 import { exportAnalyticsData } from '../services/analytics-service';
@@ -45,7 +46,7 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
   analyticsData,
   userId
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'progress' | 'topics' | 'patterns'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'progress' | 'topics' | 'patterns' | 'context'>('overview');
   const [timeframe, setTimeframe] = useState<'week' | 'month' | 'all'>('week');
   const navigate = useNavigate();
   
@@ -60,6 +61,10 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
   
   const handleViewPersonalizedLearning = () => {
     navigate('/personalized-learning');
+  };
+  
+  const handleViewContextAnalytics = () => {
+    navigate('/context-analytics');
   };
   
   // Format data for charts
@@ -163,10 +168,10 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
     <div className="space-y-6">
       {/* Header with tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg overflow-x-auto">
           <button
             className={cn(
-              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
               activeTab === 'overview' 
                 ? "bg-white shadow-sm text-primary-700" 
                 : "text-gray-600 hover:text-gray-900"
@@ -177,7 +182,7 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
           </button>
           <button
             className={cn(
-              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
               activeTab === 'progress' 
                 ? "bg-white shadow-sm text-primary-700" 
                 : "text-gray-600 hover:text-gray-900"
@@ -188,7 +193,7 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
           </button>
           <button
             className={cn(
-              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
               activeTab === 'topics' 
                 ? "bg-white shadow-sm text-primary-700" 
                 : "text-gray-600 hover:text-gray-900"
@@ -199,7 +204,7 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
           </button>
           <button
             className={cn(
-              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
               activeTab === 'patterns' 
                 ? "bg-white shadow-sm text-primary-700" 
                 : "text-gray-600 hover:text-gray-900"
@@ -207,6 +212,17 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
             onClick={() => setActiveTab('patterns')}
           >
             Patterns
+          </button>
+          <button
+            className={cn(
+              "px-3 py-1.5 text-sm font-medium rounded-md transition-colors whitespace-nowrap",
+              activeTab === 'context' 
+                ? "bg-white shadow-sm text-primary-700" 
+                : "text-gray-600 hover:text-gray-900"
+            )}
+            onClick={() => setActiveTab('context')}
+          >
+            Context
           </button>
         </div>
         
@@ -299,7 +315,10 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
                     <Tooltip formatter={(value) => [`${value} min`, 'Study Time']} />
                     <Bar dataKey="minutes" fill="#3B82F6">
                       {formatWeeklyProgress().map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.minutes > 0 ? '#3B82F6' : '#E5E7EB'} />
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.minutes > 0 ? '#3B82F6' : '#E5E7EB'} 
+                        />
                       ))}
                     </Bar>
                   </BarChart>
@@ -334,6 +353,28 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
             </Card>
           </div>
           
+          {/* Context Management Card */}
+          <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100">
+            <div className="flex flex-col md:flex-row items-center justify-between">
+              <div className="mb-4 md:mb-0 md:mr-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-2 flex items-center">
+                  <Layers className="h-5 w-5 mr-2 text-blue-600" />
+                  Context Management Analytics
+                </h3>
+                <p className="text-gray-600 max-w-xl">
+                  Dive deeper into how well context is maintained across your conversations. Track context retention, memory usage, and response relevance metrics.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                onClick={handleViewContextAnalytics}
+                rightIcon={<ArrowRight className="h-5 w-5" />}
+              >
+                View Context Analytics
+              </Button>
+            </div>
+          </Card>
+          
           {/* Personalized Learning CTA */}
           <Card className="p-6 bg-gradient-to-r from-primary-50 to-blue-50 border border-primary-100">
             <div className="flex flex-col md:flex-row items-center justify-between">
@@ -352,74 +393,6 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
               >
                 View Personalized Learning
               </Button>
-            </div>
-          </Card>
-          
-          {/* Learning Insights */}
-          <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Learning Insights</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="p-2 bg-blue-100 rounded-full mt-1">
-                    <Clock className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Peak Study Time</h4>
-                    <p className="text-gray-600">
-                      You're most productive during the <span className="font-medium">{analyticsData.peakStudyTime}</span>. 
-                      Consider scheduling important study sessions during this time.
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-3">
-                  <div className="p-2 bg-green-100 rounded-full mt-1">
-                    <Brain className="h-4 w-4 text-green-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Learning Style</h4>
-                    <p className="text-gray-600">
-                      Your learning patterns suggest you're primarily a <span className="font-medium capitalize">{analyticsData.learningStyle}</span> learner. 
-                      {analyticsData.learningStyle === 'visual' && ' Try using diagrams, charts, and color-coding in your notes.'}
-                      {analyticsData.learningStyle === 'auditory' && ' Consider recording explanations and discussing concepts aloud.'}
-                      {analyticsData.learningStyle === 'kinesthetic' && ' Incorporate hands-on practice and movement while studying.'}
-                      {analyticsData.learningStyle === 'reading/writing' && ' Focus on taking detailed notes and summarizing concepts in writing.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="p-2 bg-purple-100 rounded-full mt-1">
-                    <Target className="h-4 w-4 text-purple-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Retention Rate</h4>
-                    <p className="text-gray-600">
-                      Your estimated knowledge retention is <span className="font-medium">{analyticsData.retentionRate}%</span>. 
-                      {analyticsData.retentionRate > 70 
-                        ? ' Great job! Your study methods are working well.'
-                        : ' Consider using spaced repetition to improve retention.'}
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start space-x-3">
-                  <div className="p-2 bg-amber-100 rounded-full mt-1">
-                    <TrendingUp className="h-4 w-4 text-amber-600" />
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">Progress Trend</h4>
-                    <p className="text-gray-600">
-                      {analyticsData.weeklyProgress[6] > analyticsData.weeklyProgress[0]
-                        ? 'Your study time has increased this week. Keep up the momentum!'
-                        : 'Your study time has been consistent. Consider setting a goal to increase your weekly study time.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
             </div>
           </Card>
         </div>
@@ -568,7 +541,7 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
                   
                   <p className="text-sm text-gray-600 mt-4">
                     {analyticsData.consistencyRating === 'Excellent' && 'You have an excellent study routine. Keep it up!'}
-                    {analyticsData.consistencyRating === 'Good' && 'You have a good study routine. Try to make it more consistent.'}
+                    {analyticsData.consistencyRating === 'Good' && 'You have a good study routine. Try to make it even more consistent.'}
                     {analyticsData.consistencyRating === 'Building' && 'You\'re building your study habit. Aim for regular daily sessions.'}
                   </p>
                 </div>
@@ -892,6 +865,142 @@ export const LearningAnalyticsDetail: React.FC<LearningAnalyticsDetailProps> = (
                   </div>
                 </div>
               </div>
+            </div>
+          </Card>
+        </div>
+      )}
+      
+      {/* Context Tab */}
+      {activeTab === 'context' && (
+        <div className="space-y-6">
+          {/* Context Management Overview */}
+          <Card className="p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold">Context Management Overview</h3>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleViewContextAnalytics}
+                rightIcon={<ArrowRight className="h-4 w-4" />}
+              >
+                View Detailed Analysis
+              </Button>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Context management analytics track how well information is maintained across your conversations. This helps identify patterns of context retention, memory usage efficiency, and response relevance.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <div className="flex items-center space-x-3 mb-2">
+                  <Brain className="h-5 w-5 text-blue-600" />
+                  <h4 className="font-medium text-blue-800">Context Retention</h4>
+                </div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-blue-700">Overall Score</span>
+                  <span className="text-sm font-medium text-blue-800">78%</span>
+                </div>
+                <div className="w-full h-2 bg-blue-200 rounded-full">
+                  <div className="h-full bg-blue-600 rounded-full" style={{ width: '78%' }}></div>
+                </div>
+                <p className="text-xs text-blue-700 mt-2">
+                  How well information is remembered across conversations
+                </p>
+              </div>
+              
+              <div className="p-4 bg-green-50 rounded-lg border border-green-100">
+                <div className="flex items-center space-x-3 mb-2">
+                  <Zap className="h-5 w-5 text-green-600" />
+                  <h4 className="font-medium text-green-800">Response Relevance</h4>
+                </div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-green-700">Overall Score</span>
+                  <span className="text-sm font-medium text-green-800">85%</span>
+                </div>
+                <div className="w-full h-2 bg-green-200 rounded-full">
+                  <div className="h-full bg-green-600 rounded-full" style={{ width: '85%' }}></div>
+                </div>
+                <p className="text-xs text-green-700 mt-2">
+                  How relevant responses are to the conversation context
+                </p>
+              </div>
+              
+              <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                <div className="flex items-center space-x-3 mb-2">
+                  <Layers className="h-5 w-5 text-purple-600" />
+                  <h4 className="font-medium text-purple-800">Memory Efficiency</h4>
+                </div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm text-purple-700">Overall Score</span>
+                  <span className="text-sm font-medium text-purple-800">82%</span>
+                </div>
+                <div className="w-full h-2 bg-purple-200 rounded-full">
+                  <div className="h-full bg-purple-600 rounded-full" style={{ width: '82%' }}></div>
+                </div>
+                <p className="text-xs text-purple-700 mt-2">
+                  How efficiently memory is used to store conversation context
+                </p>
+              </div>
+            </div>
+          </Card>
+          
+          {/* Context Insights */}
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Context Management Insights</h3>
+            
+            <div className="space-y-4">
+              <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <div className="p-1.5 bg-blue-100 rounded-full mt-0.5">
+                    <Brain className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-blue-800 mb-1">Strong Short-term Retention</h4>
+                    <p className="text-sm text-blue-700">
+                      Your conversations show excellent short-term context retention (92%). Information shared within the same session is consistently remembered and utilized.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <div className="p-1.5 bg-amber-100 rounded-full mt-0.5">
+                    <Clock className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-amber-800 mb-1">Long-term Retention Opportunity</h4>
+                    <p className="text-sm text-amber-700">
+                      Long-term context retention (across multiple days) shows room for improvement (65%). Consider summarizing key points at the end of sessions to reinforce memory.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="p-3 bg-green-50 border border-green-100 rounded-lg">
+                <div className="flex items-start space-x-3">
+                  <div className="p-1.5 bg-green-100 rounded-full mt-0.5">
+                    <Target className="h-4 w-4 text-green-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-green-800 mb-1">Excellent Topic Consistency</h4>
+                    <p className="text-sm text-green-700">
+                      Your conversations maintain strong topic consistency (88%). The AI effectively stays on topic and provides relevant responses throughout your learning sessions.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-6 text-center">
+              <Button
+                variant="primary"
+                onClick={handleViewContextAnalytics}
+                rightIcon={<ArrowRight className="h-4 w-4" />}
+              >
+                View Full Context Analytics
+              </Button>
             </div>
           </Card>
         </div>
