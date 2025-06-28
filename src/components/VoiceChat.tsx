@@ -39,7 +39,6 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     pauseThreshold
   } = useVoiceChat();
   
-  const [isPaused, setIsPaused] = useState(false);
   const [volume, setVolume] = useState(70);
   const [showTranscript, setShowTranscript] = useState(true);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
@@ -173,14 +172,14 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
   };
 
   const pauseConversation = () => {
-    setIsPaused(true);
+    pauseVoiceChat();
     stopListening();
     stopSpeaking();
     toast.success('Conversation paused');
   };
 
   const resumeConversation = () => {
-    setIsPaused(false);
+    resumeVoiceChat();
     if (voiceMode === 'continuous' && !processingTranscriptRef.current) {
       startListening();
     }
