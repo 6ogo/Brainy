@@ -103,7 +103,6 @@ export const PricingPage: React.FC = () => {
       ...products.premium,
       features: [
         '4 hours daily conversation',
-        '30 minute video calls',
         'All subjects and specializations',
         'Advanced analytics and insights',
         'Downloadable conversation transcripts'
@@ -113,7 +112,6 @@ export const PricingPage: React.FC = () => {
       ...products.ultimate,
       features: [
         'Unlimited conversation time',
-        '60 minutes video calls',
         'All subjects and specializations',
         'Advanced analytics and insights',
         'Downloadable conversation transcripts',

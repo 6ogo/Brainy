@@ -1,4 +1,4 @@
-import { ElevenLabsService } from './elevenlabsService';
+import { SimplifiedElevenLabsService } from './simplifiedElevenLabsService';
 import { GroqService } from './groqService';
 import { SecurityUtils } from '../utils/security';
 
@@ -391,26 +391,53 @@ export class VoiceConversationService {
     this.config.onAudioStart?.();
     
     try {
+      // Check if ElevenLabs is configured and available
       if (!import.meta.env.VITE_ELEVENLABS_API_KEY) {
-        // Use browser speech synthesis as fallback
+        console.log('ElevenLabs API key not configured, using browser speech');
         await this.useBrowserSpeech(text);
-      } else {
-        // Try ElevenLabs first, fall back to browser speech
-        try {
-          const audioBlob = await ElevenLabsService.generateSpeech(text, this.config.avatarPersonality);
-          if (audioBlob && audioBlob.size > 1000) {
-            await this.playAudioBlob(audioBlob);
+        return;
+      }
+
+      // Try ElevenLabs API
+      try {
+        console.log('Attempting ElevenLabs speech generation...');
+        const audioBlob = await SimplifiedElevenLabsService.generateSpeech(text, this.config.avatarPersonality);
+        
+        // Check if we got a real audio blob from ElevenLabs
+        if (audioBlob && audioBlob.size > 1000 && audioBlob.type.includes('audio')) {
+          console.log(`Playing ElevenLabs audio: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+          await this.playAudioBlob(audioBlob);
+          console.log('ElevenLabs audio playback completed');
+          return;
+        } else {
+          console.log('ElevenLabs returned small/invalid blob, checking if it used fallback speech synthesis');
+          // ElevenLabs service may have used browser speech synthesis as fallback
+          // In this case, the speech is already playing, so we just wait
+          if (audioBlob && audioBlob.size <= 1000) {
+            // This is likely a silent compatibility blob, speech synthesis is handling audio
+            console.log('ElevenLabs used speech synthesis fallback, audio already playing');
+            return;
           } else {
+            console.log('No valid audio from ElevenLabs, using browser speech fallback');
             await this.useBrowserSpeech(text);
+            return;
           }
-        } catch (elevenLabsError) {
-          console.error('ElevenLabs failed, using browser speech:', elevenLabsError);
-          await this.useBrowserSpeech(text);
         }
+      } catch (elevenLabsError) {
+        console.error('ElevenLabs API error:', elevenLabsError);
+        console.log('Falling back to browser speech synthesis');
+        await this.useBrowserSpeech(text);
+        return;
       }
     } catch (error) {
       console.error('Audio playback failed:', error);
       this.config.onError?.('Voice output failed. Please check your audio settings.');
+      // Still try browser speech as final fallback
+      try {
+        await this.useBrowserSpeech(text);
+      } catch (finalError) {
+        console.error('Final speech fallback also failed:', finalError);
+      }
     } finally {
       this.isAISpeaking = false;
       this.config.onAudioEnd?.();
@@ -419,37 +446,118 @@ export class VoiceConversationService {
 
   private async playAudioBlob(audioBlob: Blob): Promise<void> {
     return new Promise((resolve, reject) => {
+      console.log(`Creating audio URL for blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       
+      // Set volume if available
+      audio.volume = 0.8;
+      
+      audio.onloadeddata = () => {
+        console.log(`Audio loaded: duration ${audio.duration}s`);
+      };
+      
+      audio.onplay = () => {
+        console.log('Audio playback started');
+      };
+      
       audio.onended = () => {
+        console.log('Audio playback ended');
         URL.revokeObjectURL(audioUrl);
         this.currentAudio = null;
         resolve();
       };
       
       audio.onerror = (event) => {
+        console.error('Audio playback error:', event);
+        const target = event.target as HTMLAudioElement;
+        const error = target.error;
+        console.error('Audio error details:', {
+          code: error?.code,
+          message: error?.message,
+          blobSize: audioBlob.size,
+          blobType: audioBlob.type
+        });
+        
         URL.revokeObjectURL(audioUrl);
         this.currentAudio = null;
-        reject(new Error('Audio playback failed'));
+        reject(new Error(`Audio playback failed: ${error?.message || 'Unknown error'}`));
+      };
+      
+      audio.oncanplay = () => {
+        console.log('Audio can start playing');
       };
       
       this.currentAudio = audio;
-      audio.play().catch(reject);
+      
+      // Start playback
+      console.log('Starting audio playback...');
+      audio.play().then(() => {
+        console.log('Audio.play() resolved successfully');
+      }).catch((playError) => {
+        console.error('Audio.play() failed:', playError);
+        URL.revokeObjectURL(audioUrl);
+        this.currentAudio = null;
+        reject(new Error(`Audio play failed: ${playError.message}`));
+      });
     });
   }
 
   private async useBrowserSpeech(text: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      console.log('Using browser speech synthesis for:', text.substring(0, 50) + '...');
+      
+      if (!('speechSynthesis' in window)) {
+        console.error('Speech synthesis not supported');
+        reject(new Error('Speech synthesis not supported'));
+        return;
+      }
+      
+      // Cancel any existing speech
+      window.speechSynthesis.cancel();
+      
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1;
       utterance.pitch = 1;
-      utterance.volume = 1;
+      utterance.volume = 0.8;
       
-      utterance.onend = () => resolve();
-      utterance.onerror = (event) => reject(new Error(`Speech synthesis error: ${event.error}`));
+      // Try to get a good voice
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        // Prefer English voices
+        const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+          console.log('Using voice:', englishVoice.name);
+        }
+      }
       
+      utterance.onstart = () => {
+        console.log('Browser speech synthesis started');
+      };
+      
+      utterance.onend = () => {
+        console.log('Browser speech synthesis ended');
+        resolve();
+      };
+      
+      utterance.onerror = (event) => {
+        console.error('Browser speech synthesis error:', event.error);
+        reject(new Error(`Speech synthesis error: ${event.error}`));
+      };
+      
+      console.log('Starting speech synthesis...');
       window.speechSynthesis.speak(utterance);
+      
+      // Fallback timeout in case onend doesn't fire
+      const timeoutDuration = Math.max(5000, text.length * 60); // Rough estimate
+      setTimeout(() => {
+        if (window.speechSynthesis.speaking) {
+          console.log('Speech synthesis timeout, canceling...');
+          window.speechSynthesis.cancel();
+        }
+        resolve();
+      }, timeoutDuration);
     });
   }
 
