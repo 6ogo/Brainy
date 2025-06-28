@@ -17,7 +17,8 @@ import {
   Download,
   Shield,
   Volume2,
-  VolumeX
+  VolumeX,
+  Sliders
 } from 'lucide-react';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -26,6 +27,7 @@ import { StudyModeToggle } from './StudyModeToggle';
 import { StudyModePrompt } from './StudyModePrompt';
 import { StudySessionEndModal } from './StudySessionEndModal';
 import { AudioVisualizer } from './AudioVisualizer';
+import { DifficultyLevelSelector } from './DifficultyLevelSelector';
 import toast from 'react-hot-toast';
 
 export const UnifiedStudyInterface: React.FC = () => {
@@ -55,6 +57,7 @@ export const UnifiedStudyInterface: React.FC = () => {
   const [showEndSessionModal, setShowEndSessionModal] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [feedbackPreventionEnabled, setFeedbackPreventionEnabled] = useState(true);
+  const [showDifficultySelector, setShowDifficultySelector] = useState(false);
   
   // Voice chat state and hooks
   const {
@@ -179,6 +182,10 @@ export const UnifiedStudyInterface: React.FC = () => {
     toast.success('Transcript downloaded successfully');
   };
 
+  const handleOpenDifficultySelector = () => {
+    setShowDifficultySelector(true);
+  };
+
   if (!currentSubject || !currentAvatar || !user) {
     return null;
   }
@@ -199,6 +206,13 @@ export const UnifiedStudyInterface: React.FC = () => {
             onClose={() => setShowEndSessionModal(false)} 
             className="w-full max-w-md"
           />
+        </div>
+      )}
+      
+      {/* Difficulty Level Selector */}
+      {showDifficultySelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <DifficultyLevelSelector onClose={() => setShowDifficultySelector(false)} />
         </div>
       )}
       
@@ -275,6 +289,16 @@ export const UnifiedStudyInterface: React.FC = () => {
             
             {/* Right Controls */}
             <div className="flex items-center space-x-2">
+              {/* Difficulty Level Button */}
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={<Sliders className="h-3 w-3" />}
+                onClick={handleOpenDifficultySelector}
+              >
+                {difficultyLevel}
+              </Button>
+              
               {/* Feedback Prevention Toggle */}
               {learningMode === 'videocall' && (
                 <Button

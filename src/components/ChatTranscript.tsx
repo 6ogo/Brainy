@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
-import { Search, Send, Phone, Info, Bot, User } from 'lucide-react';
+import { Search, Send, Phone, Info, Bot, User, Sliders } from 'lucide-react';
 import { VoiceControls } from './VoiceControls';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
@@ -8,6 +8,8 @@ import { useVoiceChat } from '../hooks/useVoiceChat';
 import { cn } from '../styles/utils';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { StudyModeIndicator } from './StudyModeIndicator';
+import { DifficultyIndicator } from './DifficultyIndicator';
+import { DifficultyLevelSelector } from './DifficultyLevelSelector';
 
 interface ChatTranscriptProps {
   className?: string;
@@ -29,6 +31,7 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({ className }) => 
   const [searchTerm, setSearchTerm] = useState('');
   const [inputMessage, setInputMessage] = useState('');
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [showDifficultySelector, setShowDifficultySelector] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   
@@ -94,8 +97,8 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({ className }) => 
         )}
         
         {/* Difficulty level indicator */}
-        <div className="mr-4 px-3 py-1 bg-primary-50 text-primary-700 text-xs font-medium rounded-full border border-primary-100">
-          {difficultyLevel} Level
+        <div className="mr-4">
+          <DifficultyIndicator onClick={() => setShowDifficultySelector(true)} />
         </div>
         
         {/* Voice Controls */}
@@ -103,6 +106,13 @@ export const ChatTranscript: React.FC<ChatTranscriptProps> = ({ className }) => 
           <VoiceControls />
         </div>
       </div>
+      
+      {/* Difficulty Level Selector Modal */}
+      {showDifficultySelector && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <DifficultyLevelSelector onClose={() => setShowDifficultySelector(false)} />
+        </div>
+      )}
       
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
