@@ -1,14 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
+import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../store/store';
 import { useConversation } from '../hooks/useConversation';
 import { useVoiceChat } from '../hooks/useVoiceChat';
-import { Mic, MicOff, Volume2, VolumeX, Pause, Play, MessageSquare, Send, Zap } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Pause, Play, MessageSquare, Send, Zap, Shield, Headphones } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '../styles/utils';
 import toast from 'react-hot-toast';
 import 'regenerator-runtime/runtime';
 import { StudyModeIndicator } from './StudyModeIndicator';
+import { AudioVisualizer } from './AudioVisualizer';
+import { PauseDetectionIndicator } from './PauseDetectionIndicator';
+import { VoiceStatusIndicator } from './VoiceStatusIndicator';
 
 interface VoiceChatProps {
   onSwitchToText?: () => void;
@@ -28,7 +30,6 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
   const { 
     isActive,
     isPaused,
-    error,
     currentTranscript,
     startVoiceChat,
     stopVoiceChat,
@@ -36,16 +37,20 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     resumeVoiceChat,
     forceSubmitTranscript,
     setPauseThreshold,
-    pauseThreshold
+    pauseThreshold,
+    feedbackPreventionEnabled,
+    toggleFeedbackPrevention,
+    visualizationData
   } = useVoiceChat();
   
-  const [volume, setVolume] = useState(70);
+  const [volume, setVolume] = useState(0.8);
   const [showTranscript, setShowTranscript] = useState(true);
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const lastTranscriptRef = useRef<string>('');
   const processingTranscriptRef = useRef<boolean>(false);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
-  const [visualizationData, setVisualizationData] = useState<number[]>([]);
+  const [lastSpeechTimestamp, setLastSpeechTimestamp] = useState(0);
+  const [isUsingHeadphones, setIsUsingHeadphones] = useState(false);
   
   const {
     transcript,
@@ -57,16 +62,12 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     resetTranscript
   } = useSpeechRecognition();
 
-  // Start listening when component mounts if in continuous mode
+  // Update last speech timestamp when transcript changes
   useEffect(() => {
-    if (voiceMode === 'continuous' && !listening && !isPaused && !processingTranscriptRef.current) {
-      const timer = setTimeout(() => {
-        startListening();
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+    if (transcript) {
+      setLastSpeechTimestamp(Date.now());
     }
-  }, [voiceMode, listening, isPaused, startListening]);
+  }, [transcript]);
 
   // Process transcript when it changes
   useEffect(() => {
@@ -157,7 +158,7 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
         await navigator.mediaDevices.getUserMedia({ audio: true });
         toast.success('Microphone access granted!');
       } catch (error) {
-        toast.error('Microphone permission is required for voice chat');
+        toast.error('Microphone permission denied. Please check your browser settings.');
         return;
       }
     }
@@ -193,28 +194,23 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
       setCurrentAudio(null);
     }
     
-    setIsSpeaking(false);
-    
     // Also stop any browser speech synthesis
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+    
+    setIsSpeaking(false);
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = parseInt(e.target.value, 10);
+    const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
     
     // Apply volume to all audio elements
     const audioElements = document.querySelectorAll('audio');
     audioElements.forEach(audio => {
-      audio.volume = newVolume / 100;
+      audio.volume = newVolume;
     });
-    
-    // Also store the current audio element's volume
-    if (currentAudio) {
-      currentAudio.volume = newVolume / 100;
-    }
   };
 
   const handleSwitchToTextChat = () => {
@@ -227,39 +223,28 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
     }
   };
 
-  // Handle pause threshold change
   const handlePauseThresholdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     setPauseThreshold(value);
   };
 
-  // Audio visualization
-  const renderAudioVisualization = () => {
-    return (
-      <div className="audio-visualization flex items-end justify-center h-8 space-x-1 my-2">
-        {visualizationData.length > 0 ? (
-          visualizationData.map((value, index) => (
-            <div 
-              key={index}
-              className="w-1 bg-primary-500 rounded-t"
-              style={{ 
-                height: `${Math.max(3, value / 2)}px`,
-                opacity: listening ? 1 : 0.3
-              }}
-            ></div>
-          ))
-        ) : (
-          // Placeholder bars when no data
-          Array.from({ length: 20 }).map((_, index) => (
-            <div 
-              key={index}
-              className="w-1 bg-gray-300 rounded-t"
-              style={{ height: '3px' }}
-            ></div>
-          ))
-        )}
-      </div>
-    );
+  const toggleHeadphonesMode = () => {
+    setIsUsingHeadphones(!isUsingHeadphones);
+    
+    // If enabling headphones mode, we can adjust feedback prevention settings
+    if (!isUsingHeadphones) {
+      // Disable feedback prevention for headphones users
+      if (feedbackPreventionEnabled) {
+        toggleFeedbackPrevention();
+      }
+      toast.success('Headphones mode enabled - feedback prevention disabled');
+    } else {
+      // Re-enable feedback prevention for speakers
+      if (!feedbackPreventionEnabled) {
+        toggleFeedbackPrevention();
+      }
+      toast.success('Headphones mode disabled - feedback prevention enabled');
+    }
   };
 
   return (
@@ -301,43 +286,26 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
         </div>
       )}
 
-      {/* Microphone Permission Banner */}
-      {browserSupportsSpeechRecognition && !isMicrophoneAvailable && (
-        <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="flex items-start space-x-3">
-            <div className="text-yellow-600 mt-0.5">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-medium text-yellow-800">
-                Microphone Access Required
-              </h4>
-              <p className="text-sm text-yellow-700 mt-1">
-                Enable microphone access to use voice features like speech recognition and voice commands.
-              </p>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    await navigator.mediaDevices.getUserMedia({ audio: true });
-                    toast.success('Microphone access granted!');
-                    window.location.reload(); // Reload to apply permission changes
-                  } catch (error) {
-                    console.error('Error requesting microphone permission:', error);
-                    toast.error('Microphone permission denied. Please check your browser settings.');
-                  }
-                }}
-                className="mt-2"
-              >
-                Enable Microphone
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Headphones Mode Toggle */}
+      <div className="flex justify-center mb-4">
+        <Button
+          variant={isUsingHeadphones ? "primary" : "outline"}
+          size="sm"
+          onClick={toggleHeadphonesMode}
+          leftIcon={<Headphones className="h-4 w-4" />}
+        >
+          {isUsingHeadphones ? "Using Headphones" : "Not Using Headphones"}
+        </Button>
+      </div>
+
+      {/* Voice Status Indicator */}
+      <div className="flex justify-center mb-4">
+        <VoiceStatusIndicator 
+          isListening={listening} 
+          isSpeaking={isSpeaking} 
+          isPaused={isPaused} 
+        />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
@@ -384,7 +352,14 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
           </div>
 
           {/* Audio visualization */}
-          {renderAudioVisualization()}
+          <div className="mb-4">
+            <AudioVisualizer 
+              audioData={visualizationData || []}
+              isActive={listening}
+              height={40}
+              showAIFilter={isSpeaking && feedbackPreventionEnabled}
+            />
+          </div>
 
           {/* Push to talk button */}
           <div className="flex flex-col items-center">
@@ -410,6 +385,14 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
             <p className="text-xs text-gray-500 mt-2">
               {listening ? "Release to stop" : "Press and hold to speak"}
             </p>
+            
+            {/* Pause detection indicator */}
+            <PauseDetectionIndicator 
+              isListening={listening}
+              pauseThreshold={pauseThreshold}
+              lastSpeechTimestamp={lastSpeechTimestamp}
+              className="mt-2"
+            />
             
             {/* Force submit button */}
             {transcript && (
@@ -439,6 +422,17 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                   </div>
                 </div>
                 <p className="text-sm text-gray-700">{transcript}</p>
+                
+                {/* AI audio filtering indicator */}
+                {isSpeaking && feedbackPreventionEnabled && (
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <div className="flex items-center text-green-600">
+                      <Shield className="h-3 w-3 mr-1" />
+                      <span>AI audio filtered out</span>
+                    </div>
+                    <span className="text-gray-500">Only your voice processed</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -468,48 +462,29 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
             </div>
           </div>
           
-          {/* Volume control */}
-          <div className="p-4 bg-gray-50 rounded-lg">
+          {/* Feedback Prevention Controls */}
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-gray-700">Volume Control</h3>
-              <span className="text-sm text-gray-500">{volume}%</span>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={stopSpeaking}
-                className={cn(
-                  "p-2 rounded-full transition-colors",
-                  isSpeaking 
-                    ? "bg-gray-100 hover:bg-gray-200 text-gray-700" 
-                    : "bg-primary-100 text-primary-700 hover:bg-primary-200"
-                )}
-                aria-label={isSpeaking ? "Mute" : "Unmute"}
+              <h3 className="text-sm font-medium text-gray-700">Feedback Prevention</h3>
+              <Button
+                variant={feedbackPreventionEnabled ? "primary" : "outline"}
+                size="sm"
+                onClick={toggleFeedbackPrevention}
+                leftIcon={<Shield className="h-4 w-4" />}
               >
-                {isSpeaking ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
-              </button>
-              
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={handleVolumeChange}
-                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
-                aria-label="Volume"
-              />
-              
-              <div className="w-8 text-center">
-                {volume > 66 ? (
-                  <Volume2 className="h-5 w-5 text-gray-700 mx-auto" />
-                ) : volume > 33 ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-700 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                  </svg>
-                ) : (
-                  <VolumeX className="h-5 w-5 text-gray-700 mx-auto" />
-                )}
+                {feedbackPreventionEnabled ? "Enabled" : "Disabled"}
+              </Button>
+            </div>
+            
+            {feedbackPreventionEnabled && (
+              <div className="text-xs text-gray-600 mb-2">
+                <p>Microphone will automatically mute while AI is speaking to prevent feedback loops.</p>
               </div>
+            )}
+            
+            <div className="flex items-center space-x-2 text-xs text-gray-600">
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span>Prevents audio feedback loops</span>
             </div>
           </div>
           
@@ -529,7 +504,6 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
                 value={pauseThreshold}
                 onChange={handlePauseThresholdChange}
                 className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                aria-label="Pause Threshold"
               />
               <Zap className="h-5 w-5 text-amber-700" />
             </div>
@@ -537,6 +511,48 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
               Adjust how long to wait after you stop speaking before processing your input.
               Lower values (left) are more responsive but may cut you off. Higher values (right) give you more time to think.
             </p>
+          </div>
+          
+          {/* Volume control */}
+          <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700">Volume Control</h3>
+              <span className="text-sm text-gray-500">{Math.round(volume * 100)}%</span>
+            </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={stopSpeaking}
+                className={cn(
+                  "p-2 rounded-full transition-colors",
+                  isSpeaking 
+                    ? "bg-gray-100 hover:bg-gray-200 text-gray-700" 
+                    : "bg-primary-100 text-primary-700 hover:bg-primary-200"
+                )}
+                aria-label={isSpeaking ? "Mute" : "Unmute"}
+              >
+                {isSpeaking ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+              </button>
+              
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={volume}
+                onChange={handleVolumeChange}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
+              />
+              
+              <div className="w-8 text-center">
+                {volume > 0.66 ? (
+                  <Volume2 className="h-5 w-5 text-gray-700 mx-auto" />
+                ) : volume > 0.33 ? (
+                  <Volume2 className="h-5 w-5 text-gray-700 mx-auto" />
+                ) : (
+                  <VolumeX className="h-5 w-5 text-gray-700 mx-auto" />
+                )}
+              </div>
+            </div>
           </div>
           
           {/* Switch to text chat button */}
@@ -606,6 +622,20 @@ export const VoiceChat: React.FC<VoiceChatProps> = ({ onSwitchToText }) => {
             <span className="flex items-center text-amber-600">
               <div className="w-2 h-2 rounded-full mr-2 bg-amber-500"></div>
               Conversation Paused
+            </span>
+          )}
+          
+          {feedbackPreventionEnabled && (
+            <span className="flex items-center text-green-600">
+              <Shield className="h-4 w-4 mr-1" />
+              AI Audio Filtered
+            </span>
+          )}
+          
+          {isUsingHeadphones && (
+            <span className="flex items-center text-blue-600">
+              <Headphones className="h-4 w-4 mr-1" />
+              Headphones Mode
             </span>
           )}
         </div>

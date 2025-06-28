@@ -41,6 +41,9 @@ export class VoiceConversationService {
   private aiAudioFingerprint: Float32Array | null = null; // For AI audio detection
   private aiSpeakingDetector: AnalyserNode | null = null;
   private microphoneGainNode: GainNode | null = null;
+  private isMicrophoneMuted = false;
+  private lastProcessedTranscript = '';
+  private recognitionPaused = false;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -85,7 +88,7 @@ export class VoiceConversationService {
 
   private initializeSpeechRecognition(): void {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      this.config.onError?.(ERROR_MESSAGES.BROWSER_SUPPORT);
+      this.config.onError?.('Speech recognition is not supported in this browser');
       return;
     }
 
@@ -98,6 +101,12 @@ export class VoiceConversationService {
       this.recognition.lang = this.recognitionLanguage;
 
       this.recognition.onresult = (event) => {
+        // Skip processing if microphone is muted to prevent feedback
+        if (this.isMicrophoneMuted) {
+          console.log('Skipping recognition result because microphone is muted');
+          return;
+        }
+        
         const lastResult = event.results[event.results.length - 1];
         const transcript = lastResult[0].transcript.trim();
         
@@ -127,7 +136,8 @@ export class VoiceConversationService {
           if (lastResult.isFinal && transcript) {
             // Set a shorter delay for final results
             this.processingTimeout = window.setTimeout(() => {
-              if (!this.isProcessing && transcript !== '') {
+              if (!this.isProcessing && transcript !== '' && transcript !== this.lastProcessedTranscript) {
+                this.lastProcessedTranscript = transcript;
                 this.handleUserSpeech(transcript);
               }
               this.processingTimeout = null;
@@ -136,8 +146,9 @@ export class VoiceConversationService {
             // Start silence detection timer
             this.silenceTimer = window.setTimeout(() => {
               const silenceDuration = Date.now() - this.lastSpeechTimestamp;
-              if (silenceDuration >= this.silenceThreshold && transcript && !this.isProcessing) {
+              if (silenceDuration >= this.silenceThreshold && transcript && !this.isProcessing && transcript !== this.lastProcessedTranscript) {
                 console.log('Processing after silence detection:', transcript);
+                this.lastProcessedTranscript = transcript;
                 this.handleUserSpeech(transcript);
               }
             }, this.silenceThreshold);
@@ -161,17 +172,23 @@ export class VoiceConversationService {
         this.isListening = false;
         
         // If we have a transcript but haven't processed it yet, process it now
-        if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing && !this.isPaused) {
+        if (this.currentTranscript && 
+            this.currentTranscript.length > this.noiseThreshold && 
+            !this.isProcessing && 
+            !this.isPaused && 
+            !this.isMicrophoneMuted && 
+            this.currentTranscript !== this.lastProcessedTranscript) {
           console.log('Processing transcript on recognition end:', this.currentTranscript);
+          this.lastProcessedTranscript = this.currentTranscript;
           this.handleUserSpeech(this.currentTranscript);
           return;
         }
         
         // Restart if we're supposed to be listening continuously
-        if (!this.isPaused && this.recognition && !this.isProcessing) {
+        if (!this.isPaused && !this.recognitionPaused && this.recognition && !this.isProcessing && !this.isMicrophoneMuted) {
           try {
             setTimeout(() => {
-              if (!this.isPaused && !this.isListening && this.recognition && !this.isProcessing) {
+              if (!this.isPaused && !this.recognitionPaused && !this.isListening && this.recognition && !this.isProcessing && !this.isMicrophoneMuted) {
                 this.recognition.start();
                 this.isListening = true;
                 console.log('Restarted speech recognition');
@@ -277,6 +294,8 @@ export class VoiceConversationService {
       }
       
       this.isPaused = false;
+      this.recognitionPaused = false;
+      this.isMicrophoneMuted = false;
       this.isListening = true;
       this.lastSpeechTimestamp = Date.now();
       this.recognition.start();
@@ -291,8 +310,14 @@ export class VoiceConversationService {
     if (this.recognition && this.isListening) {
       try {
         // If we have a transcript but haven't processed it yet, process it now
-        if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing && !this.isPaused) {
+        if (this.currentTranscript && 
+            this.currentTranscript.length > this.noiseThreshold && 
+            !this.isProcessing && 
+            !this.isPaused && 
+            !this.isMicrophoneMuted &&
+            this.currentTranscript !== this.lastProcessedTranscript) {
           console.log('Processing transcript before stopping:', this.currentTranscript);
+          this.lastProcessedTranscript = this.currentTranscript;
           this.handleUserSpeech(this.currentTranscript);
         }
         
@@ -401,8 +426,12 @@ export class VoiceConversationService {
   }
 
   forceSubmitTranscript(): void {
-    if (this.currentTranscript && this.currentTranscript.length > this.noiseThreshold && !this.isProcessing) {
+    if (this.currentTranscript && 
+        this.currentTranscript.length > this.noiseThreshold && 
+        !this.isProcessing &&
+        this.currentTranscript !== this.lastProcessedTranscript) {
       console.log('Forcing transcript submission:', this.currentTranscript);
+      this.lastProcessedTranscript = this.currentTranscript;
       this.handleUserSpeech(this.currentTranscript);
     }
   }
@@ -421,6 +450,12 @@ export class VoiceConversationService {
     try {
       this.isProcessing = true;
       console.log('Processing speech input:', transcript);
+      
+      // Mute microphone to prevent feedback
+      if (this.feedbackPrevention) {
+        console.log('Feedback prevention enabled');
+        this.muteRecognition();
+      }
       
       // Sanitize input
       const sanitizedTranscript = SecurityUtils.sanitizeInput(transcript);
@@ -448,11 +483,6 @@ export class VoiceConversationService {
 
       // Generate and play speech
       this.config.onAudioStart?.();
-      
-      // Mute microphone when AI starts speaking to prevent feedback
-      if (this.feedbackPrevention) {
-        this.muteRecognition();
-      }
       
       let audioBlob;
       try {
@@ -500,6 +530,7 @@ export class VoiceConversationService {
         if (this.feedbackPrevention) {
           setTimeout(() => {
             this.unmuteRecognition();
+            console.log('Microphone unmuted after AI finished speaking');
           }, this.delayAfterSpeaking);
         }
       }
@@ -511,7 +542,7 @@ export class VoiceConversationService {
       this.currentTranscript = '';
       
       // Restart listening if in continuous mode and not paused
-      if (!this.isPaused && !this.isListening && this.recognition) {
+      if (!this.isPaused && !this.isListening && this.recognition && !this.isMicrophoneMuted) {
         setTimeout(() => {
           this.startListening();
         }, 500);
@@ -566,10 +597,13 @@ export class VoiceConversationService {
   }
 
   private muteRecognition(): void {
+    // Stop recognition to prevent feedback
     if (this.recognition && this.isListening) {
       try {
         this.recognition.stop();
         this.isListening = false;
+        this.recognitionPaused = true;
+        this.isMicrophoneMuted = true;
         console.log('Microphone muted to prevent feedback');
       } catch (error) {
         console.error('Error muting recognition:', error);
@@ -577,31 +611,38 @@ export class VoiceConversationService {
     }
     
     // Also mute the microphone gain if available
-    if (this.microphoneGainNode) {
+    if (this.microphoneGainNode && this.audioContext) {
       // Gradually reduce gain to avoid clicks
-      const currentTime = this.audioContext?.currentTime || 0;
+      const currentTime = this.audioContext.currentTime;
       this.microphoneGainNode.gain.setValueAtTime(this.microphoneGainNode.gain.value, currentTime);
       this.microphoneGainNode.gain.exponentialRampToValueAtTime(0.001, currentTime + 0.1);
     }
   }
 
   private unmuteRecognition(): void {
-    if (this.recognition && !this.isListening && !this.isPaused) {
-      try {
-        this.recognition.start();
-        this.isListening = true;
-        console.log('Microphone unmuted after AI finished speaking');
-      } catch (error) {
-        console.error('Error unmuting recognition:', error);
+    // Only unmute if we're not paused
+    if (!this.isPaused) {
+      this.isMicrophoneMuted = false;
+      this.recognitionPaused = false;
+      
+      // Restart recognition if it was stopped
+      if (this.recognition && !this.isListening) {
+        try {
+          this.recognition.start();
+          this.isListening = true;
+          console.log('Microphone unmuted after AI finished speaking');
+        } catch (error) {
+          console.error('Error unmuting recognition:', error);
+        }
       }
-    }
-    
-    // Also restore microphone gain if available
-    if (this.microphoneGainNode && this.audioContext) {
-      // Gradually increase gain to avoid clicks
-      const currentTime = this.audioContext.currentTime;
-      this.microphoneGainNode.gain.setValueAtTime(0.001, currentTime);
-      this.microphoneGainNode.gain.exponentialRampToValueAtTime(1.0, currentTime + 0.1);
+      
+      // Also restore microphone gain if available
+      if (this.microphoneGainNode && this.audioContext) {
+        // Gradually increase gain to avoid clicks
+        const currentTime = this.audioContext.currentTime;
+        this.microphoneGainNode.gain.setValueAtTime(0.001, currentTime);
+        this.microphoneGainNode.gain.exponentialRampToValueAtTime(1.0, currentTime + 0.1);
+      }
     }
   }
 
