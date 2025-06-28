@@ -28,6 +28,7 @@ import { ElevenLabsService } from '../services/elevenlabsService';
 import { supabase } from '../lib/supabase';
 import { StudyModeToggle } from '../components/StudyModeToggle';
 import { QuickActionButtons } from '../components/QuickActionButtons';
+import { StudyModePrompt } from '../components/StudyModePrompt';
 
 export const StudyPage: React.FC = () => {
   const { 
@@ -39,7 +40,8 @@ export const StudyPage: React.FC = () => {
     updateSessionStats,
     sessionStats,
     setLearningMode,
-    learningMode
+    learningMode,
+    isStudyMode
   } = useStore();
   
   const { user } = useAuth();
@@ -56,6 +58,7 @@ export const StudyPage: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
+  const [showStudyModePrompt, setShowStudyModePrompt] = useState(false);
   
   // Refs
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -146,6 +149,13 @@ export const StudyPage: React.FC = () => {
     loadConversationHistory();
   }, [currentSubject, currentAvatar, user, navigate, updateSessionStats]);
 
+  // Show study mode prompt when study mode is activated
+  useEffect(() => {
+    if (isStudyMode) {
+      setShowStudyModePrompt(true);
+    }
+  }, [isStudyMode]);
+
   const loadConversationHistory = async () => {
     if (!user) return;
     
@@ -190,7 +200,8 @@ export const StudyPage: React.FC = () => {
         currentSubject,
         currentAvatar,
         difficultyLevel,
-        user!.id
+        user!.id,
+        isStudyMode
       );
 
       // Add AI message
@@ -508,6 +519,13 @@ export const StudyPage: React.FC = () => {
           </div>
         )}
 
+        {/* Study Mode Prompt */}
+        {showStudyModePrompt && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <StudyModePrompt onClose={() => setShowStudyModePrompt(false)} />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Main Content Area */}
           <div className="lg:col-span-3 space-y-6">
@@ -535,7 +553,9 @@ export const StudyPage: React.FC = () => {
                       type="text"
                       value={textInput}
                       onChange={(e) => setTextInput(e.target.value)}
-                      placeholder="Ask a question about your subject..."
+                      placeholder={isStudyMode 
+                        ? "Ask a specific question about your subject..." 
+                        : "Ask a question about your subject..."}
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
                       disabled={isProcessing}
                     />
@@ -604,6 +624,13 @@ export const StudyPage: React.FC = () => {
               <span>{mode === 'voice' ? 'Voice Mode' : 'Text Mode'}</span>
             </div>
             
+            {isStudyMode && (
+              <div className="flex items-center space-x-1 text-amber-600">
+                <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                <span>Study Mode</span>
+              </div>
+            )}
+            
             {isListening && (
               <div className="flex items-center space-x-1 text-green-600">
                 <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
@@ -627,3 +654,5 @@ export const StudyPage: React.FC = () => {
     </div>
   );
 };
+
+export default StudyPage;

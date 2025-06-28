@@ -20,7 +20,8 @@ export const useConversation = () => {
     sessionStats,
     socialStats,
     updateSocialStats,
-    difficultyLevel
+    difficultyLevel,
+    isStudyMode
   } = useStore();
   
   const { user } = useAuth();
@@ -92,7 +93,8 @@ export const useConversation = () => {
         currentSubject,
         currentAvatar,
         useVoice,
-        difficultyLevel
+        difficultyLevel,
+        isStudyMode
       );
 
       // Validate AI response
@@ -162,7 +164,7 @@ export const useConversation = () => {
       const newXP = 10;
       const updatedSessionStats = {
         ...sessionStats,
-        messagesCount: sessionStats.messagesCount + 2, // +2 for both user message and AI response
+        messagesCount: sessionStats.messagesCount + 1, // Increment by 1 for the user message
         xpEarned: sessionStats.xpEarned + newXP
       };
       

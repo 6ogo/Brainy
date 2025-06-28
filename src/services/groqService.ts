@@ -23,7 +23,8 @@ export class GroqService {
     subject: string,
     avatarPersonality: string,
     difficultyLevel: string,
-    userId: string
+    userId: string,
+    isStudyMode: boolean = false
   ): Promise<string> {
     try {
       if (!API_CONFIG.GROQ_API_KEY) {
@@ -41,7 +42,7 @@ export class GroqService {
       let history = this.conversationHistory.get(conversationKey) || [];
 
       // Create system prompt based on avatar personality, subject and difficulty level
-      const systemPrompt = this.createSystemPrompt(subject, avatarPersonality, difficultyLevel);
+      const systemPrompt = this.createSystemPrompt(subject, avatarPersonality, difficultyLevel, isStudyMode);
 
       // Build messages array
       const messages: GroqMessage[] = [
@@ -144,7 +145,8 @@ export class GroqService {
   private static createSystemPrompt(
     subject: string,
     avatarPersonality: string,
-    difficultyLevel: string
+    difficultyLevel: string,
+    isStudyMode: boolean = false
   ): string {
     const personalityTraits = {
       'encouraging-emma': 'You are Emma, a warm, supportive, and patient tutor. Use encouraging language, celebrate small wins, and help build confidence. Always be positive and understanding.',
@@ -164,7 +166,8 @@ export class GroqService {
     const personality = personalityTraits[avatarPersonality as keyof typeof personalityTraits] || personalityTraits['encouraging-emma'];
     const difficultyGuideline = difficultyGuidelines[difficultyLevel as keyof typeof difficultyGuidelines] || difficultyGuidelines['High School'];
 
-    return `${personality}
+    // Base prompt
+    let prompt = `${personality}
 
 You are an expert ${subject} tutor teaching at the ${difficultyLevel} level. Your role is to:
 
@@ -190,6 +193,35 @@ Guidelines:
 - Always maintain a positive, encouraging tone
 
 Remember: You're not just providing answers, you're facilitating learning and understanding.`;
+
+    // Add study mode enhancements if enabled
+    if (isStudyMode) {
+      prompt += `
+
+STUDY MODE ACTIVATED:
+You are now in Study Mode, which means you should provide deeper educational insights and more structured learning. In this mode:
+
+1. Treat each interaction as a focused learning session
+2. Provide more comprehensive explanations with educational depth
+3. Include relevant theoretical background when appropriate
+4. Offer structured learning paths for complex topics
+5. Suggest practice exercises or problems to reinforce learning
+6. Provide clear, step-by-step explanations for problem-solving
+7. Reference academic frameworks or methodologies when relevant
+8. Offer study tips specific to the topic being discussed
+
+When responding in Study Mode:
+- Begin with a clear explanation of the concept or topic
+- Include relevant examples that illustrate the concept
+- Highlight key points or takeaways
+- Suggest ways to apply this knowledge
+- Provide context for how this fits into the broader subject
+- End with a check for understanding or follow-up question
+
+Your goal is to create a rich, educational experience that helps the student develop a deep understanding of ${subject}.`;
+    }
+
+    return prompt;
   }
 
   static clearConversationHistory(userId: string, subject?: string, difficultyLevel?: string): void {

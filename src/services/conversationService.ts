@@ -17,7 +17,8 @@ export class ConversationService {
     subject: Subject,
     currentAvatar: AvatarPersonality,
     useVoice: boolean = false,
-    difficultyLevel: DifficultyLevel = 'High School'
+    difficultyLevel: DifficultyLevel = 'High School',
+    isStudyMode: boolean = false
   ): Promise<ConversationResponse> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -46,7 +47,8 @@ export class ConversationService {
           subject,
           currentAvatar,
           difficultyLevel,
-          userId
+          userId,
+          isStudyMode
         );
       }
 
