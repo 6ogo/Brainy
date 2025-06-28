@@ -28,16 +28,18 @@ export const TeacherCard: React.FC<TeacherCardProps> = ({
   convaiId,
   className
 }) => {
-  const { setCurrentAvatar } = useStore();
+  const { setCurrentAvatar, setLearningMode } = useStore();
   const navigate = useNavigate();
 
   const handleTextChat = () => {
     setCurrentAvatar(id);
+    setLearningMode('conversational');
     navigate('/study');
   };
 
   const handleVoiceChat = () => {
     setCurrentAvatar(id);
+    setLearningMode('videocall');
     navigate('/study');
   };
 

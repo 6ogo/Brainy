@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export const StudyPage: React.FC = () => {
-  const { currentSubject, currentAvatar } = useStore();
+  const { currentSubject, currentAvatar, learningMode } = useStore();
   const { user } = useAuth();
   const navigate = useNavigate();
 
