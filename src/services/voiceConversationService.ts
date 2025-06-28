@@ -34,6 +34,12 @@ export class VoiceConversationService {
   private analyser: AnalyserNode | null = null;
   private audioDataArray: Uint8Array | null = null;
   private audioVisualizationCallback: ((data: Uint8Array) => void) | null = null;
+  private noiseDetector: ScriptProcessorNode | null = null;
+  private noiseDetectionEnabled = true;
+  private retryCount = 0;
+  private maxRetries = 3;
+  private audioQueue: Blob[] = [];
+  private isPlayingQueue = false;
 
   constructor(config: VoiceConversationConfig) {
     this.config = config;
@@ -47,9 +53,34 @@ export class VoiceConversationService {
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 256;
       this.audioDataArray = new Uint8Array(this.analyser.frequencyBinCount);
+      
+      // Create noise detector
+      this.noiseDetector = this.audioContext.createScriptProcessor(4096, 1, 1);
+      this.noiseDetector.onaudioprocess = this.detectNoise.bind(this);
+      
       console.log('Audio context initialized successfully');
     } catch (error) {
       console.error('Failed to initialize audio context:', error);
+    }
+  }
+
+  private detectNoise(event: AudioProcessingEvent): void {
+    if (!this.noiseDetectionEnabled || !this.isListening || this.isProcessing) return;
+    
+    const input = event.inputBuffer.getChannelData(0);
+    let sum = 0;
+    
+    // Calculate RMS (root mean square) of the audio buffer
+    for (let i = 0; i < input.length; i++) {
+      sum += input[i] * input[i];
+    }
+    
+    const rms = Math.sqrt(sum / input.length);
+    const db = 20 * Math.log10(rms);
+    
+    // If sound level is above threshold, update last speech timestamp
+    if (db > -50) { // Adjust threshold as needed
+      this.lastSpeechTimestamp = Date.now();
     }
   }
 
@@ -66,6 +97,9 @@ export class VoiceConversationService {
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.lang = this.recognitionLanguage;
+      
+      // Increase max alternatives for better accuracy
+      this.recognition.maxAlternatives = 3;
 
       this.recognition.onresult = (event) => {
         const lastResult = event.results[event.results.length - 1];
@@ -120,7 +154,25 @@ export class VoiceConversationService {
         
         // Don't show error for aborted recognition as it's often part of normal operation
         if (event.error !== 'aborted') {
-          this.config.onError?.(`Speech recognition error: ${event.error}`);
+          // Provide more specific error messages
+          let errorMessage = `Speech recognition error: ${event.error}`;
+          
+          switch (event.error) {
+            case 'network':
+              errorMessage = 'Network error occurred. Please check your connection.';
+              break;
+            case 'not-allowed':
+              errorMessage = 'Microphone access denied. Please enable microphone permissions.';
+              break;
+            case 'audio-capture':
+              errorMessage = 'No microphone detected. Please connect a microphone.';
+              break;
+            case 'service-not-allowed':
+              errorMessage = 'Speech recognition service not allowed. Try using a different browser.';
+              break;
+          }
+          
+          this.config.onError?.(errorMessage);
         }
         
         this.isListening = false;
@@ -152,6 +204,35 @@ export class VoiceConversationService {
           }
         }
       };
+      
+      // Add additional event handlers for better debugging
+      this.recognition.onaudiostart = () => {
+        console.log('Audio recording started');
+      };
+      
+      this.recognition.onaudioend = () => {
+        console.log('Audio recording ended');
+      };
+      
+      this.recognition.onsoundstart = () => {
+        console.log('Sound detected');
+      };
+      
+      this.recognition.onsoundend = () => {
+        console.log('Sound ended');
+      };
+      
+      this.recognition.onspeechstart = () => {
+        console.log('Speech started');
+        this.lastSpeechTimestamp = Date.now();
+      };
+      
+      this.recognition.onspeechend = () => {
+        console.log('Speech ended');
+        // Start silence timer
+        const silenceDuration = Date.now() - this.lastSpeechTimestamp;
+        console.log(`Silence duration: ${silenceDuration}ms`);
+      };
     }
   }
 
@@ -174,9 +255,11 @@ export class VoiceConversationService {
       this.stream = stream;
       
       // Connect to audio context for visualization if available
-      if (this.audioContext && this.analyser) {
+      if (this.audioContext && this.analyser && this.noiseDetector) {
         const source = this.audioContext.createMediaStreamSource(stream);
         source.connect(this.analyser);
+        source.connect(this.noiseDetector);
+        this.noiseDetector.connect(this.audioContext.destination);
         
         // Start visualization loop
         this.startAudioVisualization();
@@ -189,7 +272,21 @@ export class VoiceConversationService {
       console.log('Speech recognition started');
     } catch (error) {
       console.error('Failed to start listening:', error);
-      this.config.onError?.('Failed to access microphone. Please check your browser permissions.');
+      
+      // Provide specific error message based on error type
+      let errorMessage = 'Failed to access microphone. Please check your browser permissions.';
+      
+      if (error instanceof DOMException) {
+        if (error.name === 'NotAllowedError') {
+          errorMessage = 'Microphone access denied. Please enable microphone permissions in your browser settings.';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = 'No microphone detected. Please connect a microphone and try again.';
+        } else if (error.name === 'NotReadableError') {
+          errorMessage = 'Microphone is already in use by another application. Please close other applications using the microphone.';
+        }
+      }
+      
+      this.config.onError?.(errorMessage);
     }
   }
 
@@ -214,6 +311,11 @@ export class VoiceConversationService {
     if (this.stream) {
       this.stream.getTracks().forEach(track => track.stop());
       this.stream = null;
+    }
+    
+    // Disconnect noise detector
+    if (this.noiseDetector) {
+      this.noiseDetector.disconnect();
     }
     
     // Stop audio visualization
@@ -259,17 +361,24 @@ export class VoiceConversationService {
   }
 
   stopSpeaking(): void {
+    // Stop current audio playback
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.currentTime = 0;
       this.currentAudio = null;
-      this.config.onAudioEnd?.();
     }
+    
+    // Clear audio queue
+    this.audioQueue = [];
+    this.isPlayingQueue = false;
     
     // Also stop any browser speech synthesis
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+    
+    // Notify that audio has ended
+    this.config.onAudioEnd?.();
   }
 
   setLanguage(languageCode: string): void {
@@ -358,63 +467,167 @@ export class VoiceConversationService {
       // Generate and play speech
       this.config.onAudioStart?.();
       
-      let audioBlob;
       try {
         // Test audio output before generating speech
         await this.testAudioOutput();
         
         if (!API_CONFIG.ELEVENLABS_API_KEY) {
           // Use fallback if ElevenLabs API key is not configured
-          audioBlob = await this.createFallbackAudio(aiResponse);
+          const audioBlob = await this.createFallbackAudio(aiResponse);
           console.log('Using fallback speech generation');
+          
+          // Add to queue and play
+          this.queueAudio(audioBlob);
         } else {
-          audioBlob = await ElevenLabsService.generateSpeech(aiResponse, this.config.avatarPersonality);
-          console.log('Speech generated successfully, blob size:', audioBlob?.size);
-        }
-        
-        if (audioBlob) {
-          await this.playAudio(audioBlob);
+          // Split long responses into chunks for better streaming
+          const chunks = this.splitResponseIntoChunks(aiResponse);
+          
+          for (const chunk of chunks) {
+            try {
+              const audioBlob = await ElevenLabsService.generateSpeech(chunk, this.config.avatarPersonality);
+              console.log(`Speech generated successfully for chunk, blob size: ${audioBlob?.size}`);
+              
+              // Add to queue and play
+              this.queueAudio(audioBlob);
+            } catch (chunkError) {
+              console.error('Error generating speech for chunk:', chunkError);
+              // Continue with next chunk
+            }
+          }
         }
       } catch (audioError) {
         console.error('Audio generation or playback error:', audioError);
-        // Use browser's speech synthesis as fallback
-        if ('speechSynthesis' in window) {
-          const utterance = new SpeechSynthesisUtterance(aiResponse);
-          utterance.rate = 1;
-          utterance.pitch = 1;
-          utterance.volume = 1;
+        
+        // Retry with fallback
+        if (this.retryCount < this.maxRetries) {
+          this.retryCount++;
+          console.log(`Retrying with fallback (attempt ${this.retryCount}/${this.maxRetries})`);
           
-          window.speechSynthesis.speak(utterance);
-          
-          // Wait for speech to complete
-          return new Promise<void>((resolve) => {
-            utterance.onend = () => {
-              this.config.onAudioEnd?.();
-              resolve();
-            };
+          try {
+            const fallbackBlob = await this.createFallbackAudio(aiResponse);
+            this.queueAudio(fallbackBlob);
+          } catch (fallbackError) {
+            console.error('Fallback audio generation failed:', fallbackError);
+            this.config.onError?.('Voice generation failed. Falling back to text-only mode.');
+          }
+        } else {
+          // Use browser's speech synthesis as last resort
+          if ('speechSynthesis' in window) {
+            const utterance = new SpeechSynthesisUtterance(aiResponse);
+            utterance.rate = 1;
+            utterance.pitch = 1;
+            utterance.volume = 1;
             
-            // Fallback timeout in case onend doesn't fire
-            setTimeout(() => {
-              this.config.onAudioEnd?.();
-              resolve();
-            }, aiResponse.length * 50); // Rough estimate of speech duration
-          });
+            window.speechSynthesis.speak(utterance);
+            
+            // Wait for speech to complete
+            return new Promise<void>((resolve) => {
+              utterance.onend = () => {
+                this.config.onAudioEnd?.();
+                resolve();
+              };
+              
+              // Fallback timeout in case onend doesn't fire
+              setTimeout(() => {
+                this.config.onAudioEnd?.();
+                resolve();
+              }, aiResponse.length * 50); // Rough estimate of speech duration
+            });
+          }
         }
-      } finally {
-        this.config.onAudioEnd?.();
       }
     } catch (error) {
       console.error('Error in voice conversation:', error);
-      this.config.onError?.(error instanceof Error ? error.message : 'An error occurred');
+      
+      // Provide specific error message based on error type
+      let errorMessage = 'An error occurred during voice conversation.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+          errorMessage = 'API key is missing or invalid. Please check your configuration.';
+        } else if (error.message.includes('network')) {
+          errorMessage = 'Network error. Please check your internet connection.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (error.message.includes('rate limit')) {
+          errorMessage = 'Rate limit exceeded. Please try again later.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      this.config.onError?.(errorMessage);
     } finally {
       this.isProcessing = false;
       this.currentTranscript = '';
+      
+      // Reset retry count
+      this.retryCount = 0;
       
       // Restart listening if in continuous mode and not paused
       if (!this.isPaused && !this.isListening && this.recognition) {
         setTimeout(() => {
           this.startListening();
         }, 500);
+      }
+    }
+  }
+
+  // Split long responses into chunks for better streaming
+  private splitResponseIntoChunks(text: string): string[] {
+    // Split by sentences
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    
+    const chunks: string[] = [];
+    let currentChunk = '';
+    
+    for (const sentence of sentences) {
+      // If adding this sentence would make the chunk too long, start a new chunk
+      if (currentChunk.length + sentence.length > 300) {
+        if (currentChunk) {
+          chunks.push(currentChunk);
+        }
+        currentChunk = sentence;
+      } else {
+        currentChunk += sentence;
+      }
+    }
+    
+    // Add the last chunk if it's not empty
+    if (currentChunk) {
+      chunks.push(currentChunk);
+    }
+    
+    return chunks;
+  }
+
+  // Queue audio for sequential playback
+  private queueAudio(audioBlob: Blob): void {
+    this.audioQueue.push(audioBlob);
+    
+    if (!this.isPlayingQueue) {
+      this.playNextInQueue();
+    }
+  }
+
+  // Play next audio in queue
+  private async playNextInQueue(): Promise<void> {
+    if (this.audioQueue.length === 0) {
+      this.isPlayingQueue = false;
+      this.config.onAudioEnd?.();
+      return;
+    }
+    
+    this.isPlayingQueue = true;
+    const nextBlob = this.audioQueue.shift();
+    
+    if (nextBlob) {
+      try {
+        await this.playAudio(nextBlob);
+        this.playNextInQueue();
+      } catch (error) {
+        console.error('Error playing audio from queue:', error);
+        this.playNextInQueue(); // Skip to next item in queue
       }
     }
   }
@@ -474,8 +687,7 @@ export class VoiceConversationService {
           reject(new Error(errorMessage));
         };
         
-        // Set the source and load the audio
-        audio.src = audioUrl;
+        // Set the current audio
         this.currentAudio = audio;
         
         // Play the audio
@@ -609,5 +821,32 @@ export class VoiceConversationService {
       return this.audioDataArray;
     }
     return null;
+  }
+  
+  // Enable/disable noise detection
+  setNoiseDetection(enabled: boolean): void {
+    this.noiseDetectionEnabled = enabled;
+    console.log(`Noise detection ${enabled ? 'enabled' : 'disabled'}`);
+  }
+  
+  // Clean up resources
+  dispose(): void {
+    this.stopListening();
+    this.stopSpeaking();
+    
+    // Clean up audio context
+    if (this.audioContext) {
+      if (this.noiseDetector) {
+        this.noiseDetector.disconnect();
+      }
+      
+      if (this.analyser) {
+        this.analyser.disconnect();
+      }
+      
+      this.audioContext.close().catch(err => {
+        console.error('Error closing audio context:', err);
+      });
+    }
   }
 }

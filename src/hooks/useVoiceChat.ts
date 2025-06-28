@@ -40,6 +40,8 @@ export const useVoiceChat = () => {
   const processingRef = useRef<boolean>(false);
   const pauseThresholdRef = useRef<number>(600); // 0.6 seconds pause threshold
   const [visualizationData, setVisualizationData] = useState<Uint8Array | null>(null);
+  const [noiseLevel, setNoiseLevel] = useState<number>(0);
+  const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -48,6 +50,7 @@ export const useVoiceChat = () => {
       if (voiceServiceRef.current) {
         voiceServiceRef.current.stopListening();
         voiceServiceRef.current.stopSpeaking();
+        voiceServiceRef.current.dispose();
       }
     };
   }, []);
@@ -105,6 +108,7 @@ export const useVoiceChat = () => {
                   if (transcriptTimeoutRef.current) {
                     clearTimeout(transcriptTimeoutRef.current);
                   }
+                  
                   transcriptTimeoutRef.current = window.setTimeout(() => {
                     if (text !== lastProcessedTranscriptRef.current && !processingRef.current) {
                       lastProcessedTranscriptRef.current = text;
@@ -128,6 +132,12 @@ export const useVoiceChat = () => {
       if (voiceServiceRef.current) {
         voiceServiceRef.current.setAudioVisualizationCallback((data) => {
           setVisualizationData(data);
+          
+          // Calculate noise level (average of frequency data)
+          if (data.length > 0) {
+            const sum = data.reduce((acc, val) => acc + val, 0);
+            setNoiseLevel(sum / data.length);
+          }
         });
       }
     } catch (error) {
@@ -203,9 +213,32 @@ export const useVoiceChat = () => {
         }
       });
       
+      // Set up audio visualization callback
+      if (voiceServiceRef.current) {
+        voiceServiceRef.current.setAudioVisualizationCallback((data) => {
+          setVisualizationData(data);
+        });
+      }
+      
       console.log(`Voice service updated with difficulty level: ${difficultyLevel}`);
     }
   }, [difficultyLevel, user, currentSubject, currentAvatar, addMessage, setIsSpeaking, setAvatarEmotion, toggleListening, isStudyMode]);
+
+  // Initialize audio context for noise detection
+  useEffect(() => {
+    try {
+      const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+      setAudioContext(context);
+      
+      return () => {
+        context.close().catch(err => {
+          console.error('Error closing audio context:', err);
+        });
+      };
+    } catch (error) {
+      console.error('Failed to initialize audio context:', error);
+    }
+  }, []);
 
   const startVoiceChat = useCallback(async () => {
     if (!browserSupportsSpeechRecognition) {
@@ -215,8 +248,10 @@ export const useVoiceChat = () => {
     }
     
     try {
-      if (!listening) {
-        await startListening();
+      if (voiceServiceRef.current) {
+        await voiceServiceRef.current.startListening();
+      } else {
+        throw new Error('Voice service not initialized');
       }
       
       if (isMounted.current) {
@@ -234,10 +269,13 @@ export const useVoiceChat = () => {
         toast.error('Failed to start voice chat. Please check your microphone permissions.');
       }
     }
-  }, [setAvatarEmotion, browserSupportsSpeechRecognition, listening, startListening]);
+  }, [setAvatarEmotion, browserSupportsSpeechRecognition]);
 
   const stopVoiceChat = useCallback(() => {
-    stopListening();
+    if (voiceServiceRef.current) {
+      voiceServiceRef.current.stopListening();
+      voiceServiceRef.current.stopSpeaking();
+    }
     
     if (isMounted.current) {
       setIsActive(false);
@@ -247,10 +285,12 @@ export const useVoiceChat = () => {
       setCurrentTranscript('');
       processingRef.current = false;
     }
-  }, [setIsSpeaking, setAvatarEmotion, stopListening]);
+  }, [setIsSpeaking, setAvatarEmotion]);
 
   const pauseVoiceChat = useCallback(() => {
-    stopListening();
+    if (voiceServiceRef.current) {
+      voiceServiceRef.current.pauseConversation();
+    }
     
     if (isMounted.current) {
       setIsPaused(true);
@@ -258,16 +298,19 @@ export const useVoiceChat = () => {
       processingRef.current = false;
       toast.success('Conversation paused');
     }
-  }, [setIsSpeaking, stopListening]);
+  }, [setIsSpeaking]);
 
   const resumeVoiceChat = useCallback(() => {
+    if (voiceServiceRef.current) {
+      voiceServiceRef.current.resumeConversation();
+    }
+    
     if (isMounted.current) {
       setIsPaused(false);
-      startListening();
       processingRef.current = false;
       toast.success('Conversation resumed');
     }
-  }, [startListening]);
+  }, []);
 
   const toggleVoiceChat = useCallback(() => {
     if (isPaused) {
@@ -290,6 +333,11 @@ export const useVoiceChat = () => {
       lastProcessedTranscriptRef.current = currentTranscript;
       processingRef.current = true;
       addMessage(currentTranscript, 'user');
+      
+      // Also force submit in voice service
+      if (voiceServiceRef.current) {
+        voiceServiceRef.current.forceSubmitTranscript();
+      }
       
       toast.success('Manually submitted transcript');
     } else {
@@ -364,6 +412,7 @@ export const useVoiceChat = () => {
     forceSubmitTranscript,
     setPauseThreshold,
     pauseThreshold: pauseThresholdRef.current,
-    visualizationData
+    visualizationData,
+    noiseLevel
   };
 };

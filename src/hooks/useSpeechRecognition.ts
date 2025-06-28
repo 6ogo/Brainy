@@ -33,12 +33,15 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
   } = useStore();
   
   const [isMicrophoneAvailable, setIsMicrophoneAvailable] = useState<boolean>(false);
-  const [clearTranscriptOnListen] = useState<boolean>(true);
+  const [clearTranscriptOnListen, setClearTranscriptOnListen] = useState<boolean>(true);
   const hasCheckedPermission = useRef<boolean>(false);
   const isStartingListening = useRef<boolean>(false);
   const lastTranscriptRef = useRef<string>('');
   const transcriptTimeoutRef = useRef<number | null>(null);
   const noiseThreshold = 3; // Minimum characters to consider as valid speech
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const microphoneStreamRef = useRef<MediaStream | null>(null);
   
   const {
     transcript,
@@ -53,38 +56,6 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     browserSupportsSpeechRecognition: boolean;
     isMicrophoneAvailable: boolean;
   };
-
-  // --- CALLBACKS DEFINED FIRST ---
-
-
-
-  // Stop listening callback
-  const stopListening = useCallback((): void => {
-    if (!listening) return;
-    
-    // Clear any pending transcript timeout
-    if (transcriptTimeoutRef.current) {
-      clearTimeout(transcriptTimeoutRef.current);
-      transcriptTimeoutRef.current = null;
-    }
-    
-    // If we have a transcript, send it before stopping
-    if (transcript && transcript.trim().length > noiseThreshold && transcript !== lastTranscriptRef.current) {
-      console.log('Sending transcript on stop:', transcript);
-      lastTranscriptRef.current = transcript;
-      addMessage(transcript, 'user');
-      
-      // Reset transcript after sending
-      setTimeout(() => {
-        resetTranscript();
-      }, 500);
-    }
-    
-    SpeechRecognition.stopListening();
-    
-    // Ensure the starting flag is reset
-    isStartingListening.current = false;
-  }, [listening, transcript, addMessage, resetTranscript, noiseThreshold]);
 
   // Update store listening state when the library's listening state changes
   useEffect(() => {
@@ -106,6 +77,17 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
         
         if (permissionStatus.state === 'granted') {
           setIsMicrophoneAvailable(true);
+          
+          // Initialize audio context for analysis
+          if (!audioContextRef.current) {
+            try {
+              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+              analyserRef.current = audioContextRef.current.createAnalyser();
+              analyserRef.current.fftSize = 256;
+            } catch (audioError) {
+              console.error('Error initializing audio context:', audioError);
+            }
+          }
         } else if (permissionStatus.state === 'denied') {
           setIsMicrophoneAvailable(false);
           toast.error('Microphone access denied. Please enable microphone permissions in your browser settings.');
@@ -119,6 +101,17 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
           if (permissionStatus.state === 'granted' && !window.__mic_granted_toast_shown) {
             toast.success('Microphone access granted!');
             window.__mic_granted_toast_shown = true;
+            
+            // Initialize audio context for analysis
+            if (!audioContextRef.current) {
+              try {
+                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+                analyserRef.current = audioContextRef.current.createAnalyser();
+                analyserRef.current.fftSize = 256;
+              } catch (audioError) {
+                console.error('Error initializing audio context:', audioError);
+              }
+            }
           } else if (permissionStatus.state === 'denied' && !window.__mic_denied_toast_shown) {
             toast.error('Microphone access denied.');
             setVoiceMode('muted');
@@ -192,7 +185,23 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
       if (!isMicrophoneAvailable) {
         try {
           // Try to request microphone access
-          await navigator.mediaDevices.getUserMedia({ audio: true });
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            } 
+          });
+          
+          // Save the stream for analysis
+          microphoneStreamRef.current = stream;
+          
+          // Connect to audio context for analysis
+          if (audioContextRef.current && analyserRef.current) {
+            const source = audioContextRef.current.createMediaStreamSource(stream);
+            source.connect(analyserRef.current);
+          }
+          
           setIsMicrophoneAvailable(true);
         } catch (error) {
           console.error('Error requesting microphone access:', error);
@@ -222,6 +231,21 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     } catch (error) {
       console.error('Error starting speech recognition:', error);
       isStartingListening.current = false;
+      
+      // Provide specific error messages
+      if (error instanceof DOMException) {
+        if (error.name === 'NotAllowedError') {
+          toast.error('Microphone access denied. Please enable microphone permissions in your browser settings.');
+        } else if (error.name === 'NotFoundError') {
+          toast.error('No microphone detected. Please connect a microphone and try again.');
+        } else if (error.name === 'NotReadableError') {
+          toast.error('Microphone is already in use by another application. Please close other applications using the microphone.');
+        } else {
+          toast.error(`Error starting speech recognition: ${error.message}`);
+        }
+      } else {
+        toast.error('Failed to start speech recognition. Please try again.');
+      }
     }
   }, [
     browserSupportsSpeechRecognition, 
@@ -233,6 +257,40 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     setIsMicrophoneAvailable
   ]);
 
+  // Stop listening callback
+  const stopListening = useCallback((): void => {
+    if (!listening) return;
+    
+    // Clear any pending transcript timeout
+    if (transcriptTimeoutRef.current) {
+      clearTimeout(transcriptTimeoutRef.current);
+      transcriptTimeoutRef.current = null;
+    }
+    
+    // If we have a transcript, send it before stopping
+    if (transcript && transcript.trim().length > noiseThreshold && transcript !== lastTranscriptRef.current) {
+      console.log('Sending transcript on stop:', transcript);
+      lastTranscriptRef.current = transcript;
+      addMessage(transcript, 'user');
+      
+      // Reset transcript after sending
+      setTimeout(() => {
+        resetTranscript();
+      }, 500);
+    }
+    
+    SpeechRecognition.stopListening();
+    
+    // Stop microphone stream
+    if (microphoneStreamRef.current) {
+      microphoneStreamRef.current.getTracks().forEach(track => track.stop());
+      microphoneStreamRef.current = null;
+    }
+    
+    // Ensure the starting flag is reset
+    isStartingListening.current = false;
+  }, [listening, transcript, addMessage, resetTranscript, noiseThreshold]);
+
   return {
     transcript,
     listening,
@@ -242,6 +300,6 @@ export const useSpeechRecognition = (): UseSpeechRecognitionReturn => {
     stopListening,
     resetTranscript,
     clearTranscriptOnListen,
-    setClearTranscriptOnListen: () => {}
+    setClearTranscriptOnListen
   };
-}
+};
