@@ -43,7 +43,7 @@ export const useVoiceChat = () => {
   const [noiseLevel, setNoiseLevel] = useState<number>(0);
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [feedbackPreventionEnabled, setFeedbackPreventionEnabled] = useState(true);
-  const [delayAfterSpeaking, setDelayAfterSpeaking] = useState(500); // 500ms delay
+  const [delayAfterSpeaking, _setDelayAfterSpeaking] = useState(500); // 500ms delay
 
   // Cleanup on unmount
   useEffect(() => {
@@ -410,7 +410,7 @@ export const useVoiceChat = () => {
   // Set delay after speaking
   const setDelayAfterSpeaking = useCallback((milliseconds: number) => {
     if (milliseconds >= 200 && milliseconds <= 1000) {
-      setDelayAfterSpeaking(milliseconds);
+      _setDelayAfterSpeaking(milliseconds);
       
       // Also update the voice service if available
       if (voiceServiceRef.current) {
@@ -487,10 +487,10 @@ export const useVoiceChat = () => {
     forceSubmitTranscript,
     setPauseThreshold,
     setDelayAfterSpeaking,
-    toggleFeedbackPrevention,
     pauseThreshold: pauseThresholdRef.current,
     delayAfterSpeaking,
     feedbackPreventionEnabled,
+    toggleFeedbackPrevention,
     visualizationData,
     noiseLevel
   };
