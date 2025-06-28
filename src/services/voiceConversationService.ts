@@ -26,7 +26,7 @@ export class VoiceConversationService {
   private recognitionLanguage = 'en-US';
   private stream: MediaStream | null = null;
   private processingTimeout: number | null = null;
-  private maxSilenceTime = 600; // 0.6 seconds of silence before processing
+  private maxSilenceTime = 600; // 0.6 seconds pause threshold
   private lastSpeechTimestamp = 0;
   private silenceTimer: number | null = null;
   private noiseThreshold = 3; // Minimum characters to consider as valid speech
@@ -82,7 +82,7 @@ export class VoiceConversationService {
           // Notify about interim results for UI feedback
           this.config.onTranscript?.(transcript, lastResult.isFinal);
           
-          // Clear any pending timeout
+          // Clear any existing timeout
           if (this.processingTimeout) {
             clearTimeout(this.processingTimeout);
             this.processingTimeout = null;
@@ -347,7 +347,8 @@ export class VoiceConversationService {
           this.config.subject,
           this.config.avatarPersonality,
           this.config.difficultyLevel,
-          this.config.userId
+          this.config.userId,
+          false // isStudyMode
         );
       }
 
@@ -453,7 +454,7 @@ export class VoiceConversationService {
     return new Promise((resolve, reject) => {
       try {
         const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio();
+        const audio = new Audio(audioUrl);
         
         // Set up event handlers before setting the source
         audio.onended = () => {
